@@ -1,0 +1,256 @@
+import { useState } from "react";
+import { Clock, Play, Pause, Calendar, BarChart3 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const timeData = {
+  todayStats: {
+    totalHours: 7.5,
+    expectedHours: 8,
+    activeUsers: 15,
+    projects: 8,
+  },
+  weeklyStats: [
+    { day: "Mon", hours: 8.2 },
+    { day: "Tue", hours: 7.8 },
+    { day: "Wed", hours: 8.5 },
+    { day: "Thu", hours: 7.9 },
+    { day: "Fri", hours: 6.5 },
+  ],
+  employeeTimes: [
+    {
+      employee: "Sarah Wilson",
+      avatar: "/api/placeholder/40/40",
+      department: "Engineering",
+      todayHours: 8.2,
+      weeklyHours: 42.1,
+      status: "Active",
+      currentProject: "Dashboard Redesign",
+    },
+    {
+      employee: "Michael Chen",
+      avatar: "/api/placeholder/40/40",
+      department: "Design",
+      todayHours: 7.5,
+      weeklyHours: 38.5,
+      status: "Active",
+      currentProject: "Mobile App UI",
+    },
+    {
+      employee: "Emily Rodriguez",
+      avatar: "/api/placeholder/40/40",
+      department: "Sales",
+      todayHours: 6.8,
+      weeklyHours: 35.2,
+      status: "Offline",
+      currentProject: "Client Meetings",
+    },
+  ],
+  projectTimes: [
+    { project: "Dashboard Redesign", hours: 24.5, team: 4, deadline: "2024-03-15" },
+    { project: "Mobile App UI", hours: 18.2, team: 3, deadline: "2024-03-20" },
+    { project: "Client Portal", hours: 32.1, team: 5, deadline: "2024-03-10" },
+    { project: "Marketing Campaign", hours: 15.7, team: 2, deadline: "2024-03-25" },
+  ],
+};
+
+export default function TimeTracking() {
+  const [selectedTab, setSelectedTab] = useState("overview");
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Time Tracking</h1>
+          <p className="text-muted-foreground">
+            Monitor work hours and productivity across your organization.
+          </p>
+        </div>
+      </div>
+
+      {/* Today's Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="card-metric">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Hours Today</p>
+                <p className="text-3xl font-bold text-foreground">{timeData.todayStats.totalHours}</p>
+                <p className="text-sm text-muted-foreground">
+                  of {timeData.todayStats.expectedHours} expected
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-primary-light">
+                <Clock className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="card-metric">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Active Users</p>
+                <p className="text-3xl font-bold text-foreground">{timeData.todayStats.activeUsers}</p>
+                <p className="text-sm text-success">Currently tracking</p>
+              </div>
+              <div className="p-3 rounded-lg bg-success-light">
+                <Play className="h-6 w-6 text-success" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="card-metric">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Active Projects</p>
+                <p className="text-3xl font-bold text-foreground">{timeData.todayStats.projects}</p>
+                <p className="text-sm text-muted-foreground">Being tracked</p>
+              </div>
+              <div className="p-3 rounded-lg bg-warning-light">
+                <Calendar className="h-6 w-6 text-warning" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="card-metric bg-gradient-primary text-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-white/80">Weekly Progress</p>
+                <p className="text-3xl font-bold text-white">94%</p>
+                <p className="text-sm text-white/90">On target</p>
+              </div>
+              <div className="p-3 rounded-lg bg-white/20">
+                <BarChart3 className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="overview">Weekly Overview</TabsTrigger>
+          <TabsTrigger value="employees">Employee Times</TabsTrigger>
+          <TabsTrigger value="projects">Project Times</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Weekly Hours Chart */}
+            <Card className="card-dashboard">
+              <CardHeader>
+                <CardTitle>This Week's Hours</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {timeData.weeklyStats.map((day, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{day.day}</span>
+                      <div className="flex items-center space-x-3 flex-1 ml-4">
+                        <Progress value={(day.hours / 10) * 100} className="flex-1 h-2" />
+                        <span className="text-sm w-12 text-right">{day.hours}h</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quick Actions */}
+            <Card className="card-dashboard">
+              <CardHeader>
+                <CardTitle>Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button className="w-full btn-gradient">
+                  <Play className="h-4 w-4 mr-2" />
+                  Start Timer
+                </Button>
+                <Button variant="outline" className="w-full">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  View Timesheet
+                </Button>
+                <Button variant="outline" className="w-full">
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Generate Report
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="employees" className="space-y-4">
+          <div className="grid gap-4">
+            {timeData.employeeTimes.map((employee, index) => (
+              <Card key={index} className="card-dashboard">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <Avatar>
+                        <AvatarImage src={employee.avatar} alt={employee.employee} />
+                        <AvatarFallback>
+                          {employee.employee.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h3 className="font-semibold">{employee.employee}</h3>
+                        <p className="text-sm text-muted-foreground">{employee.department}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Current: {employee.currentProject}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <span className={`w-2 h-2 rounded-full ${
+                          employee.status === 'Active' ? 'bg-success' : 'bg-muted-foreground'
+                        }`}></span>
+                        <span className="text-sm">{employee.status}</span>
+                      </div>
+                      <div className="text-lg font-bold">{employee.todayHours}h</div>
+                      <div className="text-xs text-muted-foreground">
+                        Week: {employee.weeklyHours}h
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="projects" className="space-y-4">
+          <div className="grid gap-4">
+            {timeData.projectTimes.map((project, index) => (
+              <Card key={index} className="card-dashboard">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-semibold">{project.project}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {project.team} team members • Deadline: {project.deadline}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-primary">{project.hours}h</div>
+                      <p className="text-xs text-muted-foreground">Total logged</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
