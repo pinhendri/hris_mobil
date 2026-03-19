@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart'; 
+import 'dart:convert';
+import 'package:flutter/material.dart';
 
 class NotificationItem {
   final String id;
+  final String title;
   final String type;
   final String message;
   final Map<String, dynamic>? data;
@@ -10,6 +12,7 @@ class NotificationItem {
 
   NotificationItem({
     required this.id,
+    required this.title,
     required this.type,
     required this.message,
     this.data,
@@ -18,12 +21,30 @@ class NotificationItem {
   });
 
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
+    final rawData = json['data'];
+    Map<String, dynamic>? parsedData;
+    if (rawData is Map<String, dynamic>) {
+      parsedData = rawData;
+    } else if (rawData is String && rawData.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawData);
+        if (decoded is Map<String, dynamic>) {
+          parsedData = decoded;
+        }
+      } catch (_) {
+        parsedData = null;
+      }
+    }
+
     return NotificationItem(
       id: json['id'].toString(),
+      title: json['title']?.toString() ?? '',
       type: json['type'] ?? 'info',
       message: json['message'] ?? '',
-      data: json['data'],
-      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
+      data: parsedData,
+      createdAt: DateTime.parse(
+        json['created_at'] ?? DateTime.now().toIso8601String(),
+      ),
       isRead: json['is_read'] ?? false,
     );
   }
@@ -31,6 +52,7 @@ class NotificationItem {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'title': title,
       'type': type,
       'message': message,
       'data': data,
@@ -42,6 +64,7 @@ class NotificationItem {
   NotificationItem copyWith({bool? isRead}) {
     return NotificationItem(
       id: id,
+      title: title,
       type: type,
       message: message,
       data: data,
@@ -56,7 +79,7 @@ class NotificationItem {
   String? get startDate => data?['start_date'];
   String? get endDate => data?['end_date'];
   int? get days => data?['days'];
-  
+
   // Format pesan untuk ditampilkan di UI
   String get formattedMessage {
     if (type == 'leave_request') {
@@ -68,7 +91,7 @@ class NotificationItem {
     }
     return message;
   }
-  
+
   // Dapatkan icon berdasarkan tipe
   IconData get icon {
     switch (type) {
@@ -88,7 +111,7 @@ class NotificationItem {
         return Icons.info_outline;
     }
   }
-  
+
   // Dapatkan warna berdasarkan tipe
   Color get color {
     switch (type) {
@@ -108,9 +131,13 @@ class NotificationItem {
         return Colors.blue;
     }
   }
-  
+
   // Dapatkan judul berdasarkan tipe
   String get displayTitle {
+    if (title.isNotEmpty) {
+      return title;
+    }
+
     switch (type) {
       case 'leave_request':
         return 'Pengajuan Cuti Baru';

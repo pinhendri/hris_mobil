@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
 import '../../core/constants/app_colors.dart';
-import '../../providers/document_provider.dart';
 import '../../data/models/document_model.dart';
+import '../../providers/document_provider.dart';
 
 class DocumentScreen extends StatefulWidget {
   const DocumentScreen({super.key});
@@ -18,7 +20,10 @@ class _DocumentScreenState extends State<DocumentScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<DocumentProvider>(context, listen: false).fetchDocuments();
+      final provider = context.read<DocumentProvider>();
+      if (!provider.isLoading && provider.documents.isEmpty) {
+        provider.fetchDocuments();
+      }
     });
   }
 
@@ -44,75 +49,116 @@ class _DocumentScreenState extends State<DocumentScreen> {
       ),
       body: Consumer<DocumentProvider>(
         builder: (context, provider, child) {
-          if (provider.isLoading) {
+          if (provider.isLoading && provider.documents.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (provider.documents.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.folder_off_outlined,
-                    size: 64,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No documents found',
-                    style: GoogleFonts.poppins(
-                      color: Colors.grey[600],
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
+          if (provider.error != null && provider.documents.isEmpty) {
+            return _buildStateView(
+              icon: Icons.folder_off_outlined,
+              message: provider.error!,
+              actionLabel: 'Retry',
+              onAction: provider.refresh,
             );
           }
 
-          // Group by Category
-          final categories = <String, List<DocumentItem>>{};
-          for (var doc in provider.documents) {
-            if (!categories.containsKey(doc.category)) {
-              categories[doc.category] = [];
-            }
-            categories[doc.category]!.add(doc);
+          if (provider.documents.isEmpty) {
+            return _buildStateView(
+              icon: Icons.folder_off_outlined,
+              message: 'No documents found',
+              actionLabel: 'Refresh',
+              onAction: provider.refresh,
+            );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: categories.length,
-            itemBuilder: (context, index) {
-              final category = categories.keys.elementAt(index);
-              final docs = categories[category]!;
+          final categories = <String, List<DocumentItem>>{};
+          for (final document in provider.documents) {
+            categories.putIfAbsent(document.category, () => []);
+            categories[document.category]!.add(document);
+          }
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                    child: Text(
-                      category,
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+          final sortedCategories = categories.keys.toList()..sort();
+
+          return RefreshIndicator(
+            onRefresh: provider.refresh,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: sortedCategories.length,
+              itemBuilder: (context, index) {
+                final category = sortedCategories[index];
+                final documents = categories[category]!;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 8,
+                        horizontal: 4,
+                      ),
+                      child: Text(
+                        category,
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ),
-                  ),
-                  ...docs.map((doc) => _buildDocumentItem(context, doc)),
-                  const SizedBox(height: 16),
-                ],
-              );
-            },
+                    ...documents.map(
+                      (document) => _buildDocumentItem(document),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                );
+              },
+            ),
           );
         },
       ),
     );
   }
 
-  Widget _buildDocumentItem(BuildContext context, DocumentItem doc) {
+  Widget _buildStateView({
+    required IconData icon,
+    required String message,
+    required String actionLabel,
+    required Future<void> Function() onAction,
+  }) {
+    return RefreshIndicator(
+      onRefresh: onAction,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 120),
+          Icon(icon, size: 64, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  color: Colors.grey[600],
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Center(
+            child: OutlinedButton(
+              onPressed: onAction,
+              child: Text(actionLabel),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocumentItem(DocumentItem document) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -131,17 +177,17 @@ class _DocumentScreenState extends State<DocumentScreen> {
         leading: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: _getFileColor(doc.type).withValues(alpha: 0.1),
+            color: _getFileColor(document.type).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
-            _getFileIcon(doc.type),
-            color: _getFileColor(doc.type),
+            _getFileIcon(document.type),
+            color: _getFileColor(document.type),
             size: 24,
           ),
         ),
         title: Text(
-          doc.title,
+          document.title,
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
             color: AppColors.textPrimary,
@@ -155,7 +201,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
             Row(
               children: [
                 Text(
-                  doc.size,
+                  document.size,
                   style: GoogleFonts.poppins(
                     color: AppColors.textSecondary,
                     fontSize: 12,
@@ -163,12 +209,12 @@ class _DocumentScreenState extends State<DocumentScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '•',
+                  '-',
                   style: GoogleFonts.poppins(color: AppColors.textSecondary),
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  DateFormat('MMM d, y').format(doc.updatedAt),
+                  DateFormat('MMM d, y').format(document.updatedAt),
                   style: GoogleFonts.poppins(
                     color: AppColors.textSecondary,
                     fontSize: 12,
@@ -180,18 +226,27 @@ class _DocumentScreenState extends State<DocumentScreen> {
         ),
         trailing: IconButton(
           icon: const Icon(Icons.download_rounded, color: AppColors.primary),
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Downloading ${doc.title}...'),
-                duration: const Duration(seconds: 1),
-              ),
-            );
-          },
+          onPressed: document.url.isEmpty
+              ? null
+              : () => _copyLinkToClipboard(document),
         ),
-        onTap: () {
-          // Open document logic
-        },
+        onTap: document.url.isEmpty
+            ? null
+            : () => _copyLinkToClipboard(document),
+      ),
+    );
+  }
+
+  Future<void> _copyLinkToClipboard(DocumentItem document) async {
+    await Clipboard.setData(ClipboardData(text: document.url));
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Link download ${document.title} copied.'),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -201,12 +256,15 @@ class _DocumentScreenState extends State<DocumentScreen> {
       case 'pdf':
         return Icons.picture_as_pdf_outlined;
       case 'doc':
-      case 'docx':
         return Icons.description_outlined;
+      case 'xls':
+        return Icons.table_chart_outlined;
+      case 'ppt':
+        return Icons.slideshow_outlined;
       case 'image':
-      case 'jpg':
-      case 'png':
         return Icons.image_outlined;
+      case 'txt':
+        return Icons.notes_outlined;
       default:
         return Icons.insert_drive_file_outlined;
     }
@@ -217,14 +275,15 @@ class _DocumentScreenState extends State<DocumentScreen> {
       case 'pdf':
         return Colors.red;
       case 'doc':
-      case 'docx':
         return Colors.blue;
-      case 'image':
-      case 'jpg':
-      case 'png':
+      case 'xls':
         return Colors.green;
-      default:
+      case 'ppt':
         return Colors.orange;
+      case 'image':
+        return Colors.teal;
+      default:
+        return Colors.grey;
     }
   }
 }

@@ -10,7 +10,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -32,21 +33,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
 
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeIn,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     _animationController.forward();
   }
@@ -76,39 +72,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     if (success) {
       final user = result['user'] as Map<String, dynamic>? ?? {};
-      final companyAssignments = result['company_assignments'] as List? ?? [];
-
       await auth.setUser(user);
 
-      if (companyAssignments.isEmpty) {
-        // Tidak ada company assignment
-        Navigator.pushReplacementNamed(context, '/home');
-      }
-      else if (companyAssignments.length == 1) {
-        // Satu company, langsung set selected company
-        final company = companyAssignments.first as Map<String, dynamic>;
-
-        final setCompanyResult = await auth.setSelectedCompany(
-          companyId: company['id'] is int
-              ? company['id']
-              : int.parse(company['id'].toString()),
-          cCode: company['c_code'].toString(),
-        );
-
-        if (setCompanyResult['success'] == true && mounted) {
-          Navigator.pushReplacementNamed(context, '/home');
-        } else {
-          // Gagal set company, tetap ke home
-          Navigator.pushReplacementNamed(context, '/home');
-        }
-      }
-      else {
-        // Multiple companies, tampilkan halaman pilih company
-        Navigator.pushNamed(
-          context,
-          '/select-company',
-          arguments: companyAssignments,
-        );
+      final currentRoute = ModalRoute.of(context)?.settings.name;
+      if (currentRoute != '/' && mounted) {
+        Navigator.pushReplacementNamed(context, '/');
       }
     } else {
       // Login gagal dengan animasi shake
@@ -121,25 +89,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       SnackBar(
         content: Row(
           children: [
-            Icon(
-              Icons.error_outline_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
+            Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                message,
-                style: GoogleFonts.poppins(fontSize: 14),
-              ),
+              child: Text(message, style: GoogleFonts.poppins(fontSize: 14)),
             ),
           ],
         ),
         backgroundColor: Colors.red.shade400,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
@@ -209,10 +168,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         duration: const Duration(milliseconds: 800),
                         tween: Tween(begin: 0.0, end: 1.0),
                         builder: (context, value, child) {
-                          return Transform.scale(
-                            scale: value,
-                            child: child,
-                          );
+                          return Transform.scale(scale: value, child: child);
                         },
                         child: Container(
                           width: 120,
@@ -401,10 +357,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     ),
                                     onPressed: !isLoading
                                         ? () {
-                                      setState(() {
-                                        _obscurePassword = !_obscurePassword;
-                                      });
-                                    }
+                                            setState(() {
+                                              _obscurePassword =
+                                                  !_obscurePassword;
+                                            });
+                                          }
                                         : null,
                                   ),
                                   border: OutlineInputBorder(
@@ -452,7 +409,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
                               // Remember Me & Forgot Password
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   // Remember Me
                                   Row(
@@ -461,13 +419,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                         value: _rememberMe,
                                         onChanged: !isLoading
                                             ? (value) {
-                                          setState(() {
-                                            _rememberMe = value ?? false;
-                                          });
-                                        }
+                                                setState(() {
+                                                  _rememberMe = value ?? false;
+                                                });
+                                              }
                                             : null,
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(4),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                         ),
                                         activeColor: Colors.blue.shade400,
                                       ),
@@ -485,8 +445,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   TextButton(
                                     onPressed: !isLoading
                                         ? () {
-                                      _showForgotPasswordDialog();
-                                    }
+                                            _showForgotPasswordDialog();
+                                          }
                                         : null,
                                     style: TextButton.styleFrom(
                                       padding: const EdgeInsets.symmetric(
@@ -494,7 +454,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                         vertical: 4,
                                       ),
                                       minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
                                     ),
                                     child: Text(
                                       'Forgot Password?',
@@ -526,35 +487,37 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   ),
                                   child: isLoading
                                       ? Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const SizedBox(
-                                        height: 24,
-                                        width: 24,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(
-                                            Colors.white,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const SizedBox(
+                                              height: 24,
+                                              width: 24,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                      Color
+                                                    >(Colors.white),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              'Logging in...',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Text(
+                                          'Login',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        'Logging in...',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                      : Text(
-                                    'Login',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
                                 ),
                               ),
                             ],
@@ -605,9 +568,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               ),
                               child: Column(
                                 children: [
-                                  _buildCredentialRow('Email:', 'admin@example.com'),
+                                  _buildCredentialRow(
+                                    'Email:',
+                                    'admin@example.com',
+                                  ),
                                   const SizedBox(height: 4),
-                                  _buildCredentialRow('Password:', 'password123'),
+                                  _buildCredentialRow(
+                                    'Password:',
+                                    'password123',
+                                  ),
                                 ],
                               ),
                             ),
@@ -616,11 +585,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             TextButton.icon(
                               onPressed: !isLoading
                                   ? () {
-                                setState(() {
-                                  _emailController.text = 'admin@example.com';
-                                  _passwordController.text = 'password123';
-                                });
-                              }
+                                      setState(() {
+                                        _emailController.text =
+                                            'admin@example.com';
+                                        _passwordController.text =
+                                            'password123';
+                                      });
+                                    }
                                   : null,
                               icon: Icon(
                                 Icons.content_paste_rounded,
@@ -717,9 +688,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             ),
           ),
         ],
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }

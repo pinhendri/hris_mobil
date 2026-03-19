@@ -16,6 +16,7 @@ class Attendance {
   final String? clockOutLocation;
   final String? cCode;
   final Map<String, dynamic>? employee;
+  final bool isPendingSync;
 
   Attendance({
     this.uuid,
@@ -32,6 +33,7 @@ class Attendance {
     this.clockOutLocation,
     this.cCode,
     this.employee,
+    this.isPendingSync = false,
   });
 
   factory Attendance.fromJson(Map<String, dynamic> json) {
@@ -39,8 +41,8 @@ class Attendance {
     final employeeData = json['employee'] as Map<String, dynamic>?;
 
     // Handle jika dari endpoint lain yang langsung punya field employee_xxx
-    final employeeUuid = employeeData?['uuid'] ??
-        json['employee_uuid'] as String?;
+    final employeeUuid =
+        employeeData?['uuid'] ?? json['employee_uuid'] as String?;
 
     final employeeName = employeeData?['name'] as String?;
     final employeePosition = employeeData?['position'] as String?;
@@ -61,6 +63,8 @@ class Attendance {
       clockOutLocation: json['clock_out_location'] as String?,
       cCode: json['c_code'] as String?,
       employee: employeeData,
+      isPendingSync:
+          json['is_pending_sync'] == true || json['sync_status'] == 'pending',
     );
   }
 
@@ -77,6 +81,7 @@ class Attendance {
       'clock_out_photo': clockOutPhoto,
       'clock_out_location': clockOutLocation,
       'c_code': cCode,
+      'is_pending_sync': isPendingSync,
     };
   }
 
@@ -111,17 +116,25 @@ class Attendance {
       }
       return clockOut!;
     } catch (e) {
-      return clockOut!.substring(0, clockOut!.length > 5 ? 5 : clockOut!.length);
+      return clockOut!.substring(
+        0,
+        clockOut!.length > 5 ? 5 : clockOut!.length,
+      );
     }
   }
 
   String get status {
+    if (isPendingSync) return 'Pending Sync';
     if (hasClockIn && hasClockOut) return 'Completed';
     if (hasClockIn) return 'Checked In';
     return 'Absent';
   }
 
   Color get statusColor {
+    if (isPendingSync) {
+      return Colors.orange;
+    }
+
     switch (status) {
       case 'Completed':
         return Colors.green;
@@ -133,6 +146,7 @@ class Attendance {
   }
 
   String get statusBadge {
+    if (isPendingSync) return 'Pending Sync';
     if (hasClockIn && hasClockOut) return 'Complete';
     if (hasClockIn) return 'Active';
     return 'Missed';

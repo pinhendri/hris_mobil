@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../core/localization/app_strings.dart';
+import '../../models/calendar_event_model.dart';
+import '../../providers/claim_provider.dart';
+import '../../providers/event_provider.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../data/models/notification_model.dart'; // TAMBAHKAN IMPORT INI
+import '../admin/claim_reports_screen.dart';
+import '../admin/event_management_screen.dart';
+import '../attendance/clock_in_screen.dart';
+import '../employee/add_employee_screen.dart';
+import '../leave/leave_screen.dart';
+import '../notifications/notification_screen.dart';
 
 // ================= DASHBOARD TAB =================
 class DashboardTab extends StatefulWidget {
@@ -15,7 +25,8 @@ class DashboardTab extends StatefulWidget {
   State<DashboardTab> createState() => _DashboardTabState();
 }
 
-class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMixin {
+class _DashboardTabState extends State<DashboardTab>
+    with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -36,10 +47,13 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     _notificationAnimationController = AnimationController(
       vsync: this,
@@ -47,7 +61,10 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
     );
 
     _notificationSlideAnimation = Tween<double>(begin: -100, end: 0).animate(
-      CurvedAnimation(parent: _notificationAnimationController, curve: Curves.easeOutCubic),
+      CurvedAnimation(
+        parent: _notificationAnimationController,
+        curve: Curves.easeOutCubic,
+      ),
     );
 
     _animationController.forward();
@@ -55,11 +72,14 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = context.read<AuthProvider>();
       final companyCode = authProvider.getCompanyCode();
-      
+
       print('🏢 Initializing Dashboard with company code: $companyCode');
-      
-      context.read<DashboardProvider>().fetchDashboardData(companyCode: companyCode);
+
+      context.read<DashboardProvider>().fetchDashboardData(
+        companyCode: companyCode,
+      );
       context.read<NotificationProvider>().fetchNotifications();
+      context.read<EventProvider>().fetchUpcomingEvents();
     });
   }
 
@@ -76,13 +96,18 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
     final dashboard = context.watch<DashboardProvider>();
     final themeProvider = context.watch<ThemeProvider>();
     final notificationProvider = context.watch<NotificationProvider>();
+    final eventProvider = context.watch<EventProvider>();
     final isDark = themeProvider.isDarkMode;
 
-    final firstName = (auth.user?.name ?? 'User').split(' ').first;
+    final firstName = (auth.user?.name ?? context.tr('profile_user_fallback'))
+        .split(' ')
+        .first;
     final companyCode = auth.getCompanyCode();
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF8F9FA),
+      backgroundColor: isDark
+          ? const Color(0xFF0A0A0A)
+          : const Color(0xFFF8F9FA),
       body: dashboard.isLoading
           ? _buildLoadingState(isDark)
           : dashboard.error != null
@@ -91,26 +116,43 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
               onRefresh: () async {
                 final authProvider = context.read<AuthProvider>();
                 final newCompanyCode = authProvider.getCompanyCode();
-                await context.read<DashboardProvider>().fetchDashboardData(companyCode: newCompanyCode);
-                await context.read<NotificationProvider>().fetchNotifications(); // TAMBAHKAN REFRESH NOTIFIKASI
+                await Future.wait([
+                  context.read<DashboardProvider>().fetchDashboardData(
+                    companyCode: newCompanyCode,
+                  ),
+                  context.read<NotificationProvider>().fetchNotifications(),
+                  context.read<EventProvider>().fetchUpcomingEvents(),
+                ]);
               },
               child: CustomScrollView(
                 slivers: [
-                  _buildHeader(firstName, isDark, notificationProvider, companyCode, dashboard),
+                  _buildHeader(
+                    firstName,
+                    isDark,
+                    notificationProvider,
+                    companyCode,
+                    dashboard,
+                  ),
                   if (_showNotifications)
                     SliverToBoxAdapter(
                       child: AnimatedBuilder(
                         animation: _notificationAnimationController,
                         builder: (context, child) {
                           return Transform.translate(
-                            offset: Offset(0, _notificationSlideAnimation.value),
+                            offset: Offset(
+                              0,
+                              _notificationSlideAnimation.value,
+                            ),
                             child: Container(
                               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                               constraints: BoxConstraints(
-                                maxHeight: MediaQuery.of(context).size.height * 0.5,
+                                maxHeight:
+                                    MediaQuery.of(context).size.height * 0.5,
                               ),
                               decoration: BoxDecoration(
-                                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                                color: isDark
+                                    ? const Color(0xFF1E1E1E)
+                                    : Colors.white,
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
@@ -120,7 +162,10 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                                   ),
                                 ],
                               ),
-                              child: _buildNotificationPanel(isDark, notificationProvider),
+                              child: _buildNotificationPanel(
+                                isDark,
+                                notificationProvider,
+                              ),
                             ),
                           );
                         },
@@ -134,9 +179,49 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                           opacity: _fadeAnimation,
                           child: SlideTransition(
                             position: _slideAnimation,
-                            child: _buildWelcomeSection(firstName, isDark, dashboard),
+                            child: _buildWelcomeSection(
+                              firstName,
+                              isDark,
+                              dashboard,
+                            ),
                           ),
                         ),
+                        if (dashboard.isUsingCachedData) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.orange.withOpacity(0.12)
+                                  : const Color(0xFFFFF3E0),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Colors.orange.withOpacity(0.25),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.cloud_off_outlined,
+                                  color: Colors.orange,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    context.tr('dashboard_cached_banner'),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isDark
+                                          ? Colors.orange.shade100
+                                          : Colors.orange.shade900,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 20),
                         FadeTransition(
                           opacity: _fadeAnimation,
@@ -150,7 +235,7 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                           opacity: _fadeAnimation,
                           child: SlideTransition(
                             position: _slideAnimation,
-                            child: _buildQuickActionsSection(isDark),
+                            child: _buildQuickActionsSection(isDark, auth),
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -158,7 +243,10 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                           opacity: _fadeAnimation,
                           child: SlideTransition(
                             position: _slideAnimation,
-                            child: _buildRecentActivitiesSection(dashboard, isDark),
+                            child: _buildRecentActivitiesSection(
+                              dashboard,
+                              isDark,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -166,7 +254,7 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                           opacity: _fadeAnimation,
                           child: SlideTransition(
                             position: _slideAnimation,
-                            child: _buildUpcomingSection(isDark),
+                            child: _buildUpcomingSection(isDark, eventProvider),
                           ),
                         ),
                       ]),
@@ -180,43 +268,46 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
 
   // MARK: - Stats Section
   Widget _buildStatsSection(DashboardProvider dashboard, bool isDark) {
-    print('📊 Building stats - Total: ${dashboard.totalEmployees}, Active: ${dashboard.activeEmployees}');
-    
+    print(
+      '📊 Building stats - Total: ${dashboard.totalEmployees}, Active: ${dashboard.activeEmployees}',
+    );
+
     final stats = [
       _StatItem(
-        title: 'Total Employees',
+        title: context.tr('dashboard_stat_total_employees'),
         value: dashboard.totalEmployees.toString(),
         icon: Icons.people_alt,
         color: Colors.blue,
         gradient: const [Color(0xFF4158D0), Color(0xFFC850C0)],
-        trend: 'Active: ${dashboard.activeEmployees}',
+        trend:
+            '${context.tr('dashboard_stat_active')}: ${dashboard.activeEmployees}',
         trendUp: true,
       ),
       _StatItem(
-        title: 'Today\'s Attendance',
+        title: context.tr('dashboard_stat_attendance_today'),
         value: dashboard.attendanceToday.toString(),
         icon: Icons.check_circle,
         color: Colors.green,
         gradient: const [Color(0xFF0093E9), Color(0xFF80D0C7)],
-        trend: 'Present today',
+        trend: context.tr('dashboard_stat_present_today'),
         trendUp: dashboard.attendanceToday > 0,
       ),
       _StatItem(
-        title: 'On Leave Today',
+        title: context.tr('dashboard_stat_on_leave_today'),
         value: dashboard.onLeave.toString(),
         icon: Icons.event_note,
         color: Colors.orange,
         gradient: const [Color(0xFF8EC5FC), Color(0xFFE0C3FC)],
-        trend: 'Leave today',
+        trend: context.tr('dashboard_stat_leave_today'),
         trendUp: false,
       ),
       _StatItem(
-        title: 'New Hires',
+        title: context.tr('dashboard_stat_new_hires'),
         value: dashboard.newHires.toString(),
         icon: Icons.person_add,
         color: Colors.purple,
         gradient: const [Color(0xFF00B4DB), Color(0xFF0083B0)],
-        trend: 'This month',
+        trend: context.tr('dashboard_stat_this_month'),
         trendUp: dashboard.newHires > 0,
       ),
     ];
@@ -238,10 +329,7 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
           builder: (context, value, child) {
             return Opacity(
               opacity: value,
-              child: Transform.scale(
-                scale: 0.8 + (0.2 * value),
-                child: child,
-              ),
+              child: Transform.scale(scale: 0.8 + (0.2 * value), child: child),
             );
           },
           child: _buildStatCard(stats[index], isDark),
@@ -251,189 +339,262 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
   }
 
   // MARK: - Header Section
-  Widget _buildHeader(String firstName, bool isDark, NotificationProvider notificationProvider, String? companyCode, DashboardProvider dashboard) {
+  Widget _buildHeader(
+    String firstName,
+    bool isDark,
+    NotificationProvider notificationProvider,
+    String? companyCode,
+    DashboardProvider dashboard,
+  ) {
     return SliverAppBar(
       expandedHeight: 180,
       floating: false,
       pinned: true,
       backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.blue,
       flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isDark
-                  ? const [Color(0xFF1A237E), Color(0xFF311B92)]
-                  : [Colors.blue.shade400, Colors.blue.shade700],
-            ),
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Row(
+        background: LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompactHeader = constraints.maxHeight < 150;
+
+            return Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? const [Color(0xFF1A237E), Color(0xFF311B92)]
+                      : [Colors.blue.shade400, Colors.blue.shade700],
+                ),
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    isCompactHeader ? 12 : 24,
+                    20,
+                    isCompactHeader ? 12 : 20,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      TweenAnimationBuilder<double>(
-                        duration: const Duration(milliseconds: 500),
-                        tween: Tween(begin: 0, end: 1),
-                        builder: (context, value, child) {
-                          return Transform.scale(
-                            scale: value,
-                            child: child,
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(16),
+                      Row(
+                        children: [
+                          TweenAnimationBuilder<double>(
+                            duration: const Duration(milliseconds: 500),
+                            tween: Tween(begin: 0, end: 1),
+                            builder: (context, value, child) {
+                              return Transform.scale(
+                                scale: value,
+                                child: child,
+                              );
+                            },
+                            child: Container(
+                              padding: EdgeInsets.all(
+                                isCompactHeader ? 10 : 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Icon(
+                                Icons.dashboard_customize,
+                                color: Colors.white,
+                                size: isCompactHeader ? 24 : 28,
+                              ),
+                            ),
                           ),
-                          child: const Icon(Icons.dashboard_customize, color: Colors.white, size: 28),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            TweenAnimationBuilder<double>(
-                              duration: const Duration(milliseconds: 600),
-                              tween: Tween(begin: 0, end: 1),
-                              builder: (context, value, child) {
-                                return Opacity(
-                                  opacity: value,
-                                  child: Transform.translate(
-                                    offset: Offset(0, 10 * (1 - value)),
-                                    child: child,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                TweenAnimationBuilder<double>(
+                                  duration: const Duration(milliseconds: 600),
+                                  tween: Tween(begin: 0, end: 1),
+                                  builder: (context, value, child) {
+                                    return Opacity(
+                                      opacity: value,
+                                      child: Transform.translate(
+                                        offset: Offset(0, 10 * (1 - value)),
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: Text(
+                                    context.tr('dashboard_welcome_back'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: isCompactHeader ? 12 : 14,
+                                      color: Colors.white.withOpacity(0.9),
+                                      letterSpacing: 0.5,
+                                    ),
                                   ),
-                                );
-                              },
+                                ),
+                                TweenAnimationBuilder<double>(
+                                  duration: const Duration(milliseconds: 700),
+                                  tween: Tween(begin: 0, end: 1),
+                                  builder: (context, value, child) {
+                                    return Opacity(
+                                      opacity: value,
+                                      child: Transform.translate(
+                                        offset: Offset(0, 10 * (1 - value)),
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: Text(
+                                    firstName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: isCompactHeader ? 22 : 28,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (companyCode != null &&
+                              companyCode.isNotEmpty &&
+                              !isCompactHeader)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.1),
+                                ),
+                              ),
                               child: Text(
-                                'Welcome back,',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.white.withOpacity(0.9),
-                                  letterSpacing: 0.5,
+                                companyCode,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
-                            TweenAnimationBuilder<double>(
-                              duration: const Duration(milliseconds: 700),
-                              tween: Tween(begin: 0, end: 1),
-                              builder: (context, value, child) {
-                                return Opacity(
-                                  opacity: value,
-                                  child: Transform.translate(
-                                    offset: Offset(0, 10 * (1 - value)),
-                                    child: child,
-                                  ),
-                                );
-                              },
-                              child: Text(
-                                firstName,
-                                style: const TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: -0.5,
+                          SizedBox(width: isCompactHeader ? 4 : 8),
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: BoxConstraints.tight(
+                                  Size.square(isCompactHeader ? 36 : 44),
                                 ),
+                                icon: Icon(
+                                  _showNotifications
+                                      ? Icons.notifications_active
+                                      : Icons.notifications_outlined,
+                                  color: Colors.white,
+                                  size: isCompactHeader ? 24 : 28,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _showNotifications = !_showNotifications;
+                                    if (_showNotifications) {
+                                      _notificationAnimationController
+                                          .forward();
+                                    } else {
+                                      _notificationAnimationController
+                                          .reverse();
+                                    }
+                                  });
+                                },
+                              ),
+                              if (notificationProvider.unreadCount > 0)
+                                Positioned(
+                                  right: 2,
+                                  top: 2,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 18,
+                                      minHeight: 18,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        notificationProvider.unreadCount > 99
+                                            ? '99+'
+                                            : notificationProvider.unreadCount
+                                                  .toString(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          if (!isCompactHeader) ...[
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: TweenAnimationBuilder<double>(
+                                duration: const Duration(milliseconds: 800),
+                                tween: Tween(begin: 0, end: 1),
+                                builder: (context, value, child) {
+                                  return Opacity(
+                                    opacity: value,
+                                    child: Transform.translate(
+                                      offset: Offset(20 * (1 - value), 0),
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: _buildDateChip(isDark),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (!isCompactHeader) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.people,
+                              size: 14,
+                              color: Colors.white70,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${context.tr('dashboard_stat_total_employees')}: ${dashboard.totalEmployees}',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      if (companyCode != null && companyCode.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withOpacity(0.1)),
-                          ),
-                          child: Text(
-                            companyCode,
-                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      const SizedBox(width: 8),
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              _showNotifications ? Icons.notifications_active : Icons.notifications_outlined,
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _showNotifications = !_showNotifications;
-                                if (_showNotifications) {
-                                  _notificationAnimationController.forward();
-                                } else {
-                                  _notificationAnimationController.reverse();
-                                }
-                              });
-                            },
-                          ),
-                          if (notificationProvider.unreadCount > 0)
-                            Positioned(
-                              right: 6,
-                              top: 6,
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: Colors.white, width: 1.5),
-                                ),
-                                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                                child: Center(
-                                  child: Text(
-                                    notificationProvider.unreadCount > 99 ? '99+' : notificationProvider.unreadCount.toString(),
-                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(width: 8),
-                      TweenAnimationBuilder<double>(
-                        duration: const Duration(milliseconds: 800),
-                        tween: Tween(begin: 0, end: 1),
-                        builder: (context, value, child) {
-                          return Opacity(
-                            opacity: value,
-                            child: Transform.translate(
-                              offset: Offset(20 * (1 - value), 0),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: _buildDateChip(isDark),
-                      ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.people, size: 14, color: Colors.white70),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Total Employees: ${dashboard.totalEmployees}',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -449,11 +610,19 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
       ),
       child: Row(
         children: [
-          Icon(Icons.calendar_today, size: 14, color: Colors.white.withOpacity(0.9)),
+          Icon(
+            Icons.calendar_today,
+            size: 14,
+            color: Colors.white.withOpacity(0.9),
+          ),
           const SizedBox(width: 8),
           Text(
             _getFormattedDate(),
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white.withOpacity(0.9)),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Colors.white.withOpacity(0.9),
+            ),
           ),
         ],
       ),
@@ -461,7 +630,11 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
   }
 
   // MARK: - Welcome Section
-  Widget _buildWelcomeSection(String firstName, bool isDark, DashboardProvider dashboard) {
+  Widget _buildWelcomeSection(
+    String firstName,
+    bool isDark,
+    DashboardProvider dashboard,
+  ) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -478,17 +651,46 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Good ${_getTimeGreeting()},', style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.grey.shade700)),
+                Text(
+                  '${context.tr('dashboard_good')} ${_getTimeGreeting()},',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.white70 : Colors.grey.shade700,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(firstName, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.grey.shade800)),
+                Text(
+                  firstName,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.grey.shade800,
+                  ),
+                ),
                 const SizedBox(height: 8),
-                Text('Here\'s your summary for today', style: TextStyle(fontSize: 13, color: isDark ? Colors.white60 : Colors.grey.shade600)),
+                Text(
+                  context.tr('dashboard_summary_today'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white60 : Colors.grey.shade600,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(Icons.people_outline, size: 14, color: isDark ? Colors.white54 : Colors.grey.shade600),
+                    Icon(
+                      Icons.people_outline,
+                      size: 14,
+                      color: isDark ? Colors.white54 : Colors.grey.shade600,
+                    ),
                     const SizedBox(width: 4),
-                    Text('${dashboard.totalEmployees} total employees', style: TextStyle(fontSize: 12, color: isDark ? Colors.white54 : Colors.grey.shade600)),
+                    Text(
+                      '${dashboard.totalEmployees} ${context.tr('dashboard_total_employees_short')}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white54 : Colors.grey.shade600,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -501,7 +703,11 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
               color: isDark ? Colors.white.withOpacity(0.1) : Colors.white,
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.emoji_emotions, size: 40, color: isDark ? Colors.amber : Colors.blue.shade400),
+            child: Icon(
+              Icons.emoji_emotions,
+              size: 40,
+              color: isDark ? Colors.amber : Colors.blue.shade400,
+            ),
           ),
         ],
       ),
@@ -511,9 +717,19 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
   Widget _buildStatCard(_StatItem stat, bool isDark) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: stat.gradient, begin: Alignment.topLeft, end: Alignment.bottomRight),
+        gradient: LinearGradient(
+          colors: stat.gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: stat.color.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))],
+        boxShadow: [
+          BoxShadow(
+            color: stat.color.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -530,31 +746,64 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                   children: [
                     Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: Icon(stat.icon, color: Colors.white, size: 20),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: (stat.trendUp ? Colors.green : Colors.red).withOpacity(0.2),
+                        color: (stat.trendUp ? Colors.green : Colors.red)
+                            .withOpacity(0.2),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(stat.trendUp ? Icons.arrow_upward : Icons.arrow_downward,
-                              color: stat.trendUp ? Colors.green : Colors.red, size: 12),
+                          Icon(
+                            stat.trendUp
+                                ? Icons.arrow_upward
+                                : Icons.arrow_downward,
+                            color: stat.trendUp ? Colors.green : Colors.red,
+                            size: 12,
+                          ),
                           const SizedBox(width: 2),
-                          Text(stat.trend, style: TextStyle(color: stat.trendUp ? Colors.green : Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+                          Text(
+                            stat.trend,
+                            style: TextStyle(
+                              color: stat.trendUp ? Colors.green : Colors.red,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ],
                 ),
                 const Spacer(),
-                Text(stat.value, style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                Text(
+                  stat.value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(stat.title, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
+                Text(
+                  stat.title,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ),
@@ -564,23 +813,69 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
   }
 
   // MARK: - Quick Actions Section
-  Widget _buildQuickActionsSection(bool isDark) {
-    final actions = [
-      _QuickAction(icon: Icons.qr_code_scanner, label: 'Scan', color: Colors.purple, route: '/scan'),
-      _QuickAction(icon: Icons.person_add, label: 'Add Employee', color: Colors.blue, route: '/add-employee'),
-      _QuickAction(icon: Icons.event, label: 'Leave', color: Colors.orange, route: '/leave'),
-      _QuickAction(icon: Icons.assessment, label: 'Reports', color: Colors.green, route: '/reports'),
+  Widget _buildQuickActionsSection(bool isDark, AuthProvider auth) {
+    final actions = <_QuickAction>[
+      _QuickAction(
+        id: 'scan',
+        icon: Icons.qr_code_scanner,
+        label: context.tr('dashboard_action_scan'),
+        color: Colors.purple,
+        purpose: context.tr('dashboard_action_scan_purpose'),
+        onTap: () => _pushScreen(const ClockInScreen()),
+      ),
+      _QuickAction(
+        id: 'leave',
+        icon: Icons.event,
+        label: context.tr('dashboard_action_leave'),
+        color: Colors.orange,
+        purpose: context.tr('dashboard_action_leave_purpose'),
+        onTap: () => _pushScreen(const LeaveScreen()),
+      ),
+      _QuickAction(
+        id: 'reports',
+        icon: Icons.assessment,
+        label: context.tr('dashboard_action_reports'),
+        color: Colors.green,
+        purpose: context.tr('dashboard_action_reports_purpose'),
+        onTap: () => _pushScreen(
+          ChangeNotifierProvider(
+            create: (_) => ClaimProvider(),
+            child: const ClaimReportsScreen(),
+          ),
+        ),
+      ),
     ];
 
+    if (auth.hasPermission('create-employee')) {
+      actions.insert(
+        1,
+        _QuickAction(
+          id: 'add_employee',
+          icon: Icons.person_add,
+          label: context.tr('dashboard_action_add_employee'),
+          color: Colors.blue,
+          purpose: context.tr('dashboard_action_add_employee_purpose'),
+          onTap: () => _pushScreen(const AddEmployeeScreen()),
+        ),
+      );
+    }
+
+    if (!auth.hasAnyPermission(['view-reports', 'view-payroll'])) {
+      actions.removeWhere((action) => action.id == 'reports');
+    }
+
     return _buildSectionCard(
-      title: 'Quick Actions',
+      title: context.tr('dashboard_quick_actions'),
       isDark: isDark,
-      actionText: 'More',
-      onActionTap: () {},
+      actionText: context.tr('dashboard_guide'),
+      onActionTap: () => _showQuickActionGuide(actions, isDark),
       child: GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, childAspectRatio: 0.8),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          childAspectRatio: 0.8,
+        ),
         itemCount: actions.length,
         itemBuilder: (context, index) {
           return TweenAnimationBuilder<double>(
@@ -589,7 +884,10 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
             builder: (context, value, child) {
               return Opacity(
                 opacity: value,
-                child: Transform.translate(offset: Offset(0, 20 * (1 - value)), child: child),
+                child: Transform.translate(
+                  offset: Offset(0, 20 * (1 - value)),
+                  child: child,
+                ),
               );
             },
             child: _buildQuickActionItem(actions[index], isDark),
@@ -601,7 +899,7 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
 
   Widget _buildQuickActionItem(_QuickAction action, bool isDark) {
     return InkWell(
-      onTap: () {},
+      onTap: action.onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -610,13 +908,20 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
           children: [
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: action.color.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+              decoration: BoxDecoration(
+                color: action.color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Icon(action.icon, color: action.color, size: 24),
             ),
             const SizedBox(height: 8),
             Text(
               action.label,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: isDark ? Colors.white70 : Colors.grey.shade700),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white70 : Colors.grey.shade700,
+              ),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -627,24 +932,125 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
     );
   }
 
+  Future<void> _pushScreen(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  }
+
+  void _showQuickActionGuide(List<_QuickAction> actions, bool isDark) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.tr('dashboard_quick_action_guide_title'),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  context.tr('dashboard_quick_action_guide_message'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.5,
+                    color: isDark ? Colors.white70 : Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ...actions.map(
+                  (action) => Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: action.color.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            action.icon,
+                            color: action.color,
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                action.label,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                action.purpose,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  height: 1.45,
+                                  color: isDark
+                                      ? Colors.white60
+                                      : Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // MARK: - Recent Activities Section
-  Widget _buildRecentActivitiesSection(DashboardProvider dashboard, bool isDark) {
+  Widget _buildRecentActivitiesSection(
+    DashboardProvider dashboard,
+    bool isDark,
+  ) {
     final activities = dashboard.recentActivities;
-    
+
     if (activities.isEmpty) {
       return _buildSectionCard(
-        title: 'Recent Activities',
+        title: context.tr('dashboard_recent_activities'),
         isDark: isDark,
-        actionText: 'View All',
+        actionText: context.tr('dashboard_view_all'),
         onActionTap: () {},
-        child: const Center(child: Padding(padding: EdgeInsets.all(20), child: Text('No recent activities'))),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Text(context.tr('dashboard_no_recent_activities')),
+          ),
+        ),
       );
     }
 
     return _buildSectionCard(
-      title: 'Recent Activities',
+      title: context.tr('dashboard_recent_activities'),
       isDark: isDark,
-      actionText: 'View All',
+      actionText: context.tr('dashboard_view_all'),
       onActionTap: () {},
       child: ListView.separated(
         shrinkWrap: true,
@@ -659,7 +1065,10 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
             builder: (context, value, child) {
               return Opacity(
                 opacity: value,
-                child: Transform.translate(offset: Offset(20 * (1 - value), 0), child: child),
+                child: Transform.translate(
+                  offset: Offset(20 * (1 - value), 0),
+                  child: child,
+                ),
               );
             },
             child: _buildActivityItem(activity, isDark),
@@ -674,7 +1083,10 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
       children: [
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+          decoration: BoxDecoration(
+            color: Colors.blue.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: const Icon(Icons.person_add, color: Colors.blue, size: 20),
         ),
         const SizedBox(width: 12),
@@ -682,25 +1094,55 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item.name, style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87, fontSize: 14)),
+              Text(
+                item.name,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 14,
+                ),
+              ),
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Text(item.positionName, style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.grey.shade600)),
-                  Text(' • ', style: TextStyle(color: isDark ? Colors.white38 : Colors.grey.shade400)),
-                  Text(_formatDate(item.createdAt), style: TextStyle(fontSize: 12, color: isDark ? Colors.white54 : Colors.grey.shade500)),
+                  Text(
+                    item.positionName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white70 : Colors.grey.shade600,
+                    ),
+                  ),
+                  Text(
+                    ' • ',
+                    style: TextStyle(
+                      color: isDark ? Colors.white38 : Colors.grey.shade400,
+                    ),
+                  ),
+                  Text(
+                    _formatDate(item.createdAt),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white54 : Colors.grey.shade500,
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
         ),
-        Icon(Icons.more_horiz, color: isDark ? Colors.white38 : Colors.grey.shade400, size: 20),
+        Icon(
+          Icons.more_horiz,
+          color: isDark ? Colors.white38 : Colors.grey.shade400,
+          size: 20,
+        ),
       ],
     );
   }
 
   // MARK: - Upcoming Section
-  Widget _buildUpcomingSection(bool isDark) {
+  Widget _buildUpcomingSection(bool isDark, EventProvider eventProvider) {
+    final auth = context.read<AuthProvider>();
+    return _buildDynamicUpcomingSection(isDark, eventProvider, auth);
     return _buildSectionCard(
       title: 'Upcoming Events',
       isDark: isDark,
@@ -708,17 +1150,41 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
       onActionTap: () {},
       child: Column(
         children: [
-          _buildEventItem('Team Meeting', '10:00 AM • Today', Icons.group, Colors.blue, isDark),
+          _buildEventItem(
+            'Team Meeting',
+            '10:00 AM • Today',
+            Icons.group,
+            Colors.blue,
+            isDark,
+          ),
           const SizedBox(height: 12),
-          _buildEventItem('Project Deadline', 'Tomorrow • 5:00 PM', Icons.event, Colors.red, isDark),
+          _buildEventItem(
+            'Project Deadline',
+            'Tomorrow • 5:00 PM',
+            Icons.event,
+            Colors.red,
+            isDark,
+          ),
           const SizedBox(height: 12),
-          _buildEventItem('Training Session', 'Wed • 2:00 PM', Icons.school, Colors.green, isDark),
+          _buildEventItem(
+            'Training Session',
+            'Wed • 2:00 PM',
+            Icons.school,
+            Colors.green,
+            isDark,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildEventItem(String title, String time, IconData icon, Color color, bool isDark) {
+  Widget _buildEventItem(
+    String title,
+    String time,
+    IconData icon,
+    Color color,
+    bool isDark,
+  ) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -729,7 +1195,10 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Icon(icon, color: color, size: 16),
           ),
           const SizedBox(width: 12),
@@ -737,16 +1206,32 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87, fontSize: 13)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                    fontSize: 13,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(time, style: TextStyle(fontSize: 11, color: isDark ? Colors.white60 : Colors.grey.shade600)),
+                Text(
+                  time,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.white60 : Colors.grey.shade600,
+                  ),
+                ),
               ],
             ),
           ),
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
             child: Icon(Icons.notifications_none, color: color, size: 18),
           ),
         ],
@@ -754,10 +1239,248 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
     );
   }
 
+  Widget _buildDynamicUpcomingSection(
+    bool isDark,
+    EventProvider eventProvider,
+    AuthProvider auth,
+  ) {
+    final events = eventProvider.upcomingEvents.take(3).toList(growable: false);
+    final canManageEvents = auth.hasAnyPermission([
+      'view-settings',
+      'edit-settings',
+      'create-settings',
+    ]);
+
+    return _buildSectionCard(
+      title: context.tr('dashboard_upcoming_events'),
+      isDark: isDark,
+      actionText: canManageEvents ? context.tr('dashboard_manage') : null,
+      onActionTap: canManageEvents ? _openEventManagement : null,
+      child: eventProvider.isLoading && events.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : eventProvider.error != null && events.isEmpty
+          ? Column(
+              children: [
+                Text(
+                  context.tr('dashboard_event_load_failed'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  eventProvider.error!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white60 : Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: eventProvider.fetchUpcomingEvents,
+                  child: Text(context.tr('dashboard_retry')),
+                ),
+              ],
+            )
+          : events.isEmpty
+          ? Column(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.05)
+                        : Colors.blue.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.event_available_outlined,
+                    color: isDark ? Colors.blue.shade200 : Colors.blue,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  context.tr('dashboard_no_upcoming_events'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  context.tr('dashboard_event_empty_hint'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white60 : Colors.grey.shade600,
+                  ),
+                ),
+                if (canManageEvents) ...[
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: _openEventManagement,
+                    icon: const Icon(Icons.add),
+                    label: Text(context.tr('dashboard_create_event')),
+                  ),
+                ],
+              ],
+            )
+          : Column(
+              children: [
+                for (var index = 0; index < events.length; index++) ...[
+                  _buildUpcomingEventItem(events[index], isDark),
+                  if (index != events.length - 1) const SizedBox(height: 12),
+                ],
+              ],
+            ),
+    );
+  }
+
+  Widget _buildUpcomingEventItem(CalendarEvent event, bool isDark) {
+    final isCompanyWide = event.isCompanyWide;
+    final accentColor = isCompanyWide ? Colors.green : Colors.blue;
+    final subtitleColor = isDark ? Colors.white60 : Colors.grey.shade600;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: accentColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              isCompanyWide ? Icons.groups_2_outlined : Icons.mail_outline,
+              color: accentColor,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _formatEventSchedule(event),
+                  style: TextStyle(fontSize: 11, color: subtitleColor),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  event.location.isNotEmpty
+                      ? '${_buildAudienceLabel(event)} • ${event.location}'
+                      : _buildAudienceLabel(event),
+                  style: TextStyle(fontSize: 11, color: subtitleColor),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: accentColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              isCompanyWide
+                  ? context.tr('feature_category_all')
+                  : '${event.inviteCount}',
+              style: TextStyle(
+                color: accentColor,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openEventManagement() {
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.hasAnyPermission([
+      'view-settings',
+      'edit-settings',
+      'create-settings',
+    ])) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('dashboard_no_event_access'))),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const EventManagementScreen()),
+    );
+  }
+
+  String _formatEventSchedule(CalendarEvent event) {
+    final localeCode = _currentLocaleCode();
+    final startLabel = DateFormat(
+      'EEE, dd MMM • HH:mm',
+      localeCode,
+    ).format(event.startsAt);
+
+    if (event.endsAt == null) {
+      return startLabel;
+    }
+
+    final sameDay =
+        event.startsAt.year == event.endsAt!.year &&
+        event.startsAt.month == event.endsAt!.month &&
+        event.startsAt.day == event.endsAt!.day;
+
+    if (sameDay) {
+      return '$startLabel - ${DateFormat('HH:mm', localeCode).format(event.endsAt!)}';
+    }
+
+    return '$startLabel - ${DateFormat('dd MMM • HH:mm', localeCode).format(event.endsAt!)}';
+  }
+
+  String _buildAudienceLabel(CalendarEvent event) {
+    if (event.isCompanyWide) {
+      return context.tr('dashboard_all_employees');
+    }
+
+    if (event.isUserInvited) {
+      return context.tr('dashboard_you_are_invited');
+    }
+
+    return _inviteeLabel(event.inviteCount);
+  }
+
   // MARK: - Notification Panel
-  Widget _buildNotificationPanel(bool isDark, NotificationProvider notificationProvider) {
+  Widget _buildNotificationPanel(
+    bool isDark,
+    NotificationProvider notificationProvider,
+  ) {
     if (notificationProvider.isLoading) {
-      return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
+      return const Padding(
+        padding: EdgeInsets.all(20),
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
 
     if (notificationProvider.notifications.isEmpty) {
@@ -767,9 +1490,20 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.notifications_none, size: 50, color: isDark ? Colors.white38 : Colors.grey.shade400),
+              Icon(
+                Icons.notifications_none,
+                size: 50,
+                color: isDark ? Colors.white38 : Colors.grey.shade400,
+              ),
               const SizedBox(height: 8),
-              Text('Tidak ada notifikasi', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: isDark ? Colors.white60 : Colors.grey.shade600)),
+              Text(
+                context.tr('dashboard_no_notifications'),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? Colors.white60 : Colors.grey.shade600,
+                ),
+              ),
             ],
           ),
         ),
@@ -781,21 +1515,51 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
       children: [
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: isDark ? Colors.white10 : Colors.grey.shade200,
+              ),
+            ),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
-                  Icon(Icons.notifications_active, size: 20, color: isDark ? Colors.blue.shade300 : Colors.blue),
+                  Icon(
+                    Icons.notifications_active,
+                    size: 20,
+                    color: isDark ? Colors.blue.shade300 : Colors.blue,
+                  ),
                   const SizedBox(width: 8),
-                  Text('Notifikasi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                  Text(
+                    context.tr('dashboard_notifications'),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
                   if (notificationProvider.unreadCount > 0)
                     Container(
                       margin: const EdgeInsets.only(left: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(12)),
-                      child: Text(notificationProvider.unreadCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        notificationProvider.unreadCount.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -803,12 +1567,17 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                 TextButton(
                   onPressed: () => notificationProvider.markAllAsRead(),
                   style: TextButton.styleFrom(
-                    foregroundColor: isDark ? Colors.blue.shade300 : Colors.blue,
+                    foregroundColor: isDark
+                        ? Colors.blue.shade300
+                        : Colors.blue,
                     minimumSize: Size.zero,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  child: const Text('Tandai semua sudah dibaca', style: TextStyle(fontSize: 12)),
+                  child: Text(
+                    context.tr('dashboard_mark_all_read'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                 ),
             ],
           ),
@@ -817,8 +1586,13 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
           child: ListView.separated(
             shrinkWrap: true,
             physics: const AlwaysScrollableScrollPhysics(),
-            itemCount: notificationProvider.notifications.length > 5 ? 5 : notificationProvider.notifications.length,
-            separatorBuilder: (_, __) => Divider(height: 1, color: isDark ? Colors.white10 : Colors.grey.shade200),
+            itemCount: notificationProvider.notifications.length > 5
+                ? 5
+                : notificationProvider.notifications.length,
+            separatorBuilder: (_, __) => Divider(
+              height: 1,
+              color: isDark ? Colors.white10 : Colors.grey.shade200,
+            ),
             itemBuilder: (context, index) {
               final notification = notificationProvider.notifications[index];
               return _buildNotificationItem(notification, isDark);
@@ -828,14 +1602,35 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
         if (notificationProvider.notifications.length > 5)
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(border: Border(top: BorderSide(color: isDark ? Colors.white10 : Colors.grey.shade200))),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: isDark ? Colors.white10 : Colors.grey.shade200,
+                ),
+              ),
+            ),
             child: Center(
               child: TextButton(
                 onPressed: () {
-                  // TODO: Navigasi ke halaman semua notifikasi
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationScreen(),
+                    ),
+                  );
                 },
-                child: Text('Lihat semua notifikasi (${notificationProvider.notifications.length})',
-                    style: TextStyle(fontSize: 12, color: isDark ? Colors.blue.shade300 : Colors.blue)),
+                child: Text(
+                  context
+                      .tr('dashboard_view_all_notifications')
+                      .replaceAll(
+                        '{count}',
+                        notificationProvider.notifications.length.toString(),
+                      ),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.blue.shade300 : Colors.blue,
+                  ),
+                ),
               ),
             ),
           ),
@@ -850,7 +1645,7 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
         if (!notification.isRead) {
           context.read<NotificationProvider>().markAsRead(notification.id);
         }
-        
+
         // TODO: Navigasi ke halaman terkait berdasarkan type
         // if (notification.type == 'leave_request') {
         //   // Navigasi ke halaman detail leave request
@@ -860,7 +1655,9 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: !notification.isRead
-              ? (isDark ? notification.color.withOpacity(0.15) : notification.color.withOpacity(0.05))
+              ? (isDark
+                    ? notification.color.withOpacity(0.15)
+                    : notification.color.withOpacity(0.05))
               : null,
         ),
         child: Row(
@@ -873,7 +1670,11 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                 color: notification.color.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(notification.icon, color: notification.color, size: 20),
+              child: Icon(
+                notification.icon,
+                color: notification.color,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 12),
 
@@ -886,7 +1687,9 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                   Text(
                     notification.displayTitle,
                     style: TextStyle(
-                      fontWeight: !notification.isRead ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: !notification.isRead
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                       color: isDark ? Colors.white : Colors.black87,
                       fontSize: 14,
                     ),
@@ -903,13 +1706,14 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  
+
                   // Tampilkan informasi tambahan untuk leave request
-                  if (notification.type == 'leave_request' && notification.days != null)
+                  if (notification.type == 'leave_request' &&
+                      notification.days != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
-                        'Duration: ${notification.days} ${notification.days == 1 ? 'day' : 'days'}',
+                        '${context.tr('dashboard_duration_label')}: ${notification.days} ${notification.days == 1 ? context.tr('dashboard_duration_day') : context.tr('dashboard_duration_days')}',
                         style: TextStyle(
                           fontSize: 11,
                           color: notification.color,
@@ -917,7 +1721,7 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                         ),
                       ),
                     ),
-                  
+
                   const SizedBox(height: 4),
 
                   // Time
@@ -953,11 +1757,22 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
     final now = DateTime.now();
     final difference = now.difference(time);
 
-    if (difference.inMinutes < 1) return 'Baru saja';
-    if (difference.inMinutes < 60) return '${difference.inMinutes} menit yang lalu';
-    if (difference.inHours < 24) return '${difference.inHours} jam yang lalu';
-    if (difference.inDays < 7) return '${difference.inDays} hari yang lalu';
-    return DateFormat('dd MMM yyyy').format(time);
+    if (difference.inMinutes < 1) return context.tr('dashboard_just_now');
+    if (difference.inMinutes < 60)
+      return context
+          .tr('dashboard_minutes_ago')
+          .replaceAll('{count}', difference.inMinutes.toString());
+    if (difference.inHours < 24) {
+      return context
+          .tr('dashboard_hours_ago')
+          .replaceAll('{count}', difference.inHours.toString());
+    }
+    if (difference.inDays < 7) {
+      return context
+          .tr('dashboard_days_ago')
+          .replaceAll('{count}', difference.inDays.toString());
+    }
+    return DateFormat('dd MMM yyyy', _currentLocaleCode()).format(time);
   }
 
   // MARK: - Helper Widgets
@@ -973,7 +1788,13 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -981,17 +1802,33 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: isDark ? Colors.white : Colors.grey.shade800, letterSpacing: -0.3)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : Colors.grey.shade800,
+                  letterSpacing: -0.3,
+                ),
+              ),
               if (actionText != null)
                 TextButton(
                   onPressed: onActionTap,
                   style: TextButton.styleFrom(
-                    foregroundColor: isDark ? Colors.blue.shade300 : Colors.blue,
+                    foregroundColor: isDark
+                        ? Colors.blue.shade300
+                        : Colors.blue,
                     minimumSize: Size.zero,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  child: Text(actionText, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  child: Text(
+                    actionText,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -1007,9 +1844,18 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(isDark ? Colors.blue.shade300 : Colors.blue)),
+          CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isDark ? Colors.blue.shade300 : Colors.blue,
+            ),
+          ),
           const SizedBox(height: 16),
-          Text('Loading your dashboard...', style: TextStyle(color: isDark ? Colors.white70 : Colors.grey.shade600)),
+          Text(
+            context.tr('dashboard_loading'),
+            style: TextStyle(
+              color: isDark ? Colors.white70 : Colors.grey.shade600,
+            ),
+          ),
         ],
       ),
     );
@@ -1023,32 +1869,59 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
             const SizedBox(height: 16),
-            Text('Oops! Something went wrong', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.grey.shade800)),
+            Text(
+              context.tr('dashboard_error_title'),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.grey.shade800,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(error, style: TextStyle(color: Colors.red.shade400, fontSize: 14), textAlign: TextAlign.center),
+            Text(
+              error,
+              style: TextStyle(color: Colors.red.shade400, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () {
                 final authProvider = context.read<AuthProvider>();
                 final companyCode = authProvider.getCompanyCode();
-                context.read<DashboardProvider>().fetchDashboardData(companyCode: companyCode);
-                context.read<NotificationProvider>().fetchNotifications(); // TAMBAHKAN REFRESH NOTIFIKASI
+                context.read<DashboardProvider>().fetchDashboardData(
+                  companyCode: companyCode,
+                );
+                context
+                    .read<NotificationProvider>()
+                    .fetchNotifications(); // TAMBAHKAN REFRESH NOTIFIKASI
+                context.read<EventProvider>().fetchUpcomingEvents();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 elevation: 0,
               ),
-              child: const Text('Try Again'),
+              child: Text(context.tr('dashboard_try_again')),
             ),
           ],
         ),
@@ -1059,24 +1932,42 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
   // MARK: - Utility Methods
   String _getFormattedDate() {
     final now = DateTime.now();
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${now.day} ${months[now.month - 1]} ${now.year}';
+    return DateFormat('dd MMM yyyy', _currentLocaleCode()).format(now);
   }
 
   String _getTimeGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Morning';
-    if (hour < 17) return 'Afternoon';
-    return 'Evening';
+    if (hour < 12) return context.tr('dashboard_morning');
+    if (hour < 17) return context.tr('dashboard_afternoon');
+    return context.tr('dashboard_evening');
   }
 
   String _formatDate(String dateStr) {
     try {
       final date = DateTime.parse(dateStr);
-      return DateFormat('dd MMM yyyy').format(date);
+      return DateFormat('dd MMM yyyy', _currentLocaleCode()).format(date);
     } catch (e) {
       return dateStr;
     }
+  }
+
+  String _currentLocaleCode() {
+    final locale = Localizations.localeOf(context);
+    final countryCode = locale.countryCode;
+
+    if (countryCode == null || countryCode.isEmpty) {
+      return locale.languageCode;
+    }
+
+    return '${locale.languageCode}_$countryCode';
+  }
+
+  String _inviteeLabel(int count) {
+    if (_currentLocaleCode().startsWith('id')) {
+      return '$count undangan';
+    }
+
+    return '$count invitee${count == 1 ? '' : 's'}';
   }
 }
 
@@ -1102,15 +1993,19 @@ class _StatItem {
 }
 
 class _QuickAction {
+  final String id;
   final IconData icon;
   final String label;
   final Color color;
-  final String route;
+  final String purpose;
+  final VoidCallback onTap;
 
   _QuickAction({
+    required this.id,
     required this.icon,
     required this.label,
     required this.color,
-    required this.route,
+    required this.purpose,
+    required this.onTap,
   });
 }

@@ -22,10 +22,14 @@ class ApiConstants {
   static const String updateProfileEndpoint = '/api/me/update';
   static const String changePasswordEndpoint = '/api/change-password';
   static const String logoutEndpoint = '/api/logout';
-  static const String getUserInfoEndpoint = '/me';
+  static const String getUserInfoEndpoint = meEndpoint;
+  static const String settingsEndpoint = '/api/settings';
+  static const String mapTilesEndpoint = '/map-tile-cache/{z}/{x}/{y}.png';
+  static const String mapTilesProxyEndpoint = '/map-tile.php?z={z}&x={x}&y={y}';
 
-      static const String attendanceTodayEndpoint = '/attendances?today=true';
-        static const String leaveTodayEndpoint = '/leave-requests?status=approved&today=true';
+  static const String attendanceTodayEndpoint = '/api/attendances?today=true';
+  static const String leaveTodayEndpoint =
+      '/api/leave-requests?status=approved&today=true';
 
   // ===============================
   // 🔔 NOTIFICATIONS
@@ -43,7 +47,6 @@ class ApiConstants {
   static const String attendanceDailyEndpoint = '/api/attendances/daily-report';
   static const String leaveBalanceEndpoint = '/api/leave-balance';
 
-
   // ===============================
   // 👥 EMPLOYEES
   // ===============================
@@ -51,19 +54,24 @@ class ApiConstants {
   static const String employeesEndpoint = '/api/employees';
   static const String employeesListEndpoint = '/api/employees/list';
 
-
   // ===============================
   // 📝 ATTENDANCE - TAMBAHKAN INI
   // ===============================
 
-  static const String attendanceEndpoint = '/api/attendances';          // UNTUK MENDAPATKAN DATA ABSENSI
-  static const String clockInEndpoint = '/api/attendances/clock-in';     // UNTUK CLOCK IN
-  static const String clockOutEndpoint = '/api/attendances/clock-out';   // UNTUK CLOCK OUT
-  static const String dailyReportEndpoint = '/api/attendances/daily-report'; // UNTUK LAPORAN HARIAN
-  static const String attendanceSummaryEndpoint = '/api/attendances/summary'; // UNTUK RINGKASAN
-  static const String attendanceHistoryEndpoint = '/api/attendances/history'; // UNTUK RIWAYAT
-  static const String attendanceCorrectionEndpoint = '/api/attendances/correction'; // UNTUK KOREKSI
-
+  static const String attendanceEndpoint =
+      '/api/attendances'; // UNTUK MENDAPATKAN DATA ABSENSI
+  static const String clockInEndpoint =
+      '/api/attendances/clock-in'; // UNTUK CLOCK IN
+  static const String clockOutEndpoint =
+      '/api/attendances/clock-out'; // UNTUK CLOCK OUT
+  static const String dailyReportEndpoint =
+      '/api/attendances/daily-report'; // UNTUK LAPORAN HARIAN
+  static const String attendanceSummaryEndpoint =
+      '/api/attendances/summary'; // UNTUK RINGKASAN
+  static const String attendanceHistoryEndpoint =
+      '/api/attendances/history'; // UNTUK RIWAYAT
+  static const String attendanceCorrectionEndpoint =
+      '/api/attendances/correction'; // UNTUK KOREKSI
 
   // ===============================
   // 🏝️ LEAVE

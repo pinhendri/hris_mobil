@@ -4,20 +4,24 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+import '../services/session_storage.dart';
 import '../models/recruitment_model.dart';
 
 class RecruitmentProvider with ChangeNotifier {
   List<OpenPosition> _openPositions = [];
   List<PipelineStage> _pipeline = [];
   List<Application> _applications = [];
-  RecruitmentMetrics _metrics = RecruitmentMetrics(conversionRate: 0, averageTimeToHire: 0);
+  RecruitmentMetrics _metrics = RecruitmentMetrics(
+    conversionRate: 0,
+    averageTimeToHire: 0,
+  );
   List<Department> _departments = [];
   List<Position> _positions = [];
-  
+
   bool _isLoading = false;
   String? _error;
   String? _filteredByCCode;
-  
+
   final Map<int, String> _requirementsCache = {};
 
   // Getters
@@ -41,7 +45,7 @@ class RecruitmentProvider with ChangeNotifier {
     try {
       print('🔄 Fetching recruitment data...');
       final response = await _apiService.get('/recruitment');
-      
+
       print('📥 Recruitment API Response: $response');
 
       if (response is Map<String, dynamic>) {
@@ -49,17 +53,17 @@ class RecruitmentProvider with ChangeNotifier {
         if (response['openPositions'] is List) {
           final items = response['openPositions'] as List;
           print('📦 Raw openPositions count: ${items.length}');
-          
+
           _openPositions = items.map((p) {
             print('📦 Processing open position: $p');
             return OpenPosition.fromJson(p);
           }).toList();
-          
+
           print('✅ Parsed ${_openPositions.length} open positions');
         } else {
           _openPositions = [];
         }
-        
+
         // Parse applications
         if (response['applications'] is List) {
           _applications = (response['applications'] as List)
@@ -68,7 +72,7 @@ class RecruitmentProvider with ChangeNotifier {
         } else {
           _applications = [];
         }
-        
+
         // Handle statusCounts
         Map<String, dynamic> statusCounts = {};
         if (response['statusCounts'] is Map) {
@@ -76,13 +80,13 @@ class RecruitmentProvider with ChangeNotifier {
         } else {
           print('⚠️ statusCounts is a List, using empty Map');
         }
-        
+
         // Build pipeline
         const stages = ['Applied', 'Screening', 'Interview', 'Offer', 'Hired'];
         _pipeline = stages.map((stage) {
           final key = stage.toLowerCase();
           int count = 0;
-          
+
           if (statusCounts.containsKey(key)) {
             final value = statusCounts[key];
             if (value is int) {
@@ -93,21 +97,22 @@ class RecruitmentProvider with ChangeNotifier {
               count = value.toInt();
             }
           }
-          
+
           return PipelineStage(stage: stage, count: count);
         }).toList();
-        
+
         // Parse metrics
         if (response['metrics'] is Map) {
           final metricsData = response['metrics'] as Map;
           _metrics = RecruitmentMetrics(
             conversionRate: (metricsData['conversionRate'] ?? 0).toDouble(),
-            averageTimeToHire: (metricsData['averageTimeToHire'] ?? 0).toDouble(),
+            averageTimeToHire: (metricsData['averageTimeToHire'] ?? 0)
+                .toDouble(),
           );
         }
-        
+
         _filteredByCCode = response['filtered_by_c_code']?.toString();
-        
+
         print('✅ Loaded ${_openPositions.length} open positions');
         print('✅ Loaded ${_applications.length} applications');
       }
@@ -125,7 +130,7 @@ class RecruitmentProvider with ChangeNotifier {
     try {
       print('🔄 Fetching departments...');
       final response = await _apiService.get('/departments');
-      
+
       print('📥 Departments API Response: $response');
 
       if (response is Map<String, dynamic>) {
@@ -152,7 +157,7 @@ class RecruitmentProvider with ChangeNotifier {
     try {
       print('🔄 Fetching positions...');
       final response = await _apiService.get('/employees/master/position');
-      
+
       print('📥 Positions API Response: $response');
 
       if (response is Map<String, dynamic>) {
@@ -183,16 +188,17 @@ class RecruitmentProvider with ChangeNotifier {
     try {
       print('🔄 Fetching job requirement for job $jobId...');
       final response = await _apiService.get('/recruitment/jobs/$jobId');
-      
+
       if (response is Map<String, dynamic> && response['success'] == true) {
-        final requirement = response['data']['requirement'] ?? 'No requirement specified';
+        final requirement =
+            response['data']['requirement'] ?? 'No requirement specified';
         _requirementsCache[jobId] = requirement;
         return requirement;
       }
-      return null;
+      return '';
     } catch (e) {
       print('❌ Error fetching job requirement: $e');
-      return null;
+      return '';
     }
   }
 
@@ -204,7 +210,7 @@ class RecruitmentProvider with ChangeNotifier {
     try {
       print('🔄 Creating new job with data: $jobData');
       final response = await _apiService.post('/recruitment/jobs', jobData);
-      
+
       print('📥 Create job response: $response');
 
       if (response is Map<String, dynamic>) {
@@ -223,11 +229,10 @@ class RecruitmentProvider with ChangeNotifier {
   }
 
   // Helper method untuk mendapatkan token dari berbagai sumber
-  Future<String?> _getTokenFromMultipleSources() async {
+  Future<String> _getTokenFromMultipleSources() async {
     try {
+      final token = await SessionStorage.getToken();
       final prefs = await SharedPreferences.getInstance();
-      
-      // Daftar key yang mungkin digunakan untuk menyimpan token
       final possibleKeys = [
         'auth_token',
         'token',
@@ -239,7 +244,9 @@ class RecruitmentProvider with ChangeNotifier {
         'login_token',
         'session_token',
       ];
-      
+      print('ðŸ”‘ Using token: ${token.isNotEmpty ? 'found' : 'not found'}');
+      return token;
+
       // Coba semua kemungkinan key
       for (var key in possibleKeys) {
         final token = prefs.getString(key);
@@ -248,24 +255,26 @@ class RecruitmentProvider with ChangeNotifier {
           return token;
         }
       }
-      
+
       // Jika tidak ditemukan, log semua keys yang ada untuk debugging
       print('⚠️ No token found in SharedPreferences');
       final allKeys = prefs.getKeys();
       print('📋 Available SharedPreferences keys: $allKeys');
-      
+
       // Coba baca semua nilai string untuk mencari token
       for (var key in allKeys) {
         final value = prefs.get(key);
         if (value is String && value.length > 20) {
-          print('🔍 Possible token in key: $key = ${value.substring(0, min(20, value.length))}...');
+          print(
+            '🔍 Possible token in key: $key = ${value.substring(0, min(20, value.length))}...',
+          );
         }
       }
-      
-      return null;
+
+      return '';
     } catch (e) {
       print('❌ Error getting token from multiple sources: $e');
-      return null;
+      return '';
     }
   }
 
@@ -273,53 +282,53 @@ class RecruitmentProvider with ChangeNotifier {
   Future<Map<String, String>> _getHeaders() async {
     final token = await _getTokenFromMultipleSources();
     print('🔑 Using token: ${token != null ? 'found' : 'not found'}');
-    
-    return {
-      'Authorization': 'Bearer $token',
-      'Accept': 'application/json',
-    };
+
+    return {'Authorization': 'Bearer $token', 'Accept': 'application/json'};
   }
 
   // Add new application with CV file
-  Future<bool> addApplicationWithCV(Map<String, dynamic> applicationData, File cvFile) async {
+  Future<bool> addApplicationWithCV(
+    Map<String, dynamic> applicationData,
+    File cvFile,
+  ) async {
     _isLoading = true;
     notifyListeners();
 
     try {
       print('🔄 Adding new application with CV: $applicationData');
-      
+
       // Dapatkan token dari multiple sources
       final token = await _getTokenFromMultipleSources();
-      
-      if (token == null || token.isEmpty) {
+
+      if (token.isEmpty) {
         _error = 'Authentication token not found. Please login again.';
         print('❌ Token not found in any storage');
         return false;
       }
-      
+
       print('✅ Token found: ${token.substring(0, min(20, token.length))}...');
-      
+
       // Buat multipart request
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('${ApiService.baseUrl}/api/recruitment/applications'),
       );
-      
+
       // Add headers
       request.headers.addAll({
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
       });
-      
+
       // Add fields
       applicationData.forEach((key, value) {
         request.fields[key] = value.toString();
       });
-      
+
       // Add file
       var fileStream = http.ByteStream(cvFile.openRead());
       var fileLength = await cvFile.length();
-      
+
       var multipartFile = http.MultipartFile(
         'cv',
         fileStream,
@@ -327,14 +336,14 @@ class RecruitmentProvider with ChangeNotifier {
         filename: cvFile.path.split('/').last,
         contentType: MediaType('application', 'pdf'),
       );
-      
+
       request.files.add(multipartFile);
-      
+
       print('📤 Sending request to: ${request.url}');
       print('📤 Headers: ${request.headers}');
       print('📤 Fields: ${request.fields}');
       print('📤 File: ${multipartFile.filename} (${fileLength} bytes)');
-      
+
       // Send request dengan timeout
       var streamedResponse = await request.send().timeout(
         const Duration(seconds: 30),
@@ -342,9 +351,9 @@ class RecruitmentProvider with ChangeNotifier {
           throw Exception('Connection timeout');
         },
       );
-      
+
       var response = await http.Response.fromStream(streamedResponse);
-      
+
       print('📥 Add application response status: ${response.statusCode}');
       print('📥 Add application response body: ${response.body}');
 
@@ -375,8 +384,11 @@ class RecruitmentProvider with ChangeNotifier {
 
     try {
       print('🔄 Closing job $jobId...');
-      final response = await _apiService.put('/recruitment/jobs/$jobId/close', {});
-      
+      final response = await _apiService.put(
+        '/recruitment/jobs/$jobId/close',
+        {},
+      );
+
       print('📥 Close job response: $response');
 
       if (response is Map<String, dynamic> && response['success'] == true) {
@@ -396,59 +408,59 @@ class RecruitmentProvider with ChangeNotifier {
 
   // Update application status
   // Update application status
-Future<bool> updateApplicationStatus(int applicationId, String status) async {
-  _isLoading = true;
-  notifyListeners();
-
-  try {
-    print('🔄 Updating application $applicationId status to $status...');
-    
-    // ENDPOINT YANG BENAR - Sesuai dengan route Laravel
-    final response = await _apiService.put(
-      '/recruitment/applications/$applicationId',  // Perhatikan: tanpa /status di akhir
-      {'status': status}
-    );
-    
-    print('📥 Update status response: $response');
-
-    if (response is Map<String, dynamic>) {
-      // Cek berbagai kemungkinan struktur response
-      if (response['success'] == true) {
-        await fetchRecruitmentData();
-        return true;
-      } else if (response['status'] == 'success') {
-        await fetchRecruitmentData();
-        return true;
-      } else if (response['application'] != null) {
-        await fetchRecruitmentData();
-        return true;
-      }
-    }
-    return false;
-  } catch (e) {
-    print('❌ Error updating status: $e');
-    _error = e.toString();
-    return false;
-  } finally {
-    _isLoading = false;
+  Future<bool> updateApplicationStatus(int applicationId, String status) async {
+    _isLoading = true;
     notifyListeners();
+
+    try {
+      print('🔄 Updating application $applicationId status to $status...');
+
+      // ENDPOINT YANG BENAR - Sesuai dengan route Laravel
+      final response = await _apiService.put(
+        '/recruitment/applications/$applicationId', // Perhatikan: tanpa /status di akhir
+        {'status': status},
+      );
+
+      print('📥 Update status response: $response');
+
+      if (response is Map<String, dynamic>) {
+        // Cek berbagai kemungkinan struktur response
+        if (response['success'] == true) {
+          await fetchRecruitmentData();
+          return true;
+        } else if (response['status'] == 'success') {
+          await fetchRecruitmentData();
+          return true;
+        } else if (response['application'] != null) {
+          await fetchRecruitmentData();
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      print('❌ Error updating status: $e');
+      _error = e.toString();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
-}
 
   // Public method untuk mendapatkan token (untuk digunakan di screen)
-  Future<String?> getToken() async {
+  Future<String> getToken() async {
     return await _getTokenFromMultipleSources();
   }
 
   // Get department name by ID
   String getDepartmentName(String? departmentId) {
     if (departmentId == null || departmentId.isEmpty) return 'Unknown';
-    
+
     final dept = _departments.firstWhere(
       (d) => d.id.toString() == departmentId,
       orElse: () => Department(id: 0, name: 'Unknown'),
     );
-    
+
     return dept.name != 'Unknown' ? dept.name : 'Dept $departmentId';
   }
 

@@ -1,11 +1,43 @@
+List<String> _stringListFromDynamic(dynamic value) {
+  if (value is List) {
+    final items = value
+        .map((item) {
+          if (item is Map<String, dynamic>) {
+            return item['name']?.toString() ?? '';
+          }
+
+          return item?.toString() ?? '';
+        })
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+
+    return items;
+  }
+
+  if (value is String) {
+    return value
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+  }
+
+  return const [];
+}
+
 // lib/models/user.dart
 class User {
   final int id;
   final String name;
   final String email;
   final String uuid;
-  final String? employeeUuid; // Tambahkan field ini (nullable karena mungkin tidak selalu ada)
+  final String? employeeUuid;
   final String position;
+  final String role;
+  final List<String> roles;
   final String selectedCCode;
   final List<String> permissions;
 
@@ -14,26 +46,35 @@ class User {
     required this.name,
     required this.email,
     required this.uuid,
-    this.employeeUuid, // Optional, karena mungkin tidak selalu ada
+    this.employeeUuid,
     required this.position,
+    this.role = '',
+    this.roles = const [],
     required this.selectedCCode,
     required this.permissions,
   });
 
   factory User.fromMap(Map<String, dynamic> map) {
+    final roleNames = _stringListFromDynamic(map['roles']);
+    final primaryRole = map['role']?.toString().trim() ?? '';
+    final List<String> normalizedRoles = roleNames.isNotEmpty
+        ? roleNames
+        : (primaryRole.isNotEmpty ? <String>[primaryRole] : const <String>[]);
+
     return User(
       id: map['id'] ?? 0,
       name: map['name'] ?? '',
       email: map['email'] ?? '',
       uuid: map['uuid'] ?? '',
-      // Coba ambil dari berbagai kemungkinan field
-      employeeUuid: map['employee_uuid']?.toString() ??
+      employeeUuid:
+          map['employee_uuid']?.toString() ??
           map['employeeUuid']?.toString() ??
-          map['uuid'] ?? // Fallback ke uuid jika tidak ada
-          null,
+          map['uuid']?.toString(),
       position: map['position'] ?? '',
-      selectedCCode: map['selectedCCode'] ?? map['selected_c_code'] ?? '', // Support kedua format
-      permissions: List<String>.from(map['permissions'] ?? []),
+      role: primaryRole,
+      roles: normalizedRoles,
+      selectedCCode: map['selectedCCode'] ?? map['selected_c_code'] ?? '',
+      permissions: _stringListFromDynamic(map['permissions']),
     );
   }
 
@@ -45,12 +86,13 @@ class User {
       'uuid': uuid,
       'employee_uuid': employeeUuid,
       'position': position,
+      'role': role,
+      'roles': roles,
       'selected_c_code': selectedCCode,
       'permissions': permissions,
-
     };
   }
 
-  // Helper method untuk mendapatkan UUID karyawan (prioritaskan employeeUuid)
+  // Prioritaskan UUID employee jika tersedia.
   String get employeeId => employeeUuid ?? uuid;
 }

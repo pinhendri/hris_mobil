@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -6,35 +7,44 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 // PROVIDERS
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/language_provider.dart';
 import 'providers/dashboard_provider.dart';
 import 'providers/notification_provider.dart';
 import 'providers/attendance_provider.dart';
 import 'providers/leave_provider.dart';
-import 'screens/leave/leave_screen.dart';
+import 'providers/event_provider.dart';
 import 'providers/client_provider.dart';
 import 'providers/correction_provider.dart';
-import 'package:hris_mobile/providers/shift_provider.dart'; 
+import 'package:hris_mobile/providers/shift_provider.dart';
 import 'package:hris_mobile/providers/recruitment_provider.dart';
 
 // CORE & SCREENS
 import 'core/theme/app_theme.dart';
+import 'screens/app_bootstrap_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/select_company_screen.dart';
-import 'providers/department_provider.dart'; 
+import 'providers/department_provider.dart';
 import 'providers/employee_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = false;
 
-  // 🔴 Inisialisasi locale Indonesia (tanggal, intl)
+  // Initialize date formatting for supported app locales.
   await initializeDateFormatting('id_ID', null);
+  await initializeDateFormatting('en_US', null);
 
-  runApp(const MyApp());
+  final languageProvider = LanguageProvider(loadOnInit: false);
+  await languageProvider.loadSavedLanguage();
+
+  runApp(MyApp(languageProvider: languageProvider));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.languageProvider});
+
+  final LanguageProvider languageProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -44,11 +54,13 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
 
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider<LanguageProvider>.value(value: languageProvider),
         ChangeNotifierProvider(create: (_) => DashboardProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => EventProvider()),
         ChangeNotifierProvider(create: (_) => AttendanceProvider()),
-        ChangeNotifierProvider(create: (_) => DepartmentProvider()), 
-        ChangeNotifierProvider(create: (_) => EmployeeProvider()), 
+        ChangeNotifierProvider(create: (_) => DepartmentProvider()),
+        ChangeNotifierProvider(create: (_) => EmployeeProvider()),
         ChangeNotifierProvider(create: (_) => ShiftProvider()),
         ChangeNotifierProvider(create: (_) => ClientProvider()),
         ChangeNotifierProvider(create: (_) => CorrectionProvider()),
@@ -56,26 +68,18 @@ class MyApp extends StatelessWidget {
 
         // LeaveProvider butuh AuthProvider, jadi harus dibuat setelah AuthProvider tersedia
         ChangeNotifierProvider(
-          create: (context) => LeaveProvider(
-            Provider.of<AuthProvider>(context, listen: false),
-          ),
+          create: (context) =>
+              LeaveProvider(Provider.of<AuthProvider>(context, listen: false)),
         ),
       ],
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, _) {
+      child: Consumer2<ThemeProvider, LanguageProvider>(
+        builder: (context, themeProvider, languageProvider, _) {
           return MaterialApp(
             title: 'HR App',
             debugShowCheckedModeBanner: false,
+            locale: languageProvider.locale,
+            supportedLocales: LanguageProvider.supportedLocales,
 
-            // 🔴 PAKSA LOCALE INDONESIA
-            locale: const Locale('id', 'ID'),
-
-            supportedLocales: const [
-              Locale('id', 'ID'),
-              Locale('en', 'US'),
-            ],
-
-            // 🔴 WAJIB untuk localization
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
@@ -86,9 +90,9 @@ class MyApp extends StatelessWidget {
             darkTheme: AppTheme.darkTheme,
             themeMode: themeProvider.themeMode,
 
-            initialRoute: '/',
             routes: {
-              '/': (context) => const LoginScreen(),
+              '/': (context) => const AppBootstrapScreen(),
+              '/login': (context) => const LoginScreen(),
               '/home': (context) => const MainScreen(),
             },
 
@@ -96,8 +100,7 @@ class MyApp extends StatelessWidget {
               if (settings.name == '/select-company') {
                 final companies = settings.arguments as List;
                 return MaterialPageRoute(
-                  builder: (_) =>
-                      SelectCompanyScreen(companies: companies),
+                  builder: (_) => SelectCompanyScreen(companies: companies),
                 );
               }
               return null;

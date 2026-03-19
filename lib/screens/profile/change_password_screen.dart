@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/localization/app_strings.dart';
 import '../../providers/auth_provider.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -37,7 +38,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Passwords do not match',
+            context.tr('change_password_mismatch'),
             style: GoogleFonts.poppins(),
           ),
           backgroundColor: AppColors.error,
@@ -68,8 +69,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         SnackBar(
           content: Text(
             success
-                ? (result['message'] ?? 'Password changed successfully')
-                : (result['message'] ?? 'Failed to change password'),
+                ? (result['message'] ?? context.tr('change_password_success'))
+                : (result['message'] ?? context.tr('change_password_failed')),
             style: GoogleFonts.poppins(),
           ),
           backgroundColor: success ? Colors.green.shade400 : AppColors.error,
@@ -89,7 +90,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Error: $e',
+            '${context.tr('generic_error')}: $e',
             style: GoogleFonts.poppins(),
           ),
           backgroundColor: AppColors.error,
@@ -107,13 +108,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   }
 
   Widget _passwordField({
-    required String label,
+    required String fieldKey,
     required TextEditingController controller,
     required bool obscure,
     required VoidCallback toggle,
     String? Function(String?)? additionalValidator,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final label = context.tr(fieldKey);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -133,10 +135,10 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         ),
         validator: (value) {
           if (value == null || value.isEmpty) {
-            return '$label is required';
+            return '$label ${context.tr('change_password_required')}';
           }
-          if (label != 'Current Password' && value.length < 6) {
-            return 'Must be at least 6 characters';
+          if (fieldKey != 'change_password_current' && value.length < 6) {
+            return context.tr('change_password_min_length');
           }
           if (additionalValidator != null) {
             return additionalValidator(value);
@@ -150,7 +152,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             fontSize: 14,
           ),
           prefixIcon: Icon(
-            _getIconForLabel(label),
+            _getIconForField(fieldKey),
             color: isDark ? Colors.white70 : Colors.grey.shade600,
             size: 20,
           ),
@@ -172,13 +174,13 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     );
   }
 
-  IconData _getIconForLabel(String label) {
-    switch (label) {
-      case 'Current Password':
+  IconData _getIconForField(String fieldKey) {
+    switch (fieldKey) {
+      case 'change_password_current':
         return Icons.lock_outline;
-      case 'New Password':
+      case 'change_password_new':
         return Icons.lock_reset;
-      case 'Confirm New Password':
+      case 'change_password_confirm':
         return Icons.check_circle_outline;
       default:
         return Icons.lock_outline;
@@ -194,10 +196,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[50],
       appBar: AppBar(
         title: Text(
-          'Change Password',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-          ),
+          context.tr('change_password_title'),
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
         backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
@@ -235,7 +235,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Password must be at least 6 characters long',
+                        context.tr('change_password_hint'),
                         style: GoogleFonts.poppins(
                           fontSize: 13,
                           color: isDark ? Colors.white70 : Colors.grey.shade700,
@@ -250,27 +250,29 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
               // Password Fields
               _passwordField(
-                label: 'Current Password',
+                fieldKey: 'change_password_current',
                 controller: _currentController,
                 obscure: _obscureCurrent,
-                toggle: () => setState(() => _obscureCurrent = !_obscureCurrent),
+                toggle: () =>
+                    setState(() => _obscureCurrent = !_obscureCurrent),
               ),
 
               _passwordField(
-                label: 'New Password',
+                fieldKey: 'change_password_new',
                 controller: _newController,
                 obscure: _obscureNew,
                 toggle: () => setState(() => _obscureNew = !_obscureNew),
               ),
 
               _passwordField(
-                label: 'Confirm New Password',
+                fieldKey: 'change_password_confirm',
                 controller: _confirmController,
                 obscure: _obscureConfirm,
-                toggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                toggle: () =>
+                    setState(() => _obscureConfirm = !_obscureConfirm),
                 additionalValidator: (value) {
                   if (value != _newController.text) {
-                    return 'Passwords do not match';
+                    return context.tr('change_password_mismatch');
                   }
                   return null;
                 },
@@ -295,22 +297,22 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   ),
                   child: _isLoading
                       ? const SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Colors.white,
-                      ),
-                    ),
-                  )
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
                       : Text(
-                    'Change Password',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                          context.tr('change_password_button'),
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
             ],

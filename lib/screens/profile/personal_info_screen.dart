@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import '../../core/localization/app_strings.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 
@@ -45,13 +46,20 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
       if (!mounted) return;
 
       final bool success = result['success'] == true;
+      final bool queued = result['queued'] == true;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            success ? 'Profile updated successfully' : result['message'] ?? 'Failed to update profile',
+            success
+                ? result['message']?.toString() ??
+                      context.tr('personal_info_saved')
+                : result['message']?.toString() ??
+                      context.tr('personal_info_save_failed'),
           ),
-          backgroundColor: success ? AppColors.primary : AppColors.error,
+          backgroundColor: success
+              ? (queued ? Colors.orange : AppColors.primary)
+              : AppColors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -67,7 +75,7 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('${context.tr('generic_error')}: $e'),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -91,10 +99,8 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[50],
       appBar: AppBar(
         title: Text(
-          'Personal Information',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-          ),
+          context.tr('personal_info_title'),
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
         backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
@@ -120,7 +126,7 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                   color: isDark ? Colors.white : Colors.black87,
                 ),
                 decoration: InputDecoration(
-                  labelText: 'Full Name',
+                  labelText: context.tr('personal_info_name'),
                   labelStyle: GoogleFonts.poppins(
                     color: isDark ? Colors.white70 : Colors.grey.shade600,
                   ),
@@ -155,7 +161,7 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                   color: isDark ? Colors.white : Colors.black87,
                 ),
                 decoration: InputDecoration(
-                  labelText: 'Email Address',
+                  labelText: context.tr('personal_info_email'),
                   labelStyle: GoogleFonts.poppins(
                     color: isDark ? Colors.white70 : Colors.grey.shade600,
                   ),
@@ -193,22 +199,22 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                 ),
                 child: _isLoading
                     ? const SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Colors.white,
-                    ),
-                  ),
-                )
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
                     : Text(
-                  'Save Changes',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                        context.tr('personal_info_save'),
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
             ),
           ],

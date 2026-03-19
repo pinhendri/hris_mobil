@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/widgets/access_denied_state.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/employee_provider.dart';
 import '../../models/employee_model.dart'; // PASTIKAN IMPORT INI ADA
 import 'add_employee_screen.dart';
@@ -35,6 +37,29 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final canViewEmployee = authProvider.canViewEmployeeScreen;
+    final canCreateEmployee = authProvider.hasPermission('create-employee');
+
+    if (!canViewEmployee) {
+      return Scaffold(
+        backgroundColor: Colors.grey[50],
+        appBar: AppBar(
+          title: Text(
+            'Employees',
+            style: GoogleFonts.poppins(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        ),
+        body: const AccessDeniedState(permissionLabel: 'view/manage employee'),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -60,9 +85,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final filteredEmployees = provider.employees.where((
-                  employee,
-                ) {
+                final filteredEmployees = provider.employees.where((employee) {
                   final query = _searchQuery.toLowerCase();
                   return employee.name.toLowerCase().contains(query) ||
                       employee.position.toLowerCase().contains(query) ||
@@ -88,16 +111,20 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const AddEmployeeScreen()),
-          );
-        },
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+      floatingActionButton: canCreateEmployee
+          ? FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddEmployeeScreen(),
+                  ),
+                );
+              },
+              backgroundColor: AppColors.primary,
+              child: const Icon(Icons.add, color: Colors.white),
+            )
+          : null,
     );
   }
 
@@ -135,7 +162,9 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05), // PERBAIKAN: withValues -> withOpacity
+            color: Colors.black.withOpacity(
+              0.05,
+            ), // PERBAIKAN: withValues -> withOpacity
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -160,20 +189,26 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
               children: [
                 CircleAvatar(
                   radius: 28,
-                  backgroundColor: AppColors.primary.withOpacity(0.1), // PERBAIKAN: withValues -> withOpacity
-                  backgroundImage: employee.avatarUrl != null && employee.avatarUrl!.isNotEmpty
+                  backgroundColor: AppColors.primary.withOpacity(
+                    0.1,
+                  ), // PERBAIKAN: withValues -> withOpacity
+                  backgroundImage:
+                      employee.avatarUrl != null &&
+                          employee.avatarUrl!.isNotEmpty
                       ? ImageHelper.avatar(employee.avatarUrl)
                       : null,
-                  child: (employee.avatarUrl == null || employee.avatarUrl!.isEmpty)
-                    ? Text(
-                        employee.name.substring(0, 2).toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                        ),
-                      )
-                    : null,
+                  child:
+                      (employee.avatarUrl == null ||
+                          employee.avatarUrl!.isEmpty)
+                      ? Text(
+                          employee.name.substring(0, 2).toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        )
+                      : null,
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -227,9 +262,9 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(
-                          employee.status,
-                        ).withOpacity(0.1), // PERBAIKAN: withValues -> withOpacity
+                        color: _getStatusColor(employee.status).withOpacity(
+                          0.1,
+                        ), // PERBAIKAN: withValues -> withOpacity
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -265,14 +300,18 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
           Icon(
             Icons.people_outline,
             size: 64,
-            color: AppColors.textSecondary.withOpacity(0.3), // PERBAIKAN: withValues -> withOpacity
+            color: AppColors.textSecondary.withOpacity(
+              0.3,
+            ), // PERBAIKAN: withValues -> withOpacity
           ),
           const SizedBox(height: 16),
           Text(
             'No employees found',
             style: GoogleFonts.poppins(
               fontSize: 16,
-              color: AppColors.textSecondary.withOpacity(0.5), // PERBAIKAN: withValues -> withOpacity
+              color: AppColors.textSecondary.withOpacity(
+                0.5,
+              ), // PERBAIKAN: withValues -> withOpacity
               fontWeight: FontWeight.w500,
             ),
           ),

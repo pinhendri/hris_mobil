@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/widgets/access_denied_state.dart';
 import '../../models/department_model.dart';
 import '../../models/employee_model.dart';
 import '../../providers/auth_provider.dart';
@@ -38,9 +39,36 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final user = authProvider.user;
-    // Perbaikan: Cek permissions untuk menentukan admin
-    final isAdmin = user != null && (user.permissions.contains('all') || user.permissions.contains('admin'));
+    final canViewDepartment = authProvider.hasPermission('view-department');
+    final canEditDepartment = authProvider.hasPermission('edit-department');
+    final canDeleteDepartment = authProvider.hasPermission('delete-department');
+    final canManageEmployees = authProvider.hasAnyPermission([
+      'edit-department',
+      'edit-employee',
+    ]);
+
+    if (!canViewDepartment) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'Department Details',
+            style: GoogleFonts.poppins(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: const AccessDeniedState(
+          permissionLabel: 'view-department',
+        ),
+      );
+    }
 
     return Consumer2<DepartmentProvider, EmployeeProvider>(
       builder: (context, deptProvider, empProvider, child) {
@@ -128,7 +156,7 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
 
         final userIdStr = authProvider.user?.id.toString();
         final isDeptHead = userIdStr == department.employeeId; // Use employeeId instead of headId
-        final canManage = isAdmin || isDeptHead;
+        final canManage = canManageEmployees || isDeptHead;
 
         return Scaffold(
           backgroundColor: Colors.grey[50],
@@ -147,25 +175,29 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
-              if (isAdmin) ...[
-                IconButton(
-                  icon: const Icon(Icons.edit, color: AppColors.primary),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => AddEditDepartmentScreen(department: department),
-                      ),
-                    ).then((_) {
-                      // Refresh after editing
-                      deptProvider.fetchDepartments();
-                    });
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _confirmDelete(context, deptProvider, department),
-                ),
+              if (canEditDepartment || canDeleteDepartment) ...[
+                if (canEditDepartment)
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: AppColors.primary),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              AddEditDepartmentScreen(department: department),
+                        ),
+                      ).then((_) {
+                        // Refresh after editing
+                        deptProvider.fetchDepartments();
+                      });
+                    },
+                  ),
+                if (canDeleteDepartment)
+                  IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () =>
+                        _confirmDelete(context, deptProvider, department),
+                  ),
               ],
             ],
           ),

@@ -1,8 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/api_constants.dart';
-
+import '../../services/session_storage.dart';
 
 class ApiService {
   // ===============================
@@ -14,15 +13,14 @@ class ApiService {
   // 🔐 HEADERS
   // ===============================
   Future<Map<String, String>> _getHeaders() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
+    final token = await SessionStorage.getToken();
 
     final headers = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
 
-    if (token != null && token.isNotEmpty) {
+    if (token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
 
@@ -36,10 +34,7 @@ class ApiService {
     final headers = await _getHeaders();
 
     final response = await http
-        .get(
-      Uri.parse('$_baseUrl$endpoint'),
-      headers: headers,
-    )
+        .get(Uri.parse('$_baseUrl$endpoint'), headers: headers)
         .timeout(const Duration(seconds: 10));
 
     return _handleResponse(response);
@@ -48,18 +43,15 @@ class ApiService {
   // ===============================
   // 📤 POST
   // ===============================
-  Future<dynamic> post(
-      String endpoint,
-      Map<String, dynamic> body,
-      ) async {
+  Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
     final headers = await _getHeaders();
 
     final response = await http
         .post(
-      Uri.parse('$_baseUrl$endpoint'),
-      headers: headers,
-      body: jsonEncode(body),
-    )
+          Uri.parse('$_baseUrl$endpoint'),
+          headers: headers,
+          body: jsonEncode(body),
+        )
         .timeout(const Duration(seconds: 10));
 
     return _handleResponse(response);

@@ -1,23 +1,20 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import '../core/constants/api_constants.dart';
+import 'session_storage.dart';
 
 class ApiService {
-  // Ganti dengan URL backend Anda
-  static const String baseUrl = 'http://10.0.2.2:8000'; // Untuk Android Emulator
-  // static const String baseUrl = 'http://localhost:8000'; // Untuk iOS Simulator
-  // static const String baseUrl = 'https://api.modernland.co.id'; // Untuk Production
+  static const String baseUrl = ApiConstants.baseUrl;
 
   Future<Map<String, String>> _getHeaders() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token'); // Sesuaikan dengan key token Anda
+    final token = await SessionStorage.getToken();
 
     final headers = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
 
-    if (token != null && token.isNotEmpty) {
+    if (token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
 
@@ -32,10 +29,7 @@ class ApiService {
     print('📡 GET: $url');
 
     try {
-      final response = await http.get(
-        Uri.parse(url),
-        headers: headers,
-      );
+      final response = await http.get(Uri.parse(url), headers: headers);
 
       print('📥 Response (${response.statusCode}): ${response.body}');
 
@@ -114,10 +108,7 @@ class ApiService {
     print('📡 DELETE: $url');
 
     try {
-      final response = await http.delete(
-        Uri.parse(url),
-        headers: headers,
-      );
+      final response = await http.delete(Uri.parse(url), headers: headers);
 
       print('📥 Response (${response.statusCode}): ${response.body}');
 

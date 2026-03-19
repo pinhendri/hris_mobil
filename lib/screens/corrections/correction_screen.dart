@@ -6,7 +6,6 @@ import '../../core/constants/app_colors.dart';
 import '../../providers/correction_provider.dart';
 import '../../providers/employee_provider.dart';
 import '../../data/models/correction_model.dart';
-import '../../data/models/employee_model.dart';
 
 class CorrectionScreen extends StatefulWidget {
   const CorrectionScreen({super.key});
@@ -15,7 +14,8 @@ class CorrectionScreen extends StatefulWidget {
   State<CorrectionScreen> createState() => _CorrectionScreenState();
 }
 
-class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerProviderStateMixin {
+class _CorrectionScreenState extends State<CorrectionScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String? _selectedEmployeeUuid;
   DateTime? _selectedDate;
@@ -32,7 +32,7 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Load employees saat screen pertama dibuka
       Provider.of<EmployeeProvider>(context, listen: false).fetchEmployees();
@@ -50,23 +50,26 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
   // Format waktu dari database untuk input time
   String _formatTimeFromDatabase(String? timeStr) {
     print("🔄 Processing time from database: $timeStr");
-    
-    if (timeStr == null || timeStr.isEmpty || timeStr == "null" || timeStr == "00:00:00") {
+
+    if (timeStr == null ||
+        timeStr.isEmpty ||
+        timeStr == "null" ||
+        timeStr == "00:00:00") {
       return "";
     }
-    
+
     // Handle berbagai format waktu dari database
     final timeParts = timeStr.split(':');
-    
+
     if (timeParts.length >= 2) {
       final hours = timeParts[0].padLeft(2, '0');
       final minutes = timeParts[1].padLeft(2, '0');
       final formattedTime = "$hours:$minutes";
-      
+
       print("✅ Formatted time for input: $formattedTime");
       return formattedTime;
     }
-    
+
     print("❌ Could not format time: $timeStr");
     return "";
   }
@@ -76,14 +79,14 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
     if (timeStr.isEmpty) {
       return null;
     }
-    
+
     final timeParts = timeStr.split(':');
     if (timeParts.length >= 2) {
       final hours = timeParts[0].padLeft(2, '0');
       final minutes = timeParts[1].padLeft(2, '0');
       return "$hours:$minutes:00";
     }
-    
+
     return null;
   }
 
@@ -100,10 +103,12 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
 
     try {
       final provider = Provider.of<CorrectionProvider>(context, listen: false);
-      
-      print('🔍 Searching attendance for employee UUID: $_selectedEmployeeUuid');
+
+      print(
+        '🔍 Searching attendance for employee UUID: $_selectedEmployeeUuid',
+      );
       print('📅 Date: ${DateFormat('yyyy-MM-dd').format(_selectedDate!)}');
-      
+
       final data = await provider.getAttendanceForCorrection(
         employeeUuid: _selectedEmployeeUuid!,
         date: DateFormat('yyyy-MM-dd').format(_selectedDate!),
@@ -111,7 +116,7 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
 
       setState(() {
         _attendanceData = data;
-        
+
         // Format waktu untuk input
         _checkInController.text = _formatTimeFromDatabase(data.clockIn);
         _checkOutController.text = _formatTimeFromDatabase(data.clockOut);
@@ -124,7 +129,6 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
       } else {
         _showInfoSnackBar('Tidak ada data absensi. Silakan buat data baru.');
       }
-
     } catch (e) {
       print('❌ Error searching attendance: $e');
       _showErrorSnackBar('Gagal mengambil data: $e');
@@ -145,7 +149,7 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
 
     try {
       final provider = Provider.of<CorrectionProvider>(context, listen: false);
-      
+
       final Map<String, dynamic> payload = {
         'status': _selectedStatus,
         'date': DateFormat('yyyy-MM-dd').format(_selectedDate!),
@@ -158,7 +162,9 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
       }
 
       // Hanya tambahkan clock_out jika ada nilai
-      final clockOutFormatted = _formatTimeForDatabase(_checkOutController.text);
+      final clockOutFormatted = _formatTimeForDatabase(
+        _checkOutController.text,
+      );
       if (clockOutFormatted != null) {
         payload['clock_out'] = clockOutFormatted;
       }
@@ -169,7 +175,9 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
       }
 
       print('📤 Submitting correction with payload: $payload');
-      print('📤 Using identifier: ${_attendanceData?.id?.toString() ?? _selectedEmployeeUuid!}');
+      print(
+        '📤 Using identifier: ${_attendanceData?.id?.toString() ?? _selectedEmployeeUuid!}',
+      );
 
       final success = await provider.updateAttendanceCorrection(
         identifier: _attendanceData?.id?.toString() ?? _selectedEmployeeUuid!,
@@ -181,27 +189,30 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Koreksi absensi berhasil disimpan'),
-              backgroundColor: Colors.green,
+              content: Text(
+                provider.lastActionMessage ??
+                    'Koreksi absensi berhasil disimpan',
+              ),
+              backgroundColor: provider.lastActionQueued
+                  ? Colors.orange
+                  : Colors.green,
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 2),
             ),
           );
         }
-        
+
         // Tunggu sebentar lalu close screen
         await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) {
           Navigator.pop(context, true);
         }
-        
       } else {
         setState(() {
           _isSubmitting = false;
         });
         _showErrorSnackBar('Gagal menyimpan koreksi');
       }
-
     } catch (e) {
       setState(() {
         _isSubmitting = false;
@@ -286,10 +297,7 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildCorrectionTab(),
-          _buildHistoryTab(),
-        ],
+        children: [_buildCorrectionTab(), _buildHistoryTab()],
       ),
     );
   }
@@ -298,7 +306,9 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
     return Consumer2<CorrectionProvider, EmployeeProvider>(
       builder: (context, correctionProvider, employeeProvider, child) {
         // Debug: print employees data
-        print('📋 EmployeeProvider has ${employeeProvider.employees.length} employees');
+        print(
+          '📋 EmployeeProvider has ${employeeProvider.employees.length} employees',
+        );
         for (var emp in employeeProvider.employees) {
           print('   - ${emp.name}: UUID=${emp.uuid}');
         }
@@ -373,30 +383,34 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
                             ),
                           );
                         }).toList(),
-                        onChanged: _isSubmitting ? null : (value) {
-                          print('✅ Selected employee UUID: $value');
-                          setState(() {
-                            _selectedEmployeeUuid = value;
-                          });
-                        },
+                        onChanged: _isSubmitting
+                            ? null
+                            : (value) {
+                                print('✅ Selected employee UUID: $value');
+                                setState(() {
+                                  _selectedEmployeeUuid = value;
+                                });
+                              },
                       ),
                       const SizedBox(height: 16),
 
                       // Date Picker
                       InkWell(
-                        onTap: _isSubmitting ? null : () async {
-                          final date = await showDatePicker(
-                            context: context,
-                            initialDate: _selectedDate ?? DateTime.now(),
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime.now(),
-                          );
-                          if (date != null) {
-                            setState(() {
-                              _selectedDate = date;
-                            });
-                          }
-                        },
+                        onTap: _isSubmitting
+                            ? null
+                            : () async {
+                                final date = await showDatePicker(
+                                  context: context,
+                                  initialDate: _selectedDate ?? DateTime.now(),
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime.now(),
+                                );
+                                if (date != null) {
+                                  setState(() {
+                                    _selectedDate = date;
+                                  });
+                                }
+                              },
                         child: InputDecorator(
                           decoration: InputDecoration(
                             labelText: 'Tanggal',
@@ -407,7 +421,9 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
                           ),
                           child: Text(
                             _selectedDate != null
-                                ? DateFormat('dd MMMM yyyy').format(_selectedDate!)
+                                ? DateFormat(
+                                    'dd MMMM yyyy',
+                                  ).format(_selectedDate!)
                                 : 'Pilih tanggal',
                           ),
                         ),
@@ -419,15 +435,18 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
                         children: [
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: (_selectedEmployeeUuid == null || 
-                                       _selectedDate == null || 
-                                       _isSearching ||
-                                       _isSubmitting)
+                              onPressed:
+                                  (_selectedEmployeeUuid == null ||
+                                      _selectedDate == null ||
+                                      _isSearching ||
+                                      _isSubmitting)
                                   ? null
                                   : _searchAttendance,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primary,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -482,9 +501,7 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
   Widget _buildAttendanceDetail() {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -519,7 +536,9 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: _attendanceData!.exists ? Colors.green : Colors.orange,
+                    color: _attendanceData!.exists
+                        ? Colors.green
+                        : Colors.orange,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -560,7 +579,9 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(_attendanceData!.status).withOpacity(0.1),
+                      color: _getStatusColor(
+                        _attendanceData!.status,
+                      ).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -601,7 +622,11 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
                       Expanded(
                         child: Row(
                           children: [
-                            const Icon(Icons.login, size: 14, color: Colors.grey),
+                            const Icon(
+                              Icons.login,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               'Clock In: ',
@@ -615,16 +640,17 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
                       ),
                       Expanded(
                         child: Text(
-                          _attendanceData!.clockIn != null && 
-                          _attendanceData!.clockIn != "00:00:00"
+                          _attendanceData!.clockIn != null &&
+                                  _attendanceData!.clockIn != "00:00:00"
                               ? _attendanceData!.clockIn!
                               : 'Belum diisi',
                           style: GoogleFonts.poppins(
                             fontSize: 12,
-                            color: _attendanceData!.clockIn != null && 
-                                   _attendanceData!.clockIn != "00:00:00"
-                                   ? Colors.green
-                                   : Colors.orange,
+                            color:
+                                _attendanceData!.clockIn != null &&
+                                    _attendanceData!.clockIn != "00:00:00"
+                                ? Colors.green
+                                : Colors.orange,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -637,7 +663,11 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
                       Expanded(
                         child: Row(
                           children: [
-                            const Icon(Icons.logout, size: 14, color: Colors.grey),
+                            const Icon(
+                              Icons.logout,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               'Clock Out: ',
@@ -651,16 +681,17 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
                       ),
                       Expanded(
                         child: Text(
-                          _attendanceData!.clockOut != null && 
-                          _attendanceData!.clockOut != "00:00:00"
+                          _attendanceData!.clockOut != null &&
+                                  _attendanceData!.clockOut != "00:00:00"
                               ? _attendanceData!.clockOut!
                               : 'Belum diisi',
                           style: GoogleFonts.poppins(
                             fontSize: 12,
-                            color: _attendanceData!.clockOut != null && 
-                                   _attendanceData!.clockOut != "00:00:00"
-                                   ? Colors.green
-                                   : Colors.orange,
+                            color:
+                                _attendanceData!.clockOut != null &&
+                                    _attendanceData!.clockOut != "00:00:00"
+                                ? Colors.green
+                                : Colors.orange,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -729,11 +760,13 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
                 DropdownMenuItem(value: 'Leave', child: Text('Cuti')),
                 DropdownMenuItem(value: 'Sick', child: Text('Sakit')),
               ],
-              onChanged: _isSubmitting ? null : (value) {
-                setState(() {
-                  _selectedStatus = value!;
-                });
-              },
+              onChanged: _isSubmitting
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _selectedStatus = value!;
+                      });
+                    },
             ),
             const SizedBox(height: 20),
 
@@ -778,18 +811,11 @@ class _CorrectionScreenState extends State<CorrectionScreen> with SingleTickerPr
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.history,
-            size: 64,
-            color: Colors.grey,
-          ),
+          Icon(Icons.history, size: 64, color: Colors.grey),
           SizedBox(height: 16),
           Text(
             'Fitur riwayat absensi akan segera tersedia',
-            style: TextStyle(
-              color: Colors.grey,
-              fontSize: 16,
-            ),
+            style: TextStyle(color: Colors.grey, fontSize: 16),
             textAlign: TextAlign.center,
           ),
         ],

@@ -1,31 +1,45 @@
-// providers/department_provider.dart
-
 import 'package:flutter/material.dart';
+
 import '../models/department_model.dart';
 import '../services/api_service.dart';
-import '../providers/auth_provider.dart'; // Import AuthProvider
-import 'package:provider/provider.dart';
+import '../services/offline_support.dart';
 
 class DepartmentProvider extends ChangeNotifier {
   List<Department> _departments = [];
   bool _isLoading = false;
   String? _error;
-  String? _currentCcode; // Store current company code
-  
-  // For dropdown selections
-  List<String> _availableRoles = ['Manager', 'Supervisor', 'Lead', 'Staff'];
-  List<String> _availableTypes = ['Department', 'Division', 'Team', 'Unit'];
-  List<String> _availableLocations = ['Jakarta', 'Bandung', 'Surabaya', 'Medan', 'Remote'];
+  String? _currentCcode;
+  bool _isUsingCachedData = false;
+
+  final List<String> _availableRoles = [
+    'Manager',
+    'Supervisor',
+    'Lead',
+    'Staff',
+  ];
+  final List<String> _availableTypes = [
+    'Department',
+    'Division',
+    'Team',
+    'Unit',
+  ];
+  final List<String> _availableLocations = [
+    'Jakarta',
+    'Bandung',
+    'Surabaya',
+    'Medan',
+    'Remote',
+  ];
 
   List<Department> get departments => _departments;
   bool get isLoading => _isLoading;
   String? get error => _error;
   String? get currentCcode => _currentCcode;
+  bool get isUsingCachedData => _isUsingCachedData;
   List<String> get availableRoles => _availableRoles;
   List<String> get availableTypes => _availableTypes;
   List<String> get availableLocations => _availableLocations;
 
-  // Set current company code from AuthProvider
   void setCurrentCcode(String ccode) {
     _currentCcode = ccode;
     notifyListeners();
@@ -34,70 +48,59 @@ class DepartmentProvider extends ChangeNotifier {
   Future<void> fetchDepartments() async {
     _isLoading = true;
     _error = null;
+    _isUsingCachedData = false;
     notifyListeners();
 
     try {
-      final apiService = ApiService();
-      
-      // Build URL with query parameters if needed
-      // Note: The backend already filters by c_code from cache, so we don't need to pass it in URL
-      // But if you want to pass it explicitly, you can uncomment the code below
-      
-      String endpoint = '/departments';
-      
-      // If you want to pass c_code explicitly in URL (optional)
-      // if (_currentCcode != null && _currentCcode!.isNotEmpty) {
-      //   endpoint += '?c_code=$_currentCcode';
-      // }
-      
-      print('📡 Fetching departments with endpoint: $endpoint');
-      print('📡 Current company code: $_currentCcode');
-      
-      final response = await apiService.get(endpoint);
-      
-      print('📥 Response: $response');
-      
-      if (response['success'] == true) {
-        final List<dynamic> data = response['data'] ?? [];
-        _departments = data.map((json) => Department.fromJson(json)).toList();
-        
-        // Optional: Filter client-side if needed (backend already filters)
-        // if (_currentCcode != null && _currentCcode!.isNotEmpty) {
-        //   _departments = _departments.where((dept) => dept.cCode == _currentCcode).toList();
-        // }
-        
-        print('✅ Loaded ${_departments.length} departments');
-        print('✅ Filtered by c_code: ${response['filtered_by_c_code'] ?? 'none'}');
+      final response = await ApiService().get('/departments');
+
+      if (response is Map<String, dynamic> && response['success'] == true) {
+        final data = response['data'];
+        final items = data is List ? List<dynamic>.from(data) : <dynamic>[];
+
+        _departments = items
+            .whereType<Map>()
+            .map((json) => Department.fromJson(Map<String, dynamic>.from(json)))
+            .toList(growable: false);
         _error = null;
+
+        await OfflineSupport.saveJsonCache(
+          _cacheKey,
+          _departments.map((department) => department.toJson()).toList(),
+        );
       } else {
-        _error = response['message'] ?? 'Failed to load departments';
+        final loadedFromCache = await _loadFromCache();
+        if (!loadedFromCache) {
+          _error = response is Map<String, dynamic>
+              ? response['message']?.toString() ?? 'Failed to load departments'
+              : 'Failed to load departments';
+          _departments = [];
+        }
+      }
+    } catch (error) {
+      final loadedFromCache = await _loadFromCache();
+      if (!loadedFromCache) {
+        _error = error.toString();
         _departments = [];
       }
-    } catch (e) {
-      print('❌ Error fetching departments: $e');
-      _error = e.toString();
-      _departments = [];
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // Get departments filtered by c_code (client-side filtering as backup)
   List<Department> getDepartmentsByCcode(String? cCode) {
-    if (cCode == null || cCode.isEmpty) return _departments;
-    
-    // This assumes your department model has a cCode field
-    // If not, you'll need to add it to the model
+    if (cCode == null || cCode.isEmpty) {
+      return _departments;
+    }
+
     return _departments.where((dept) => dept.cCode == cCode).toList();
   }
 
-  // Calculate total employees across all departments
   int getTotalEmployees() {
-    return _departments.fold<int>(0, (sum, d) => sum + (d.employees ?? 0));
+    return _departments.fold<int>(0, (sum, d) => sum + (d.employees));
   }
 
-  // Calculate total budget across all departments
   double getTotalBudget() {
     return _departments.fold<double>(0.0, (sum, d) => sum + (d.budget ?? 0));
   }
@@ -108,24 +111,23 @@ class DepartmentProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      final apiService = ApiService();
-      
-      // Add company code to the data if available
       if (_currentCcode != null && _currentCcode!.isNotEmpty) {
         data['c_code'] = _currentCcode;
       }
-      
-      final response = await apiService.post('/departments', data);
-      
-      if (response['success'] == true) {
-        await fetchDepartments(); // Refresh the list
+
+      final response = await ApiService().post('/departments', data);
+
+      if (response is Map<String, dynamic> && response['success'] == true) {
+        await fetchDepartments();
         return true;
-      } else {
-        _error = response['message'] ?? 'Failed to create department';
-        return false;
       }
-    } catch (e) {
-      _error = e.toString();
+
+      _error = response is Map<String, dynamic>
+          ? response['message']?.toString() ?? 'Failed to create department'
+          : 'Failed to create department';
+      return false;
+    } catch (error) {
+      _error = error.toString();
       return false;
     } finally {
       _isLoading = false;
@@ -139,24 +141,23 @@ class DepartmentProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      final apiService = ApiService();
-      
-      // Add company code to the data if available
       if (_currentCcode != null && _currentCcode!.isNotEmpty) {
         data['c_code'] = _currentCcode;
       }
-      
-      final response = await apiService.put('/departments/$id', data);
-      
-      if (response['success'] == true) {
-        await fetchDepartments(); // Refresh the list
+
+      final response = await ApiService().put('/departments/$id', data);
+
+      if (response is Map<String, dynamic> && response['success'] == true) {
+        await fetchDepartments();
         return true;
-      } else {
-        _error = response['message'] ?? 'Failed to update department';
-        return false;
       }
-    } catch (e) {
-      _error = e.toString();
+
+      _error = response is Map<String, dynamic>
+          ? response['message']?.toString() ?? 'Failed to update department'
+          : 'Failed to update department';
+      return false;
+    } catch (error) {
+      _error = error.toString();
       return false;
     } finally {
       _isLoading = false;
@@ -170,18 +171,19 @@ class DepartmentProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      final apiService = ApiService();
-      final response = await apiService.delete('/departments/$id');
-      
-      if (response['success'] == true) {
-        await fetchDepartments(); // Refresh the list
+      final response = await ApiService().delete('/departments/$id');
+
+      if (response is Map<String, dynamic> && response['success'] == true) {
+        await fetchDepartments();
         return true;
-      } else {
-        _error = response['message'] ?? 'Failed to delete department';
-        return false;
       }
-    } catch (e) {
-      _error = e.toString();
+
+      _error = response is Map<String, dynamic>
+          ? response['message']?.toString() ?? 'Failed to delete department'
+          : 'Failed to delete department';
+      return false;
+    } catch (error) {
+      _error = error.toString();
       return false;
     } finally {
       _isLoading = false;
@@ -189,25 +191,40 @@ class DepartmentProvider extends ChangeNotifier {
     }
   }
 
-  // Helper method to get department by ID
   Department? getDepartmentById(int id) {
     try {
       return _departments.firstWhere((dept) => dept.id == id);
-    } catch (e) {
+    } catch (_) {
       return null;
     }
   }
 
-  // Get child departments (if you have parent-child relationship)
   List<Department> getChildrenDepartments(int parentId) {
     return _departments.where((dept) => dept.parentId == parentId).toList();
   }
 
-  // Clear data (useful for logout)
   void clear() {
     _departments = [];
     _error = null;
     _currentCcode = null;
+    _isUsingCachedData = false;
     notifyListeners();
+  }
+
+  String get _cacheKey => 'departments::${_currentCcode ?? 'all'}';
+
+  Future<bool> _loadFromCache() async {
+    final cached = await OfflineSupport.getJsonCache(_cacheKey);
+    if (cached is! List) {
+      return false;
+    }
+
+    _departments = cached
+        .whereType<Map>()
+        .map((item) => Department.fromJson(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+    _error = null;
+    _isUsingCachedData = true;
+    return true;
   }
 }

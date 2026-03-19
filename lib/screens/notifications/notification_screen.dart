@@ -169,7 +169,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            notification.title,
+                            notification.displayTitle,
                             style: GoogleFonts.poppins(
                               fontWeight: notification.isRead
                                   ? FontWeight.w600
@@ -192,7 +192,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      notification.message,
+                      notification.formattedMessage,
                       style: GoogleFonts.poppins(
                         color: AppColors.textSecondary,
                         fontSize: 13,

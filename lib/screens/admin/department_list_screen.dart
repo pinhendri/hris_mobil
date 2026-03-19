@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/widgets/access_denied_state.dart';
 import '../../providers/department_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/department_model.dart';
@@ -58,7 +59,34 @@ class _DepartmentListScreenState extends State<DepartmentListScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final companyCode = authProvider.getCompanyCode();
-    
+    final canViewDepartment = authProvider.hasPermission('view-department');
+    final canCreateDepartment = authProvider.hasPermission('create-department');
+
+    if (!canViewDepartment) {
+      return Scaffold(
+        backgroundColor: Colors.grey[50],
+        appBar: AppBar(
+          title: Text(
+            'Master Departments',
+            style: GoogleFonts.poppins(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: const AccessDeniedState(
+          permissionLabel: 'view-department',
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -90,21 +118,21 @@ class _DepartmentListScreenState extends State<DepartmentListScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add, color: AppColors.primary),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const AddEditDepartmentScreen(),
-                ),
-              ).then((_) {
-                // Refresh when returning from add screen
-                Provider.of<DepartmentProvider>(context, listen: false)
-                    .fetchDepartments();
-              });
-            },
-          ),
+          if (canCreateDepartment)
+            IconButton(
+              icon: const Icon(Icons.add, color: AppColors.primary),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AddEditDepartmentScreen(),
+                  ),
+                ).then((_) {
+                  Provider.of<DepartmentProvider>(context, listen: false)
+                      .fetchDepartments();
+                });
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.grey),
             onPressed: () {

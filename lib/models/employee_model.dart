@@ -1,9 +1,13 @@
 class Employee {
   final String id;
   final String uuid;
+  final String? nik;
+  final String? nikEmployee;
   final String name;
   final String position;
+  final String? positionId;
   final String department;
+  final String? departmentId;
   final String status;
   final String joinDate;
   final String? avatarUrl;
@@ -14,6 +18,17 @@ class Employee {
   final String? companyCode;
   final String? positionName;
   final String? departmentDescription;
+  final String? shiftId;
+  final String? shiftName;
+  final String? clockIn;
+  final String? clockOut;
+  final String? supervisorName;
+  final String? religionName;
+  final String? ptkpCode;
+  final String? taxNumber;
+  final String? flag;
+  final String? endDate;
+  final String? cvUrl;
 
   // New fields for extended form
   final String? gender;
@@ -56,9 +71,13 @@ class Employee {
   Employee({
     required this.id,
     required this.uuid,
+    this.nik,
+    this.nikEmployee,
     required this.name,
     required this.position,
+    this.positionId,
     required this.department,
+    this.departmentId,
     required this.status,
     required this.joinDate,
     this.avatarUrl,
@@ -69,6 +88,17 @@ class Employee {
     this.companyCode,
     this.positionName,
     this.departmentDescription,
+    this.shiftId,
+    this.shiftName,
+    this.clockIn,
+    this.clockOut,
+    this.supervisorName,
+    this.religionName,
+    this.ptkpCode,
+    this.taxNumber,
+    this.flag,
+    this.endDate,
+    this.cvUrl,
     this.gender,
     this.dateOfBirth,
     this.nationality,
@@ -110,10 +140,10 @@ class Employee {
   // Helper method untuk parse salary dengan aman
   static double _parseSalary(dynamic value) {
     if (value == null) return 0.0;
-    
+
     if (value is double) return value;
     if (value is int) return value.toDouble();
-    
+
     if (value is String) {
       String cleanValue = value.replaceAll(RegExp(r'[^\d.-]'), '');
       if (cleanValue.isEmpty) return 0.0;
@@ -124,7 +154,7 @@ class Employee {
         return 0.0;
       }
     }
-    
+
     print('⚠️ Unknown salary type: ${value.runtimeType}');
     return 0.0;
   }
@@ -132,10 +162,21 @@ class Employee {
   factory Employee.fromJson(Map<String, dynamic> json) {
     return Employee(
       id: json['id'].toString(),
-      uuid: json['uuid'] ?? '',
+      uuid: json['uuid']?.toString() ?? '',
+      nik: json['nik']?.toString(),
+      nikEmployee: json['nik_employee']?.toString(),
       name: json['name'] ?? '',
-      position: json['position_name'] ?? json['position'] ?? '',
-      department: json['department_description'] ?? json['department'] ?? '',
+      position:
+          json['position_name']?.toString() ??
+          json['position']?.toString() ??
+          '',
+      positionId: json['position']?.toString(),
+      department:
+          json['department_name']?.toString() ??
+          json['department_description']?.toString() ??
+          json['department']?.toString() ??
+          '',
+      departmentId: json['department']?.toString(),
       status: json['status'] ?? 'Active',
       joinDate: json['join_date'] ?? json['created_at'] ?? '',
       avatarUrl: json['avatar'],
@@ -145,7 +186,22 @@ class Employee {
       cCode: json['c_code'],
       companyCode: json['company_code'],
       positionName: json['position_name'],
-      departmentDescription: json['department_description'],
+      departmentDescription:
+          json['department_description']?.toString() ??
+          json['department_name']?.toString(),
+      shiftId: json['shift_id']?.toString(),
+      shiftName:
+          json['shift_name']?.toString() ??
+          json['shift_description']?.toString(),
+      clockIn: json['clock_in']?.toString(),
+      clockOut: json['clock_out']?.toString(),
+      supervisorName: json['supervisor_name']?.toString(),
+      religionName: json['religion_name']?.toString(),
+      ptkpCode: json['ptkp_code']?.toString(),
+      taxNumber: json['tax_number']?.toString(),
+      flag: json['flag']?.toString(),
+      endDate: json['enddate']?.toString(),
+      cvUrl: json['cv']?.toString(),
       gender: json['gender'],
       dateOfBirth: json['date_of_birth'],
       nationality: json['nationality'],
@@ -154,10 +210,15 @@ class Employee {
       emergencyContactName: json['emergency_contact_name'],
       emergencyContactRelationship: json['emergency_contact_relationship'],
       emergencyContactPhone: json['emergency_contact_phone'],
-      managerId: json['manager_id'],
+      managerId:
+          json['manager_id']?.toString() ??
+          json['immediate_supervisor']?.toString(),
       employmentType: json['employment_type'],
       officeLocation: json['office_location'],
-      shiftType: json['shift_type'],
+      shiftType:
+          json['shift_description']?.toString() ??
+          json['shift_type']?.toString() ??
+          json['shift_name']?.toString(),
       workSchedule: json['work_schedule'],
       bankAccountNumber: json['bank_account_number'],
       bankName: json['bank_name'],
@@ -173,14 +234,18 @@ class Employee {
       medicalConditions: json['medical_conditions'],
       bloodType: json['blood_type'],
       emergencyMedicalInfo: json['emergency_medical_info'],
-      tin: json['tin'],
+      tin: json['tin']?.toString() ?? json['tax_number']?.toString(),
       ssn: json['ssn'],
       workAuthorization: json['work_authorization'],
       contractType: json['contract_type'],
       companyPoliciesAcknowledged: json['company_policies_acknowledged'],
-      assignedEquipment: json['assigned_equipment'] != null ? List<String>.from(json['assigned_equipment']) : null,
+      assignedEquipment: json['assigned_equipment'] != null
+          ? List<String>.from(json['assigned_equipment'])
+          : null,
       trainingPlan: json['training_plan'],
-      systemAccess: json['system_access'] != null ? List<String>.from(json['system_access']) : null,
+      systemAccess: json['system_access'] != null
+          ? List<String>.from(json['system_access'])
+          : null,
       handbookAcknowledged: json['handbook_acknowledged'],
     );
   }
@@ -189,9 +254,13 @@ class Employee {
   Employee copyWith({
     String? id,
     String? uuid,
+    String? nik,
+    String? nikEmployee,
     String? name,
     String? position,
+    String? positionId,
     String? department,
+    String? departmentId,
     String? status,
     String? joinDate,
     String? avatarUrl,
@@ -202,6 +271,17 @@ class Employee {
     String? companyCode,
     String? positionName,
     String? departmentDescription,
+    String? shiftId,
+    String? shiftName,
+    String? clockIn,
+    String? clockOut,
+    String? supervisorName,
+    String? religionName,
+    String? ptkpCode,
+    String? taxNumber,
+    String? flag,
+    String? endDate,
+    String? cvUrl,
     String? gender,
     String? dateOfBirth,
     String? nationality,
@@ -242,9 +322,13 @@ class Employee {
     return Employee(
       id: id ?? this.id,
       uuid: uuid ?? this.uuid,
+      nik: nik ?? this.nik,
+      nikEmployee: nikEmployee ?? this.nikEmployee,
       name: name ?? this.name,
       position: position ?? this.position,
+      positionId: positionId ?? this.positionId,
       department: department ?? this.department,
+      departmentId: departmentId ?? this.departmentId,
       status: status ?? this.status,
       joinDate: joinDate ?? this.joinDate,
       avatarUrl: avatarUrl ?? this.avatarUrl,
@@ -254,15 +338,29 @@ class Employee {
       cCode: cCode ?? this.cCode,
       companyCode: companyCode ?? this.companyCode,
       positionName: positionName ?? this.positionName,
-      departmentDescription: departmentDescription ?? this.departmentDescription,
+      departmentDescription:
+          departmentDescription ?? this.departmentDescription,
+      shiftId: shiftId ?? this.shiftId,
+      shiftName: shiftName ?? this.shiftName,
+      clockIn: clockIn ?? this.clockIn,
+      clockOut: clockOut ?? this.clockOut,
+      supervisorName: supervisorName ?? this.supervisorName,
+      religionName: religionName ?? this.religionName,
+      ptkpCode: ptkpCode ?? this.ptkpCode,
+      taxNumber: taxNumber ?? this.taxNumber,
+      flag: flag ?? this.flag,
+      endDate: endDate ?? this.endDate,
+      cvUrl: cvUrl ?? this.cvUrl,
       gender: gender ?? this.gender,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       nationality: nationality ?? this.nationality,
       address: address ?? this.address,
       maritalStatus: maritalStatus ?? this.maritalStatus,
       emergencyContactName: emergencyContactName ?? this.emergencyContactName,
-      emergencyContactRelationship: emergencyContactRelationship ?? this.emergencyContactRelationship,
-      emergencyContactPhone: emergencyContactPhone ?? this.emergencyContactPhone,
+      emergencyContactRelationship:
+          emergencyContactRelationship ?? this.emergencyContactRelationship,
+      emergencyContactPhone:
+          emergencyContactPhone ?? this.emergencyContactPhone,
       managerId: managerId ?? this.managerId,
       employmentType: employmentType ?? this.employmentType,
       officeLocation: officeLocation ?? this.officeLocation,
@@ -286,7 +384,8 @@ class Employee {
       ssn: ssn ?? this.ssn,
       workAuthorization: workAuthorization ?? this.workAuthorization,
       contractType: contractType ?? this.contractType,
-      companyPoliciesAcknowledged: companyPoliciesAcknowledged ?? this.companyPoliciesAcknowledged,
+      companyPoliciesAcknowledged:
+          companyPoliciesAcknowledged ?? this.companyPoliciesAcknowledged,
       assignedEquipment: assignedEquipment ?? this.assignedEquipment,
       trainingPlan: trainingPlan ?? this.trainingPlan,
       systemAccess: systemAccess ?? this.systemAccess,
@@ -298,9 +397,13 @@ class Employee {
     return {
       'id': id,
       'uuid': uuid,
+      'nik': nik,
+      'nik_employee': nikEmployee,
       'name': name,
       'position': position,
+      'position_id': positionId,
       'department': department,
+      'department_id': departmentId,
       'status': status,
       'join_date': joinDate,
       'avatar': avatarUrl,
@@ -311,6 +414,17 @@ class Employee {
       'company_code': companyCode,
       'position_name': positionName,
       'department_description': departmentDescription,
+      'shift_id': shiftId,
+      'shift_name': shiftName,
+      'clock_in': clockIn,
+      'clock_out': clockOut,
+      'supervisor_name': supervisorName,
+      'religion_name': religionName,
+      'ptkp_code': ptkpCode,
+      'tax_number': taxNumber,
+      'flag': flag,
+      'enddate': endDate,
+      'cv': cvUrl,
       'gender': gender,
       'date_of_birth': dateOfBirth,
       'nationality': nationality,

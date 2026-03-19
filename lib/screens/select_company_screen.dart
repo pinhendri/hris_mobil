@@ -108,7 +108,10 @@ class SelectCompanyScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _selectCompany(BuildContext context, Map<String, dynamic> company) async {
+  Future<void> _selectCompany(
+    BuildContext context,
+    Map<String, dynamic> company,
+  ) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
 
     try {
@@ -122,7 +125,10 @@ class SelectCompanyScreen extends StatelessWidget {
       if (!context.mounted) return;
 
       if (result['success'] == true) {
-        Navigator.pushReplacementNamed(context, '/home');
+        final currentRoute = ModalRoute.of(context)?.settings.name;
+        if (currentRoute != '/') {
+          Navigator.pushReplacementNamed(context, '/');
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -140,10 +146,7 @@ class SelectCompanyScreen extends StatelessWidget {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Error: $e',
-            style: GoogleFonts.poppins(),
-          ),
+          content: Text('Error: $e', style: GoogleFonts.poppins()),
           backgroundColor: Colors.red.shade400,
           behavior: SnackBarBehavior.floating,
         ),

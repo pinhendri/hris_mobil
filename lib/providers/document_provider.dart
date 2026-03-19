@@ -1,41 +1,64 @@
-// lib/providers/document_provider.dart
-import '../data/models/document_model.dart';
 import 'package:flutter/material.dart';
 
+import '../data/models/document_model.dart';
+import '../services/api_service.dart';
+
 class DocumentProvider extends ChangeNotifier {
-  bool isLoading = false;
-  List<DocumentItem> documents = [];
+  final ApiService _apiService = ApiService();
+
+  bool _isLoading = false;
+  String? _error;
+  List<DocumentItem> _documents = [];
+
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+  List<DocumentItem> get documents => _documents;
 
   Future<void> fetchDocuments() async {
-    try {
-      isLoading = true;
-      notifyListeners();
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
 
-      // Dummy data
-      await Future.delayed(const Duration(seconds: 1));
-      documents = [
-        DocumentItem(
-          id: '1',
-          title: 'Company Policy',
-          type: 'pdf',
-          category: 'Policy',
-          url: 'https://example.com/policy.pdf',
-          size: '1.2 MB',
-          updatedAt: DateTime.now(),
-        ),
-        DocumentItem(
-          id: '2',
-          title: 'Employee Handbook',
-          type: 'doc',
-          category: 'Handbook',
-          url: 'https://example.com/handbook.doc',
-          size: '800 KB',
-          updatedAt: DateTime.now().subtract(const Duration(days: 2)),
-        ),
-      ];
+    try {
+      final response = await _apiService.get('/documents');
+      final rawItems = response is Map<String, dynamic>
+          ? response['data']
+          : null;
+
+      if (rawItems is List) {
+        _documents =
+            rawItems
+                .whereType<Map<String, dynamic>>()
+                .map(DocumentItem.fromJson)
+                .toList(growable: true)
+              ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      } else {
+        _documents = [];
+      }
+    } catch (e) {
+      _error = _normalizeError(e);
+      _documents = [];
     } finally {
-      isLoading = false;
+      _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> refresh() async {
+    await fetchDocuments();
+  }
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
+  String _normalizeError(Object error) {
+    final message = error.toString();
+    if (message.startsWith('Exception: ')) {
+      return message.substring('Exception: '.length);
+    }
+
+    return message;
   }
 }

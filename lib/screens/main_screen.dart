@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/theme_provider.dart';
+
+import '../core/localization/app_strings.dart';
+import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
+import 'tabs/admin_tab.dart';
 import 'tabs/dashboard_tab.dart';
 import 'tabs/feature_tab.dart';
-import 'tabs/admin_tab.dart';
 import 'tabs/profile_tab.dart';
 
 class MainScreen extends StatefulWidget {
@@ -16,28 +19,48 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  late final List<Widget> _tabs;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabs = const [
-      DashboardTab(),
-      FeatureTab(),
-      AdminTab(),
-      ProfileTab(),
-    ];
-  }
-
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+    final themeProvider = context.watch<ThemeProvider>();
+    final authProvider = context.watch<AuthProvider>();
     final isDark = themeProvider.isDarkMode;
 
+    final tabs = <_MainNavigationItem>[
+      _MainNavigationItem(
+        label: context.tr('nav_dashboard'),
+        icon: Icons.dashboard_outlined,
+        activeIcon: Icons.dashboard,
+        screen: const DashboardTab(),
+      ),
+      _MainNavigationItem(
+        label: context.tr('nav_features'),
+        icon: Icons.grid_view_outlined,
+        activeIcon: Icons.grid_view,
+        screen: const FeatureTab(),
+      ),
+      if (authProvider.canAccessAdminPanel)
+        _MainNavigationItem(
+          label: context.tr('nav_admin'),
+          icon: Icons.admin_panel_settings_outlined,
+          activeIcon: Icons.admin_panel_settings,
+          screen: const AdminTab(),
+        ),
+      _MainNavigationItem(
+        label: context.tr('nav_profile'),
+        icon: Icons.person_outline,
+        activeIcon: Icons.person,
+        screen: const ProfileTab(),
+      ),
+    ];
+
+    final currentIndex = _selectedIndex >= tabs.length
+        ? tabs.length - 1
+        : _selectedIndex;
+
     return Scaffold(
-      body: _tabs[_selectedIndex],
+      body: tabs[currentIndex].screen,
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
+        currentIndex: currentIndex,
         onTap: (index) {
           setState(() {
             _selectedIndex = index;
@@ -47,29 +70,30 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         selectedItemColor: isDark ? Colors.blue.shade300 : Colors.blue,
         unselectedItemColor: isDark ? Colors.grey.shade600 : Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_outlined),
-            activeIcon: Icon(Icons.grid_view),
-            label: 'Features',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.admin_panel_settings_outlined),
-            activeIcon: Icon(Icons.admin_panel_settings),
-            label: 'Admin',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+        items: tabs
+            .map(
+              (tab) => BottomNavigationBarItem(
+                icon: Icon(tab.icon),
+                activeIcon: Icon(tab.activeIcon),
+                label: tab.label,
+              ),
+            )
+            .toList(growable: false),
       ),
     );
   }
+}
+
+class _MainNavigationItem {
+  final String label;
+  final IconData icon;
+  final IconData activeIcon;
+  final Widget screen;
+
+  const _MainNavigationItem({
+    required this.label,
+    required this.icon,
+    required this.activeIcon,
+    required this.screen,
+  });
 }

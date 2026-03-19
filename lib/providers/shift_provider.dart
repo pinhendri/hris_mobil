@@ -1,20 +1,22 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/shift_model.dart';
 import '../models/shift_day_model.dart';
 import '../models/shift_assignment_model.dart';
 import '../services/api_service.dart';
+import '../services/offline_support.dart';
 
 class ShiftProvider with ChangeNotifier {
   List<Shift> _shifts = [];
   List<ShiftAssignment> _orders = [];
   bool _isLoading = false;
   String? _error;
+  bool _isUsingCachedData = false;
 
   List<Shift> get shifts => _shifts;
   List<ShiftAssignment> get orders => _orders;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get isUsingCachedData => _isUsingCachedData;
   int get totalShifts => _shifts.length;
 
   final ApiService _apiService = ApiService();
@@ -25,15 +27,15 @@ class ShiftProvider with ChangeNotifier {
   Future<List<ShiftDay>> fetchShiftDays(String shiftId) async {
     try {
       print('🔄 Fetching shift days for shift: $shiftId');
-      
+
       final response = await _apiService.get('/shift-days/by-shift/$shiftId');
-      
+
       print('📥 Shift days response: $response');
-      
+
       if (response is Map<String, dynamic>) {
         final success = response['success'] ?? false;
         final data = response['data'];
-        
+
         if (success == true && data is Map) {
           final shiftDaysData = data['shift_days'];
           if (shiftDaysData is List) {
@@ -62,7 +64,7 @@ class ShiftProvider with ChangeNotifier {
           }
         }
       }
-      
+
       return [];
     } catch (e) {
       print('❌ Error fetching shift days: $e');
@@ -73,14 +75,22 @@ class ShiftProvider with ChangeNotifier {
   // Helper to convert day string to number
   int _getDayNumber(String? dayString) {
     switch (dayString) {
-      case 'Mon': return 1;
-      case 'Tue': return 2;
-      case 'Wed': return 3;
-      case 'Thu': return 4;
-      case 'Fri': return 5;
-      case 'Sat': return 6;
-      case 'Sun': return 7;
-      default: return 1;
+      case 'Mon':
+        return 1;
+      case 'Tue':
+        return 2;
+      case 'Wed':
+        return 3;
+      case 'Thu':
+        return 4;
+      case 'Fri':
+        return 5;
+      case 'Sat':
+        return 6;
+      case 'Sun':
+        return 7;
+      default:
+        return 1;
     }
   }
 
@@ -88,59 +98,73 @@ class ShiftProvider with ChangeNotifier {
   Future<void> fetchShifts() async {
     _isLoading = true;
     _error = null;
+    _isUsingCachedData = false;
     notifyListeners();
 
     try {
       print('🔄 Fetching shifts from API...');
-      
+
       final response = await _apiService.get('/shifts');
-      
+
       print('📥 Raw API Response: $response');
-      
+
       if (response is Map<String, dynamic>) {
         final success = response['success'] ?? false;
         final message = response['message'] ?? 'No message';
         final data = response['data'];
-        
+
         if (success == true) {
           List<dynamic> items = [];
-          
+
           // Handle paginated response
           if (data is Map && data.containsKey('data')) {
             print('📥 Data is paginated response');
             items = data['data'] as List? ?? [];
-          } 
+          }
           // Handle direct array response
           else if (data is List) {
             print('📥 Data is direct List with length: ${data.length}');
             items = data;
           }
-          
+
           // Parse shifts without days first
           final shiftsWithoutDays = _parseShiftList(items);
-          
+
           // Then fetch shift days for each shift
           List<Shift> shiftsWithDays = [];
           for (var shift in shiftsWithoutDays) {
             final shiftDays = await fetchShiftDays(shift.id);
             shiftsWithDays.add(shift.copyWith(shiftDays: shiftDays));
           }
-          
+
           _shifts = shiftsWithDays;
+          await OfflineSupport.saveJsonCache(
+            _cacheKey,
+            _shifts.map((shift) => shift.toJson()).toList(),
+          );
         } else {
-          _error = message;
-          _shifts = [];
+          final loadedFromCache = await _loadCachedShifts();
+          if (!loadedFromCache) {
+            _error = message;
+            _shifts = [];
+          }
           print('❌ API Error: $message');
         }
       } else {
         print('❌ Response is not a Map. Type: ${response.runtimeType}');
-        _error = 'Invalid response format';
-        _shifts = [];
+        final loadedFromCache = await _loadCachedShifts();
+        if (!loadedFromCache) {
+          _error = 'Invalid response format';
+          _shifts = [];
+        }
       }
     } catch (e) {
       print('❌ Error fetching shifts: $e');
-      _error = e.toString();
-      _shifts = [];
+      final loadedFromCache = await _loadCachedShifts();
+      if (!loadedFromCache) {
+        _error = e.toString();
+        _shifts = [];
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -152,13 +176,13 @@ class ShiftProvider with ChangeNotifier {
   Future<Shift?> fetchShiftById(String id) async {
     try {
       print('🔄 Fetching shift by ID: $id');
-      
+
       final response = await _apiService.get('/shifts/$id');
-      
+
       if (response is Map<String, dynamic>) {
         final success = response['success'] ?? false;
         final data = response['data'];
-        
+
         if (success == true && data is Map<String, dynamic>) {
           // Parse shift days if included
           List<ShiftDay> shiftDays = [];
@@ -178,7 +202,7 @@ class ShiftProvider with ChangeNotifier {
             // If not included, fetch separately
             shiftDays = await fetchShiftDays(id);
           }
-          
+
           return Shift(
             id: data['id']?.toString() ?? '',
             name: data['name']?.toString() ?? '',
@@ -195,7 +219,7 @@ class ShiftProvider with ChangeNotifier {
           );
         }
       }
-      
+
       return null;
     } catch (e) {
       print('❌ Error fetching shift by ID: $e');
@@ -211,11 +235,13 @@ class ShiftProvider with ChangeNotifier {
     }
 
     print('📥 First item sample: ${items.first}');
-    print('📥 First item keys: ${items.first is Map ? (items.first as Map).keys : 'Not a Map'}');
-    
+    print(
+      '📥 First item keys: ${items.first is Map ? (items.first as Map).keys : 'Not a Map'}',
+    );
+
     final shifts = items.map<Shift>((json) {
       print('📥 Processing item: $json');
-      
+
       if (json is Map<String, dynamic>) {
         final id = json['id']?.toString() ?? '';
         final name = json['name']?.toString() ?? '';
@@ -223,9 +249,11 @@ class ShiftProvider with ChangeNotifier {
         final clockIn = json['clock_in']?.toString() ?? '';
         final clockOut = json['clock_out']?.toString() ?? '';
         final breakMinutes = json['break_minutes'] ?? 60;
-        
-        print('📥 Parsed - id: $id, name: $name, description: $description, clockIn: $clockIn, clockOut: $clockOut');
-        
+
+        print(
+          '📥 Parsed - id: $id, name: $name, description: $description, clockIn: $clockIn, clockOut: $clockOut',
+        );
+
         return Shift(
           id: id,
           name: name,
@@ -258,16 +286,18 @@ class ShiftProvider with ChangeNotifier {
         );
       }
     }).toList();
-    
+
     final validShifts = shifts.where((shift) => shift.id.isNotEmpty).toList();
-    
+
     print('✅ Successfully converted ${validShifts.length} shifts');
-    
+
     for (var i = 0; i < validShifts.length; i++) {
       final shift = validShifts[i];
-      print('📋 Shift $i: id=${shift.id}, name=${shift.name}, start=${shift.startTime}, end=${shift.endTime}');
+      print(
+        '📋 Shift $i: id=${shift.id}, name=${shift.name}, start=${shift.startTime}, end=${shift.endTime}',
+      );
     }
-    
+
     return validShifts;
   }
 
@@ -298,23 +328,25 @@ class ShiftProvider with ChangeNotifier {
         'is_flexible': shift.isFlexible,
         'is_active': shift.isActive,
       };
-      
+
       print('📤 Adding shift with data: $shiftData');
-      
+
       final shiftResponse = await _apiService.post('/shifts', shiftData);
-      
+
       print('📥 Add shift response: $shiftResponse');
-      
+
       if (shiftResponse is Map && shiftResponse['success'] == true) {
         final newShiftId = shiftResponse['data']['id'].toString();
-        
+
         // 2. Simpan shift days jika ada
         if (shift.shiftDays.isNotEmpty) {
-          final List<Map<String, dynamic>> daysData = shift.shiftDays.map((day) {
+          final List<Map<String, dynamic>> daysData = shift.shiftDays.map((
+            day,
+          ) {
             // PERBAIKAN: Format waktu tanpa detik
             String clockIn = day.clockIn;
             String clockOut = day.clockOut;
-            
+
             // Jika waktu mengandung detik (format HH:mm:ss), potong detiknya
             if (clockIn.length > 5 && clockIn.contains(':')) {
               clockIn = clockIn.substring(0, 5);
@@ -322,7 +354,7 @@ class ShiftProvider with ChangeNotifier {
             if (clockOut.length > 5 && clockOut.contains(':')) {
               clockOut = clockOut.substring(0, 5);
             }
-            
+
             return {
               'shift_id': newShiftId,
               'day_of_week': day.dayOfWeekString,
@@ -331,16 +363,16 @@ class ShiftProvider with ChangeNotifier {
               'break_minutes': day.breakMinutes,
             };
           }).toList();
-          
+
           print('📤 Adding shift days with data: $daysData');
-          
-          final daysResponse = await _apiService.post('/shift-days/bulk-update', {
-            'shift_id': newShiftId,
-            'days': daysData,
-          });
-          
+
+          final daysResponse = await _apiService.post(
+            '/shift-days/bulk-update',
+            {'shift_id': newShiftId, 'days': daysData},
+          );
+
           print('📥 Add shift days response: $daysResponse');
-          
+
           // Cek jika ada error validasi
           if (daysResponse is Map && daysResponse['success'] == false) {
             print('❌ Bulk update failed: ${daysResponse['errors']}');
@@ -348,7 +380,7 @@ class ShiftProvider with ChangeNotifier {
             return false;
           }
         }
-        
+
         await fetchShifts(); // Refresh list
         return true;
       } else {
@@ -383,22 +415,26 @@ class ShiftProvider with ChangeNotifier {
         'is_flexible': shift.isFlexible,
         'is_active': shift.isActive,
       };
-      
+
       print('📤 Updating shift ${shift.id} with data: $shiftData');
-      
-      final shiftResponse = await _apiService.put('/shifts/${shift.id}', shiftData);
-      
+
+      final shiftResponse = await _apiService.put(
+        '/shifts/${shift.id}',
+        shiftData,
+      );
+
       print('📥 Update shift response: $shiftResponse');
-      
+
       if (shiftResponse is Map && shiftResponse['success'] == true) {
-        
         // 2. Update shift days menggunakan bulk update
         if (shift.shiftDays.isNotEmpty) {
-          final List<Map<String, dynamic>> daysData = shift.shiftDays.map((day) {
+          final List<Map<String, dynamic>> daysData = shift.shiftDays.map((
+            day,
+          ) {
             // PERBAIKAN: Format waktu tanpa detik
             String clockIn = day.clockIn;
             String clockOut = day.clockOut;
-            
+
             // Jika waktu mengandung detik (format HH:mm:ss), potong detiknya
             if (clockIn.length > 5 && clockIn.contains(':')) {
               clockIn = clockIn.substring(0, 5); // Ambil hanya HH:mm
@@ -406,7 +442,7 @@ class ShiftProvider with ChangeNotifier {
             if (clockOut.length > 5 && clockOut.contains(':')) {
               clockOut = clockOut.substring(0, 5); // Ambil hanya HH:mm
             }
-            
+
             return {
               'shift_id': shift.id,
               'day_of_week': day.dayOfWeekString,
@@ -415,16 +451,16 @@ class ShiftProvider with ChangeNotifier {
               'break_minutes': day.breakMinutes,
             };
           }).toList();
-          
+
           print('📤 Updating shift days with data: $daysData');
-          
-          final daysResponse = await _apiService.post('/shift-days/bulk-update', {
-            'shift_id': shift.id,
-            'days': daysData,
-          });
-          
+
+          final daysResponse = await _apiService.post(
+            '/shift-days/bulk-update',
+            {'shift_id': shift.id, 'days': daysData},
+          );
+
           print('📥 Update shift days response: $daysResponse');
-          
+
           // Cek jika ada error validasi
           if (daysResponse is Map && daysResponse['success'] == false) {
             print('❌ Bulk update failed: ${daysResponse['errors']}');
@@ -434,13 +470,16 @@ class ShiftProvider with ChangeNotifier {
         } else {
           // Jika tidak ada shift days, hapus semua yang ada dengan bulk update kosong
           print('📤 No shift days, deleting all for shift ${shift.id}');
-          final deleteResponse = await _apiService.post('/shift-days/bulk-update', {
-            'shift_id': shift.id,
-            'days': [], // Kirim array kosong untuk menghapus semua
-          });
+          final deleteResponse = await _apiService.post(
+            '/shift-days/bulk-update',
+            {
+              'shift_id': shift.id,
+              'days': [], // Kirim array kosong untuk menghapus semua
+            },
+          );
           print('📥 Delete shift days response: $deleteResponse');
         }
-        
+
         await fetchShifts(); // Refresh list
         return true;
       } else {
@@ -465,17 +504,19 @@ class ShiftProvider with ChangeNotifier {
 
     try {
       print('📤 Deleting shift with id: $id');
-      
+
       // Cek apakah shift memiliki shift days
       final shiftDays = await fetchShiftDays(id);
       if (shiftDays.isNotEmpty) {
-        print('📤 Shift has ${shiftDays.length} shift days, they will be deleted automatically by backend');
+        print(
+          '📤 Shift has ${shiftDays.length} shift days, they will be deleted automatically by backend',
+        );
       }
-      
+
       final response = await _apiService.delete('/shifts/$id');
-      
+
       print('📥 Delete shift response: $response');
-      
+
       if (response is Map && response['success'] == true) {
         _shifts.removeWhere((s) => s.id == id);
         return true;
@@ -501,17 +542,19 @@ class ShiftProvider with ChangeNotifier {
 
     try {
       print('📤 Deleting shift day with id: $shiftDayId for shift: $shiftId');
-      
+
       final response = await _apiService.delete('/shift-days/$shiftDayId');
-      
+
       print('📥 Delete shift day response: $response');
-      
+
       if (response is Map && response['success'] == true) {
         // Update local data
         final shiftIndex = _shifts.indexWhere((s) => s.id == shiftId);
         if (shiftIndex != -1) {
           final updatedShift = _shifts[shiftIndex].copyWith(
-            shiftDays: _shifts[shiftIndex].shiftDays.where((d) => d.id != shiftDayId).toList()
+            shiftDays: _shifts[shiftIndex].shiftDays
+                .where((d) => d.id != shiftDayId)
+                .toList(),
           );
           _shifts[shiftIndex] = updatedShift;
         }
@@ -534,13 +577,13 @@ class ShiftProvider with ChangeNotifier {
   Future<List<Shift>> getActiveShifts() async {
     try {
       print('🔄 Fetching active shifts...');
-      
+
       final response = await _apiService.get('/shifts/active');
-      
+
       if (response is Map<String, dynamic>) {
         final success = response['success'] ?? false;
         final data = response['data'];
-        
+
         if (success == true && data is List) {
           return data.map<Shift>((json) {
             if (json is Map<String, dynamic>) {
@@ -576,7 +619,7 @@ class ShiftProvider with ChangeNotifier {
           }).toList();
         }
       }
-      
+
       return [];
     } catch (e) {
       print('❌ Error fetching active shifts: $e');
@@ -595,10 +638,10 @@ class ShiftProvider with ChangeNotifier {
     try {
       // TODO: Implement when backend ready
       // final response = await _apiService.get('/shift-assignments');
-      
+
       // For now, use local data
       _orders = [];
-      
+
       print('✅ Loaded ${_orders.length} shift assignments');
     } catch (e) {
       print('❌ Error fetching shift assignments: $e');
@@ -631,7 +674,10 @@ class ShiftProvider with ChangeNotifier {
   }
 
   // Assign shift to department
-  Future<bool> assignShiftToDepartment(String departmentId, String shiftId) async {
+  Future<bool> assignShiftToDepartment(
+    String departmentId,
+    String shiftId,
+  ) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -805,6 +851,24 @@ class ShiftProvider with ChangeNotifier {
     _shifts = [];
     _orders = [];
     _error = null;
+    _isUsingCachedData = false;
     notifyListeners();
+  }
+
+  String get _cacheKey => 'shifts::master';
+
+  Future<bool> _loadCachedShifts() async {
+    final cached = await OfflineSupport.getJsonCache(_cacheKey);
+    if (cached is! List) {
+      return false;
+    }
+
+    _shifts = cached
+        .whereType<Map>()
+        .map((item) => Shift.fromJson(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+    _error = null;
+    _isUsingCachedData = true;
+    return true;
   }
 }

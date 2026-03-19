@@ -8,7 +8,6 @@ import '../../providers/theme_provider.dart';
 import '../../data/models/attendance_model.dart';
 import '../../widgets/loading_widget.dart';
 import 'clock_in_screen.dart';
-import '../../utils/debounce.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -17,40 +16,34 @@ class AttendanceScreen extends StatefulWidget {
   State<AttendanceScreen> createState() => _AttendanceScreenState();
 }
 
-class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerProviderStateMixin {
+class _AttendanceScreenState extends State<AttendanceScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  DateTime _selectedDate = DateTime.now();
   String? _employeeUuid;
-  bool _isLoading = false;
-  final Debouncer _debouncer = Debouncer(duration: const Duration(milliseconds: 500));
+  bool _isInitialized = false; // Flag untuk menandai sudah diinisialisasi
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-
     _tabController.addListener(_handleTabChange);
     _scrollController.addListener(_handleScroll);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _debouncer.run(() {
-        _loadInitialData();
-      });
-    });
   }
 
   void _handleTabChange() {
     if (_tabController.indexIsChanging) {
-      // Reset scroll position when tab changes
       _scrollController.jumpTo(0);
     }
   }
 
   void _handleScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       final provider = Provider.of<AttendanceProvider>(context, listen: false);
-      if (_tabController.index == 1 && !provider.isLoading && provider.currentPage < provider.lastPage) {
+      if (_tabController.index == 1 &&
+          !provider.isLoading &&
+          provider.currentPage < provider.lastPage) {
         provider.loadNextPage();
       }
     }
@@ -60,10 +53,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   void dispose() {
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
-    _debouncer.dispose();
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Hanya load data sekali
+    if (!_isInitialized) {
+      _loadInitialData();
+      _isInitialized = true;
+    }
   }
 
   Future<void> _loadInitialData() async {
@@ -71,25 +74,24 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final attendanceProvider = Provider.of<AttendanceProvider>(context, listen: false);
+      final attendanceProvider = Provider.of<AttendanceProvider>(
+        context,
+        listen: false,
+      );
 
-      _employeeUuid = authProvider.user?.employeeUuid ??
-          authProvider.user?.uuid ??
-          null;
+      // Set employee UUID
+      _employeeUuid =
+          authProvider.user?.employeeUuid ?? authProvider.user?.uuid;
 
       if (_employeeUuid != null) {
-        if (mounted) {
-          setState(() => _isLoading = true);
-        }
-
-        // Load data secara parallel
-        await Future.wait([
-          attendanceProvider.fetchAttendances(),
-          attendanceProvider.getAttendanceSummary(),
-        ]);
-
-        if (mounted) {
-          setState(() => _isLoading = false);
+        // Cek apakah data sudah ada sebelumnya
+        if (attendanceProvider.attendances.isEmpty &&
+            attendanceProvider.todayAttendance == null) {
+          // Load data secara parallel hanya jika belum ada data
+          await Future.wait([
+            attendanceProvider.fetchAttendances(),
+            attendanceProvider.getAttendanceSummary(),
+          ]);
         }
       } else {
         print('Employee UUID not found');
@@ -100,14 +102,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
               backgroundColor: Colors.orange,
             ),
           );
-          setState(() => _isLoading = false);
         }
       }
     } catch (e) {
       print('Error loading initial data: $e');
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
   }
 
@@ -120,35 +118,19 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
     final todayAttendance = attendanceProvider.todayAttendance;
     final canClockIn = todayAttendance == null || !todayAttendance.hasClockIn;
-    final canClockOut = todayAttendance != null && todayAttendance.hasClockIn && !todayAttendance.hasClockOut;
-
-    // Loading state
-    if (_isLoading || attendanceProvider.isLoading) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text(
-            'Attendance',
-            style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          elevation: 0,
-        ),
-        body: const LoadingWidget(message: 'Loading attendance data...'),
-      );
-    }
+    final canClockOut =
+        todayAttendance != null &&
+        todayAttendance.hasClockIn &&
+        !todayAttendance.hasClockOut;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF8F9FA),
+      backgroundColor: isDark
+          ? const Color(0xFF0A0A0A)
+          : const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: Text(
           'Attendance',
-          style: GoogleFonts.poppins(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600),
         ),
         backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         elevation: 0,
@@ -167,7 +149,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         controller: _tabController,
         children: [
           // Today Tab
-          _buildTodayTab(context, isDark, attendanceProvider, authProvider, canClockIn, canClockOut),
+          _buildTodayTab(
+            context,
+            isDark,
+            attendanceProvider,
+            authProvider,
+            canClockIn,
+            canClockOut,
+          ),
 
           // History Tab
           _buildHistoryTab(context, isDark, attendanceProvider),
@@ -178,13 +167,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
   // MARK: - Today Tab
   Widget _buildTodayTab(
-      BuildContext context,
-      bool isDark,
-      AttendanceProvider provider,
-      AuthProvider authProvider,
-      bool canClockIn,
-      bool canClockOut,
-      ) {
+    BuildContext context,
+    bool isDark,
+    AttendanceProvider provider,
+    AuthProvider authProvider,
+    bool canClockIn,
+    bool canClockOut,
+  ) {
+    // Loading state hanya jika benar-benar loading dan data kosong
+    if (provider.isLoading && provider.todayAttendance == null) {
+      return const LoadingWidget(message: 'Loading attendance data...');
+    }
+
     if (provider.error != null) {
       return Center(
         child: Padding(
@@ -192,11 +186,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: Colors.red.shade300,
-              ),
+              Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
               const SizedBox(height: 16),
               Text(
                 'Error Loading Data',
@@ -296,6 +286,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
           const SizedBox(height: 24),
 
+          if (provider.syncNotice != null) ...[
+            _buildSyncNoticeCard(context, isDark, provider),
+            const SizedBox(height: 24),
+          ],
+
           // Status Card
           Container(
             padding: const EdgeInsets.all(20),
@@ -330,7 +325,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         'Clock In',
                         todayAttendance?.clockInTimeFormatted ?? '-',
                         Icons.login,
-                        todayAttendance?.hasClockIn ?? false ? Colors.green : Colors.grey,
+                        todayAttendance?.hasClockIn ?? false
+                            ? Colors.green
+                            : Colors.grey,
                         isDark,
                       ),
                     ),
@@ -344,7 +341,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                         'Clock Out',
                         todayAttendance?.clockOutTimeFormatted ?? '-',
                         Icons.logout,
-                        todayAttendance?.hasClockOut ?? false ? Colors.green : Colors.grey,
+                        todayAttendance?.hasClockOut ?? false
+                            ? Colors.green
+                            : Colors.grey,
                         isDark,
                       ),
                     ),
@@ -363,20 +362,26 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
           if (canClockOut)
             _buildClockOutButton(context, isDark, provider, authProvider),
 
-          if (!canClockIn && !canClockOut)
-            _buildCompletedCard(isDark),
+          if (!canClockIn && !canClockOut) _buildCompletedCard(isDark),
 
           const SizedBox(height: 24),
 
           // Location Info (if available)
-          if (todayAttendance != null && todayAttendance.clockInLocation != null)
-            _buildLocationCard(isDark, todayAttendance!),
+          if (todayAttendance != null &&
+              todayAttendance.clockInLocation != null)
+            _buildLocationCard(isDark, todayAttendance),
         ],
       ),
     );
   }
 
-  Widget _buildStatusItem(String label, String value, IconData icon, Color color, bool isDark) {
+  Widget _buildStatusItem(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+    bool isDark,
+  ) {
     return Column(
       children: [
         Icon(icon, color: color, size: 24),
@@ -402,32 +407,31 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   }
 
   Widget _buildClockInButton(
-      BuildContext context,
-      bool isDark,
-      AttendanceProvider provider,
-      AuthProvider authProvider,
-      ) {
+    BuildContext context,
+    bool isDark,
+    AttendanceProvider provider,
+    AuthProvider authProvider,
+  ) {
     return Container(
       width: double.infinity,
       height: 56,
       child: ElevatedButton.icon(
-        onPressed: provider.isClockingIn ? null : () => _handleClockIn(context, provider, authProvider),
+        onPressed: provider.isClockingIn
+            ? null
+            : () => _handleClockIn(context, provider, authProvider),
         icon: provider.isClockingIn
             ? const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-          ),
-        )
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
             : const Icon(Icons.login),
         label: Text(
           provider.isClockingIn ? 'Processing...' : 'Clock In',
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.green,
@@ -442,32 +446,31 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   }
 
   Widget _buildClockOutButton(
-      BuildContext context,
-      bool isDark,
-      AttendanceProvider provider,
-      AuthProvider authProvider,
-      ) {
+    BuildContext context,
+    bool isDark,
+    AttendanceProvider provider,
+    AuthProvider authProvider,
+  ) {
     return Container(
       width: double.infinity,
       height: 56,
       child: ElevatedButton.icon(
-        onPressed: provider.isClockingOut ? null : () => _handleClockOut(context, provider, authProvider),
+        onPressed: provider.isClockingOut
+            ? null
+            : () => _handleClockOut(context, provider, authProvider),
         icon: provider.isClockingOut
             ? const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-          ),
-        )
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
             : const Icon(Icons.logout),
         label: Text(
           provider.isClockingOut ? 'Processing...' : 'Clock Out',
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.orange,
@@ -488,10 +491,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.green.withOpacity(0.3),
-          width: 2,
-        ),
+        border: Border.all(color: Colors.green.withOpacity(0.3), width: 2),
       ),
       child: Row(
         children: [
@@ -585,7 +585,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   }
 
   // MARK: - History Tab
-  Widget _buildHistoryTab(BuildContext context, bool isDark, AttendanceProvider provider) {
+  Widget _buildHistoryTab(
+    BuildContext context,
+    bool isDark,
+    AttendanceProvider provider,
+  ) {
+    // Loading state hanya jika benar-benar loading dan data kosong
+    if (provider.isLoading && provider.attendances.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     if (provider.attendances.isEmpty && !provider.isLoading) {
       return Center(
         child: Column(
@@ -622,7 +631,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       onNotification: (ScrollNotification scrollInfo) {
         if (!provider.isLoading &&
             provider.currentPage < provider.lastPage &&
-            scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent * 0.8) {
+            scrollInfo.metrics.pixels >=
+                scrollInfo.metrics.maxScrollExtent * 0.8) {
           provider.loadNextPage();
         }
         return true;
@@ -650,7 +660,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
   Widget _buildHistoryItem(Attendance attendance, bool isDark) {
     final date = DateTime.parse(attendance.date);
-    final formattedDate = DateFormat('dd MMM yyyy', 'id').format(date);
     final dayName = DateFormat('EEEE', 'id').format(date);
 
     return Container(
@@ -733,7 +742,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                     Icon(
                       Icons.logout,
                       size: 12,
-                      color: attendance.hasClockOut ? Colors.orange : Colors.grey,
+                      color: attendance.hasClockOut
+                          ? Colors.orange
+                          : Colors.grey,
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -751,10 +762,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
           // Status badge
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: attendance.statusColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
@@ -773,62 +781,160 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
     );
   }
 
+  Widget _buildSyncNoticeCard(
+    BuildContext context,
+    bool isDark,
+    AttendanceProvider provider,
+  ) {
+    final notice = provider.syncNotice;
+    if (notice == null || notice.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final cardColor = provider.pendingSyncCount > 0
+        ? Colors.orange
+        : Colors.blue;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cardColor.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                provider.pendingSyncCount > 0
+                    ? Icons.cloud_off_outlined
+                    : Icons.info_outline,
+                color: cardColor,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  provider.pendingSyncCount > 0
+                      ? 'Sync Offline Pending'
+                      : 'Attendance Notice',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+              if (provider.pendingSyncCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cardColor.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${provider.pendingSyncCount} pending',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: cardColor,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            notice,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          if (provider.pendingSyncCount > 0) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: provider.isSyncingOfflineQueue
+                    ? null
+                    : () async {
+                        await provider.syncOfflineActions();
+                      },
+                icon: provider.isSyncingOfflineQueue
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync),
+                label: Text(
+                  provider.isSyncingOfflineQueue ? 'Syncing...' : 'Sync now',
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   // MARK: - Handlers
   Future<void> _handleClockIn(
-      BuildContext context,
-      AttendanceProvider provider,
-      AuthProvider authProvider,
-      ) async {
+    BuildContext context,
+    AttendanceProvider provider,
+    AuthProvider authProvider,
+  ) async {
     if (_employeeUuid == null) {
       _showErrorSnackBar('Data karyawan tidak ditemukan');
       return;
     }
 
-    // Navigasi ke ClockInScreen
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const ClockInScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const ClockInScreen()),
     );
 
-    // Setelah kembali dari ClockInScreen, refresh data
     if (result == true && mounted) {
       await provider.refreshData();
-      _showSuccessSnackBar('Clock in berhasil');
     }
   }
 
   Future<void> _handleClockOut(
-      BuildContext context,
-      AttendanceProvider provider,
-      AuthProvider authProvider,
-      ) async {
+    BuildContext context,
+    AttendanceProvider provider,
+    AuthProvider authProvider,
+  ) async {
     if (_employeeUuid == null) {
       _showErrorSnackBar('Data karyawan tidak ditemukan');
       return;
     }
 
-    final success = await provider.clockOut(
-      employeeUuid: _employeeUuid!,
-    );
+    final success = await provider.clockOut(employeeUuid: _employeeUuid!);
 
     if (success && mounted) {
-      _showSuccessSnackBar('Clock out berhasil');
+      await provider.refreshData();
+      _showSuccessSnackBar(
+        provider.lastActionMessage ?? 'Clock out berhasil',
+        isQueued: provider.lastActionQueued,
+      );
     } else if (mounted && provider.error != null) {
       _showErrorSnackBar(provider.error!);
     }
   }
 
-  void _showSuccessSnackBar(String message) {
+  void _showSuccessSnackBar(String message, {bool isQueued = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.green,
+        backgroundColor: isQueued ? Colors.orange : Colors.green,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -839,9 +945,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
         content: Text(message),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }

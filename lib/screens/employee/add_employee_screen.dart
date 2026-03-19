@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/widgets/access_denied_state.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/employee_model.dart';
+import '../../models/recruitment_model.dart' show Position;
+import '../../models/shift_model.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/department_provider.dart';
 import '../../providers/employee_provider.dart';
+import '../../providers/shift_provider.dart';
+import '../../services/api_service.dart';
 
 class AddEmployeeScreen extends StatefulWidget {
   final Employee? employee;
@@ -18,9 +25,11 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _formKey = GlobalKey<FormState>();
+  final ApiService _apiService = ApiService();
 
   // Controllers for Tab 1: Personal Information
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _nikController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -30,7 +39,8 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       TextEditingController();
 
   // Controllers for Tab 2: Job Information
-  final TextEditingController _employeeIdController = TextEditingController();
+  final TextEditingController _employeeIdPreviewController =
+      TextEditingController();
   final TextEditingController _positionController = TextEditingController();
   final TextEditingController _salaryController = TextEditingController();
   final TextEditingController _bankAccountController = TextEditingController();
@@ -71,6 +81,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
   String? _selectedDepartment;
   String? _selectedManager;
   DateTime? _joinDate;
+  String? _selectedPositionId;
   String? _selectedEmploymentType;
   String? _selectedLocation;
   String? _selectedShift;
@@ -92,6 +103,8 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
   final List<String> _assignedEquipment = [];
   final List<String> _systemAccess = [];
   bool _handbookAcknowledged = false;
+  bool _isSubmitting = false;
+  List<Position> _positionOptions = const [];
 
   PlatformFile? _resumeFile;
   PlatformFile? _idFile;
@@ -101,6 +114,10 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
   // Error messages
   String? _dobError;
   String? _joinDateError;
+
+  // Employee ID auto-generate states
+  String _employeePrefix = 'EMP';
+  String? _generatedEmployeeId;
 
   // Mock Data for Dropdowns
   final List<String> _genders = ['Male', 'Female', 'Other'];
@@ -120,16 +137,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     'Widowed',
   ];
   final List<String> _relationships = ['Family', 'Friend', 'Spouse', 'Other'];
-  final List<String> _departments = [
-    'Engineering',
-    'Product',
-    'Human Resources',
-    'Marketing',
-    'Sales',
-    'Finance',
-    'IT',
-  ];
-  final List<String> _managers = ['Manager A', 'Manager B', 'Manager C'];
   final List<String> _employmentTypes = [
     'Full-Time',
     'Part-Time',
@@ -141,12 +148,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     'HQ - New York',
     'Branch - London',
     'Remote',
-  ];
-  final List<String> _shifts = [
-    'Day Shift',
-    'Night Shift',
-    'Flexible',
-    'Rotational',
   ];
   final List<String> _schedules = ['9 AM - 5 PM', 'Flexible Hours'];
   final List<String> _accountTypes = ['Checking', 'Savings'];
@@ -185,13 +186,18 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     'Payroll System',
   ];
 
+  String get _employeeIdPreview =>
+      _generatedEmployeeId ?? '${_employeePrefix}XXXXX';
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 9, vsync: this);
+
     final e = widget.employee;
     if (e != null) {
       _nameController.text = e.name;
+      _nikController.text = e.nik ?? '';
       _selectedGender = e.gender;
       _dob = _tryParseDate(e.dateOfBirth);
       _selectedNationality = e.nationality;
@@ -200,15 +206,17 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       _emergencyNameController.text = e.emergencyContactName ?? '';
       _selectedEmergencyRelationship = e.emergencyContactRelationship;
       _emergencyPhoneController.text = e.emergencyContactPhone ?? '';
-      _employeeIdController.text = e.id;
-      _positionController.text = e.position;
-      _selectedDepartment = e.department;
+      _generatedEmployeeId = e.nikEmployee ?? e.id;
+      _employeeIdPreviewController.text = _employeeIdPreview;
+      _positionController.text = e.positionName ?? e.position;
+      _selectedPositionId = e.positionId;
+      _selectedDepartment = e.departmentId ?? e.department;
       _selectedManager = e.managerId;
       _joinDate = _tryParseDate(e.joinDate);
       _selectedEmploymentType = e.employmentType;
       _salaryController.text = e.salary.toString();
       _selectedLocation = e.officeLocation;
-      _selectedShift = e.shiftType;
+      _selectedShift = e.shiftId ?? e.shiftType;
       _selectedWorkSchedule = e.workSchedule;
       _bankAccountController.text = e.bankAccountNumber ?? '';
       _bankNameController.text = e.bankName ?? '';
@@ -239,19 +247,28 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       _systemAccess.clear();
       if (e.systemAccess != null) _systemAccess.addAll(e.systemAccess!);
       _handbookAcknowledged = e.handbookAcknowledged ?? false;
+    } else {
+      _employeeIdPreviewController.text = _employeeIdPreview;
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _initializeMasterData();
+      }
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _nameController.dispose();
+    _nikController.dispose();
     _addressController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _emergencyNameController.dispose();
     _emergencyPhoneController.dispose();
-    _employeeIdController.dispose();
+    _employeeIdPreviewController.dispose();
     _positionController.dispose();
     _salaryController.dispose();
     _bankAccountController.dispose();
@@ -267,6 +284,143 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     _ssnController.dispose();
     _trainingPlanController.dispose();
     super.dispose();
+  }
+
+  Future<void> _initializeMasterData() async {
+    final authProvider = context.read<AuthProvider>();
+    final departmentProvider = context.read<DepartmentProvider>();
+    final employeeProvider = context.read<EmployeeProvider>();
+    final shiftProvider = context.read<ShiftProvider>();
+
+    final companyCode = authProvider.getCompanyCode();
+    if (companyCode.isNotEmpty) {
+      departmentProvider.setCurrentCcode(companyCode);
+    }
+
+    await Future.wait([
+      departmentProvider.fetchDepartments(),
+      employeeProvider.fetchAllEmployees(),
+      shiftProvider.fetchShifts(),
+      _loadPositions(),
+      _loadEmployeePrefix(companyCode),
+    ]);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _employeeIdPreviewController.text = _employeeIdPreview;
+    });
+    _syncMasterSelections();
+  }
+
+  Future<void> _loadEmployeePrefix(String companyCode) async {
+    try {
+      if (companyCode.isEmpty) {
+        _employeePrefix = 'EMP';
+        return;
+      }
+
+      final response = await _apiService.get(
+        '/payroll/settings?c_code=$companyCode',
+      );
+
+      final dynamic raw = response;
+      final dynamic data =
+          raw is Map<String, dynamic> ? (raw['data'] ?? raw) : raw;
+
+      final dynamic prefixValue =
+          data is Map<String, dynamic> ? data['emp_type'] : null;
+
+      final prefix = (prefixValue ?? '').toString().trim().toUpperCase();
+
+      _employeePrefix = prefix.isEmpty ? 'EMP' : prefix;
+    } catch (_) {
+      _employeePrefix = 'EMP';
+    }
+  }
+
+  Future<void> _loadPositions() async {
+    try {
+      final response = await _apiService.get('/employees/master/position');
+      final rawData = response is Map<String, dynamic> ? response['data'] : null;
+      if (rawData is! List) {
+        return;
+      }
+
+      _positionOptions = rawData
+          .whereType<Map<String, dynamic>>()
+          .map(Position.fromJson)
+          .toList(growable: false);
+    } catch (_) {
+      _positionOptions = const [];
+    }
+  }
+
+  void _syncMasterSelections() {
+    final currentEmployee = widget.employee;
+    if (currentEmployee == null) {
+      return;
+    }
+
+    final departmentProvider = context.read<DepartmentProvider>();
+    final shiftProvider = context.read<ShiftProvider>();
+
+    final hasSelectedDepartment =
+        _selectedDepartment != null &&
+        departmentProvider.departments.any(
+          (department) => department.id.toString() == _selectedDepartment,
+        );
+
+    if (!hasSelectedDepartment && currentEmployee.department.isNotEmpty) {
+      for (final department in departmentProvider.departments) {
+        if (department.name.toLowerCase() ==
+            currentEmployee.department.toLowerCase()) {
+          _selectedDepartment = department.id.toString();
+          break;
+        }
+      }
+    }
+
+    if ((_selectedPositionId == null || _selectedPositionId!.isEmpty) &&
+        currentEmployee.position.isNotEmpty) {
+      for (final position in _positionOptions) {
+        if (position.namaJabatan.toLowerCase() ==
+            currentEmployee.position.toLowerCase()) {
+          _selectedPositionId = position.id.toString();
+          _positionController.text = position.namaJabatan;
+          break;
+        }
+      }
+    }
+
+    if ((_selectedManager == null || _selectedManager!.isEmpty) &&
+        (currentEmployee.managerId?.isNotEmpty ?? false)) {
+      _selectedManager = currentEmployee.managerId;
+    }
+
+    final hasSelectedShift =
+        _selectedShift != null &&
+        shiftProvider.shifts.any((shift) => shift.id == _selectedShift);
+
+    if (!hasSelectedShift && (currentEmployee.shiftType?.isNotEmpty ?? false)) {
+      final normalizedShift = currentEmployee.shiftType!.trim().toLowerCase();
+      for (final shift in shiftProvider.shifts) {
+        final shiftName = shift.name.trim().toLowerCase();
+        final shiftDescription = (shift.description ?? '').trim().toLowerCase();
+        final shiftLabel = _buildShiftOptionLabel(shift).trim().toLowerCase();
+
+        if (shiftName == normalizedShift ||
+            shiftDescription == normalizedShift ||
+            shiftLabel == normalizedShift) {
+          _selectedShift = shift.id;
+          break;
+        }
+      }
+    }
+
+    setState(() {});
   }
 
   Future<void> _selectDate(BuildContext context, {required bool isDob}) async {
@@ -330,6 +484,35 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final requiredPermission =
+        widget.employee == null ? 'create-employee' : 'edit-employee';
+
+    if (!authProvider.hasPermission(requiredPermission)) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          title: Text(
+            widget.employee == null ? 'Add New Employee' : 'Edit Employee',
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: AccessDeniedState(
+          permissionLabel: requiredPermission,
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -386,7 +569,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     );
   }
 
-  // Tab 1: Personal Information
   Widget _buildPersonalTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -399,6 +581,14 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
             label: 'Full Name',
             controller: _nameController,
             icon: Icons.person_outline,
+            validator: (value) =>
+                value == null || value.isEmpty ? 'Required' : null,
+          ),
+          const SizedBox(height: 16),
+          _buildTextField(
+            label: 'NIK / KTP',
+            controller: _nikController,
+            icon: Icons.badge_outlined,
             validator: (value) =>
                 value == null || value.isEmpty ? 'Required' : null,
           ),
@@ -502,8 +692,47 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     );
   }
 
-  // Tab 2: Job Information
   Widget _buildJobTab() {
+    final departmentOptions = context
+        .watch<DepartmentProvider>()
+        .departments
+        .map(
+          (department) => _OptionItem(
+            value: department.id.toString(),
+            label: department.name,
+          ),
+        )
+        .toList(growable: false);
+
+    final managerOptions = context
+        .watch<EmployeeProvider>()
+        .employees
+        .where((employee) => employee.uuid != widget.employee?.uuid)
+        .map(
+          (employee) => _OptionItem(value: employee.uuid, label: employee.name),
+        )
+        .toList(growable: false);
+
+    final positionOptions = _positionOptions
+        .map(
+          (position) => _OptionItem(
+            value: position.id.toString(),
+            label: position.namaJabatan,
+          ),
+        )
+        .toList(growable: false);
+
+    final shiftOptions = context
+        .watch<ShiftProvider>()
+        .shifts
+        .map(
+          (shift) => _OptionItem(
+            value: shift.id,
+            label: _buildShiftOptionLabel(shift),
+          ),
+        )
+        .toList(growable: false);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -513,36 +742,60 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
           const SizedBox(height: 16),
           _buildTextField(
             label: 'Employee ID',
-            controller: _employeeIdController,
+            controller: _employeeIdPreviewController,
             icon: Icons.badge_outlined,
-            validator: (value) =>
-                value == null || value.isEmpty ? 'Required' : null,
+            readOnly: true,
+            enabled: false,
+            hint:
+                'Auto generated from prefix ${_employeePrefix.isEmpty ? "EMP" : _employeePrefix}',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _generatedEmployeeId != null
+                ? 'Employee ID final dibuat oleh sistem.'
+                : 'Preview saja. Employee ID final akan dibuat otomatis saat data disimpan.',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
           ),
           const SizedBox(height: 16),
-          _buildTextField(
+          _buildOptionDropdown(
             label: 'Job Title',
-            controller: _positionController,
+            value: _selectedPositionId,
+            items: positionOptions,
             icon: Icons.work_outline,
-            validator: (value) =>
-                value == null || value.isEmpty ? 'Required' : null,
+            onChanged: (value) {
+              setState(() {
+                _selectedPositionId = value;
+                String selectedLabel = '';
+                for (final item in positionOptions) {
+                  if (item.value == value) {
+                    selectedLabel = item.label;
+                    break;
+                  }
+                }
+                _positionController.text = selectedLabel;
+              });
+            },
+            validator: (value) => value == null ? 'Required' : null,
           ),
           const SizedBox(height: 16),
-          _buildDropdown(
+          _buildOptionDropdown(
             label: 'Department',
             value: _selectedDepartment,
-            items: _departments,
+            items: departmentOptions,
             icon: Icons.business_outlined,
             onChanged: (val) => setState(() => _selectedDepartment = val),
             validator: (value) => value == null ? 'Required' : null,
           ),
           const SizedBox(height: 16),
-          _buildDropdown(
+          _buildOptionDropdown(
             label: 'Manager/Supervisor',
             value: _selectedManager,
-            items: _managers,
+            items: managerOptions,
             icon: Icons.supervisor_account_outlined,
             onChanged: (val) => setState(() => _selectedManager = val),
-            validator: (value) => value == null ? 'Required' : null,
           ),
           const SizedBox(height: 16),
           _buildDatePicker(
@@ -576,16 +829,14 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
             items: _locations,
             icon: Icons.location_on_outlined,
             onChanged: (val) => setState(() => _selectedLocation = val),
-            validator: (value) => value == null ? 'Required' : null,
           ),
           const SizedBox(height: 16),
-          _buildDropdown(
+          _buildOptionDropdown(
             label: 'Shift Type',
             value: _selectedShift,
-            items: _shifts,
+            items: shiftOptions,
             icon: Icons.schedule,
             onChanged: (val) => setState(() => _selectedShift = val),
-            validator: (value) => value == null ? 'Required' : null,
           ),
           const SizedBox(height: 16),
           _buildDropdown(
@@ -594,7 +845,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
             items: _schedules,
             icon: Icons.access_time,
             onChanged: (val) => setState(() => _selectedWorkSchedule = val),
-            validator: (value) => value == null ? 'Required' : null,
           ),
           const SizedBox(height: 24),
           _buildSectionTitle('Payroll Information'),
@@ -604,16 +854,12 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
             controller: _bankAccountController,
             icon: Icons.account_balance,
             keyboardType: TextInputType.number,
-            validator: (value) =>
-                value == null || value.isEmpty ? 'Required' : null,
           ),
           const SizedBox(height: 16),
           _buildTextField(
             label: 'Bank Name',
             controller: _bankNameController,
             icon: Icons.account_balance_wallet,
-            validator: (value) =>
-                value == null || value.isEmpty ? 'Required' : null,
           ),
           const SizedBox(height: 16),
           _buildDropdown(
@@ -622,7 +868,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
             items: _accountTypes,
             icon: Icons.credit_card,
             onChanged: (val) => setState(() => _selectedAccountType = val),
-            validator: (value) => value == null ? 'Required' : null,
           ),
           const SizedBox(height: 32),
           _buildNextButton(2),
@@ -631,7 +876,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     );
   }
 
-  // Tab 3: Education & Qualifications
   Widget _buildEducationTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -698,7 +942,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     );
   }
 
-  // Tab 4: Work Experience
   Widget _buildExperienceTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -763,7 +1006,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     );
   }
 
-  // Tab 5: Documents Upload
   Widget _buildDocumentsTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -869,7 +1111,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     );
   }
 
-  // Tab 6: Health & Safety
   Widget _buildHealthTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -921,7 +1162,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     );
   }
 
-  // Tab 7: Legal & Compliance
   Widget _buildLegalTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -974,7 +1214,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     );
   }
 
-  // Tab 8: Onboarding Information
   Widget _buildOnboardingTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -1050,7 +1289,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     );
   }
 
-  // Tab 9: Review & Submit
   Widget _buildReviewTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -1064,12 +1302,20 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
             'Ensure that all mandatory fields in "Personal" and "Job" tabs are filled correctly.',
             style: TextStyle(color: Colors.grey),
           ),
+          const SizedBox(height: 12),
+          Text(
+            'Employee ID Preview: $_employeeIdPreview',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             height: 56,
             child: ElevatedButton(
-              onPressed: _submitForm,
+              onPressed: _isSubmitting ? null : () => _submitForm(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
@@ -1078,15 +1324,24 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
                 ),
                 elevation: 2,
               ),
-              child: Text(
-                widget.employee == null
-                    ? 'Submit Employee Data'
-                    : 'Update Employee Data',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : Text(
+                      widget.employee == null
+                          ? 'Submit Employee Data'
+                          : 'Update Employee Data',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -1094,154 +1349,237 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     );
   }
 
-  void _submitForm() {
-  // Validate Mandatory Tabs
-  bool isPersonalValid =
-      _nameController.text.isNotEmpty &&
-      _selectedGender != null &&
-      _dob != null &&
-      _selectedNationality != null &&
-      _addressController.text.isNotEmpty &&
-      _phoneController.text.isNotEmpty &&
-      _emailController.text.isNotEmpty &&
-      _selectedMaritalStatus != null &&
-      _emergencyNameController.text.isNotEmpty &&
-      _selectedEmergencyRelationship != null &&
-      _emergencyPhoneController.text.isNotEmpty;
+  Future<void> _submitForm() async {
+    final bool isPersonalValid =
+        _nameController.text.isNotEmpty &&
+        _nikController.text.isNotEmpty &&
+        _selectedGender != null &&
+        _dob != null &&
+        _selectedNationality != null &&
+        _addressController.text.isNotEmpty &&
+        _phoneController.text.isNotEmpty &&
+        _emailController.text.isNotEmpty &&
+        _selectedMaritalStatus != null &&
+        _emergencyNameController.text.isNotEmpty &&
+        _selectedEmergencyRelationship != null &&
+        _emergencyPhoneController.text.isNotEmpty;
 
-  bool isJobValid =
-      _employeeIdController.text.isNotEmpty &&
-      _positionController.text.isNotEmpty &&
-      _selectedDepartment != null &&
-      _selectedManager != null &&
-      _joinDate != null &&
-      _selectedEmploymentType != null &&
-      _salaryController.text.isNotEmpty &&
-      _selectedLocation != null &&
-      _selectedShift != null &&
-      _selectedWorkSchedule != null &&
-      _bankAccountController.text.isNotEmpty &&
-      _bankNameController.text.isNotEmpty &&
-      _selectedAccountType != null;
+    final bool isJobValid =
+        _selectedPositionId != null &&
+        _selectedDepartment != null &&
+        _joinDate != null &&
+        _selectedEmploymentType != null &&
+        _salaryController.text.isNotEmpty;
 
-  if (!isPersonalValid) {
-    _tabController.animateTo(0);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Please fill all mandatory fields in Personal Info tab',
-        ),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
-  }
-
-  if (!isJobValid) {
-    _tabController.animateTo(1);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Please fill all mandatory fields in Job Info tab'),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
-  }
-
-  if (_formKey.currentState!.validate()) {
-    if (widget.employee != null) {
-      // UPDATE MODE - Buat employee baru tanpa copyWith
-      final updatedEmployee = Employee(
-        id: widget.employee!.id,
-        uuid: widget.employee!.uuid,
-        name: _nameController.text,
-        position: _positionController.text,
-        department: _selectedDepartment ?? widget.employee!.department,
-        status: widget.employee!.status,
-        joinDate: _joinDate != null
-            ? DateFormat('yyyy-MM-dd').format(_joinDate!)
-            : widget.employee!.joinDate,
-        avatarUrl: widget.employee!.avatarUrl,
-        email: _emailController.text,
-        phone: _phoneController.text,
-        salary: double.tryParse(_salaryController.text) ?? widget.employee!.salary,
-        cCode: widget.employee!.cCode,
-        companyCode: widget.employee!.companyCode,
-        positionName: _positionController.text,
-        departmentDescription: _selectedDepartment,
-        gender: _selectedGender,
-        dateOfBirth: _dob != null
-            ? DateFormat('yyyy-MM-dd').format(_dob!)
-            : widget.employee!.dateOfBirth,
-        nationality: _selectedNationality,
-        address: _addressController.text,
-        maritalStatus: _selectedMaritalStatus,
-        emergencyContactName: _emergencyNameController.text,
-        emergencyContactRelationship: _selectedEmergencyRelationship,
-        emergencyContactPhone: _emergencyPhoneController.text,
-        managerId: _selectedManager,
-        employmentType: _selectedEmploymentType,
-        officeLocation: _selectedLocation,
-        shiftType: _selectedShift,
-        workSchedule: _selectedWorkSchedule,
-        bankAccountNumber: _bankAccountController.text,
-        bankName: _bankNameController.text,
-        accountType: _selectedAccountType,
-        highestEducation: _selectedEducationLevel,
-        degree: _degreeController.text,
-        institution: _institutionController.text,
-        graduationYear: _graduationYear != null
-            ? DateFormat('yyyy-MM-dd').format(_graduationYear!)
-            : widget.employee!.graduationYear,
-        previousEmployers: _previousEmployersController.text,
-        yearsOfExperience: int.tryParse(_experienceYearsController.text),
-        skills: _selectedSkills.isNotEmpty ? _selectedSkills : null,
-        certifications: _certificationsController.text,
-        medicalConditions: _hasMedicalCondition
-            ? _medicalConditionsController.text
-            : null,
-        bloodType: _selectedBloodType,
-        emergencyMedicalInfo: _emergencyMedicalInfoController.text,
-        tin: _tinController.text,
-        ssn: _ssnController.text,
-        workAuthorization: _selectedWorkAuth,
-        contractType: _selectedContractType,
-        companyPoliciesAcknowledged: _policyAcknowledged,
-        assignedEquipment: _assignedEquipment.isNotEmpty ? _assignedEquipment : null,
-        trainingPlan: _trainingPlanController.text,
-        systemAccess: _systemAccess.isNotEmpty ? _systemAccess : null,
-        handbookAcknowledged: _handbookAcknowledged,
-      );
-      
-      Provider.of<EmployeeProvider>(
-        context,
-        listen: false,
-      ).updateEmployee(updatedEmployee);
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Employee Updated Successfully')),
-      );
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) Navigator.pop(context);
-      });
-    } else {
-      // CREATE MODE
+    if (!isPersonalValid) {
+      _tabController.animateTo(0);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Employee Data Submitted Successfully!'),
+          content: Text(
+            'Please fill all mandatory fields in Personal Info tab',
+          ),
+          backgroundColor: Colors.red,
         ),
       );
-      Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) Navigator.pop(context);
-      });
+      return;
+    }
+
+    if (!isJobValid) {
+      _tabController.animateTo(1);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill all mandatory fields in Job Info tab'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (!_formKey.currentState!.validate() || _isSubmitting) {
+      return;
+    }
+
+    final provider = context.read<EmployeeProvider>();
+    final payload = _buildEmployeePayload();
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    final bool success = widget.employee == null
+        ? await provider.createEmployee(payload)
+        : await provider.updateEmployee(
+            widget.employee!,
+            overrideData: payload,
+          );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = false;
+    });
+
+    if (success) {
+      String? finalEmployeeId;
+
+      try {
+        final createdEmployee = provider.selectedEmployee;
+        finalEmployeeId = createdEmployee?.nikEmployee;
+      } catch (_) {
+        finalEmployeeId = null;
+      }
+
+      if (finalEmployeeId != null && finalEmployeeId.isNotEmpty) {
+        _generatedEmployeeId = finalEmployeeId;
+        _employeeIdPreviewController.text = finalEmployeeId;
+      }
+
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(widget.employee == null ? 'Employee Created' : 'Employee Updated'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.employee == null
+                    ? 'Employee berhasil dibuat.'
+                    : 'Employee berhasil diupdate.',
+              ),
+              const SizedBox(height: 8),
+              Text('Employee ID: ${finalEmployeeId ?? _employeeIdPreview}'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context, true);
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(provider.error ?? 'Failed to save employee.'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  Map<String, dynamic> _buildEmployeePayload() {
+    final companyCode = context.read<AuthProvider>().getCompanyCode();
+    final salary = double.tryParse(_salaryController.text.trim());
+    final int? positionId = int.tryParse(_selectedPositionId ?? '');
+    final int? departmentId = int.tryParse(_selectedDepartment ?? '');
+    final int? shiftId = int.tryParse(_selectedShift ?? '');
+
+    final payload = <String, dynamic>{
+      'name': _nameController.text.trim(),
+      'nik': _nikController.text.trim(),
+      'email': _emailController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'position': positionId,
+      'department': departmentId,
+      'status': widget.employee?.status ?? 'Active',
+      'join_date': _formatDate(_joinDate),
+      'salary': salary,
+      'basic_salary': salary,
+      'immediate_supervisor': _selectedManager,
+      'shift_id': shiftId,
+      'shift': shiftId,
+      'c_code': companyCode,
+      'flag': _deriveFlag(),
+      'gender': _selectedGender,
+      'date_of_birth': _formatDate(_dob),
+      'nationality': _selectedNationality,
+      'address': _addressController.text.trim(),
+      'marital_status': _selectedMaritalStatus,
+      'emergency_contact_name': _emergencyNameController.text.trim(),
+      'emergency_contact_relationship': _selectedEmergencyRelationship,
+      'emergency_contact_phone': _emergencyPhoneController.text.trim(),
+      'employment_type': _selectedEmploymentType,
+      'office_location': _selectedLocation,
+      'work_schedule': _selectedWorkSchedule,
+      'bank_account_number': _bankAccountController.text.trim(),
+      'bank_name': _bankNameController.text.trim(),
+      'account_type': _selectedAccountType,
+      'highest_education': _selectedEducationLevel,
+      'degree': _degreeController.text.trim(),
+      'institution': _institutionController.text.trim(),
+      'graduation_year': _formatDate(_graduationYear),
+      'previous_employers': _previousEmployersController.text.trim(),
+      'years_of_experience': int.tryParse(
+        _experienceYearsController.text.trim(),
+      ),
+      'skills': _selectedSkills.isEmpty ? null : _selectedSkills,
+      'certifications': _certificationsController.text.trim(),
+      'medical_conditions': _hasMedicalCondition
+          ? _medicalConditionsController.text.trim()
+          : null,
+      'blood_type': _selectedBloodType,
+      'emergency_medical_info': _emergencyMedicalInfoController.text.trim(),
+      'tax_number': _tinController.text.trim(),
+      'ssn': _ssnController.text.trim(),
+      'work_authorization': _selectedWorkAuth,
+      'contract_type': _selectedContractType,
+      'company_policies_acknowledged': _policyAcknowledged,
+      'assigned_equipment': _assignedEquipment.isEmpty
+          ? null
+          : _assignedEquipment,
+      'training_plan': _trainingPlanController.text.trim(),
+      'system_access': _systemAccess.isEmpty ? null : _systemAccess,
+      'handbook_acknowledged': _handbookAcknowledged,
+    };
+
+    payload.removeWhere((key, value) {
+      if (value == null) {
+        return true;
+      }
+
+      if (value is String) {
+        return value.trim().isEmpty;
+      }
+
+      return false;
+    });
+
+    return payload;
+  }
+
+  String _deriveFlag() {
+    switch ((_selectedEmploymentType ?? '').toLowerCase()) {
+      case 'contract':
+      case 'temporary':
+        return 'Kontrak';
+      default:
+        return 'Permanen';
     }
   }
-}
+
+  String? _formatDate(DateTime? value) {
+    if (value == null) {
+      return null;
+    }
+
+    return DateFormat('yyyy-MM-dd').format(value);
+  }
+
+  String _buildShiftOptionLabel(Shift shift) {
+    final description = (shift.description ?? '').trim();
+    final hasDescription = description.isNotEmpty && description != shift.name;
+    return hasDescription ? '${shift.name} - $description' : shift.name;
+  }
 
   Widget _buildNextButton(int nextTabIndex) {
-    // Only show Save button from Tab 2 (Job) onwards
-    // Tab 1 (Personal) -> nextTabIndex = 1. No Save.
-    // Tab 2 (Job) -> nextTabIndex = 2. Show Save.
     final bool showSave = nextTabIndex >= 2;
 
     return Row(
@@ -1249,9 +1587,19 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       children: [
         if (showSave) ...[
           OutlinedButton.icon(
-            onPressed: _submitForm,
-            icon: const Icon(Icons.save_outlined),
-            label: Text(widget.employee == null ? 'Save' : 'Update'),
+            onPressed: _isSubmitting ? null : () => _submitForm(),
+            icon: _isSubmitting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_outlined),
+            label: Text(
+              _isSubmitting
+                  ? 'Saving...'
+                  : (widget.employee == null ? 'Save' : 'Update'),
+            ),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: const BorderSide(color: AppColors.primary),
@@ -1302,12 +1650,16 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     String? Function(String?)? validator,
     int maxLines = 1,
     String? hint,
+    bool readOnly = false,
+    bool enabled = true,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
       maxLines: maxLines,
+      readOnly: readOnly,
+      enabled: enabled,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -1341,6 +1693,44 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
           .map(
             (String item) =>
                 DropdownMenuItem<String>(value: item, child: Text(item)),
+          )
+          .toList(),
+      onChanged: onChanged,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: AppColors.textSecondary),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
+        ),
+      ),
+      icon: const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary),
+    );
+  }
+
+  Widget _buildOptionDropdown({
+    required String label,
+    required String? value,
+    required List<_OptionItem> items,
+    required IconData icon,
+    required void Function(String?) onChanged,
+    String? Function(String?)? validator,
+  }) {
+    final bool valueExists =
+        value == null || items.any((item) => item.value == value);
+    final String? safeValue = valueExists ? value : null;
+
+    return DropdownButtonFormField<String>(
+      key: ValueKey('$label-$safeValue-${items.length}'),
+      initialValue: safeValue,
+      items: items
+          .map(
+            (item) => DropdownMenuItem<String>(
+              value: item.value,
+              child: Text(item.label, overflow: TextOverflow.ellipsis),
+            ),
           )
           .toList(),
       onChanged: onChanged,
@@ -1411,4 +1801,11 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       }
     }
   }
+}
+
+class _OptionItem {
+  final String value;
+  final String label;
+
+  const _OptionItem({required this.value, required this.label});
 }

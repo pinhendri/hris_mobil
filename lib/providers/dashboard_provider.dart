@@ -1,18 +1,154 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+
 import '../core/constants/api_constants.dart';
-import '../models/employee_model.dart';
+import '../services/offline_support.dart';
+import '../services/session_storage.dart';
+
+Map<String, dynamic> _summarizeEmployeesForDashboard(
+  Map<String, dynamic> payload,
+) {
+  final response = payload['response'];
+  final companyCode = (payload['companyCode'] as String?)?.trim() ?? '';
+  final now =
+      DateTime.tryParse(payload['now'] as String? ?? '') ?? DateTime.now();
+  final currentMonthStart = DateTime(now.year, now.month, 1);
+  final currentMonthEnd = DateTime(now.year, now.month + 1, 0);
+
+  List<Map<String, dynamic>> employeeMaps = const [];
+
+  if (response is Map<String, dynamic>) {
+    final data = response['data'];
+
+    if (data is List) {
+      employeeMaps = data
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList(growable: false);
+    } else if (data is Map<String, dynamic>) {
+      final nestedList = data['data'];
+      final employeesList = data['employees'];
+      final deepNestedList = nestedList is Map<String, dynamic>
+          ? nestedList['data']
+          : null;
+      final sourceList = nestedList is List
+          ? nestedList
+          : employeesList is List
+          ? employeesList
+          : deepNestedList is List
+          ? deepNestedList
+          : const [];
+
+      employeeMaps = sourceList
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList(growable: false);
+    }
+  }
+
+  final filteredEmployees = employeeMaps
+      .where((employee) {
+        if (companyCode.isEmpty) {
+          return true;
+        }
+
+        final itemCode = (employee['c_code'] ?? employee['company_code'] ?? '')
+            .toString();
+        return itemCode == companyCode;
+      })
+      .toList(growable: false);
+
+  var activeEmployees = 0;
+  var newHires = 0;
+  final employeeIds = <String>[];
+  final employeeUuids = <String>[];
+  final recentCandidates = <Map<String, dynamic>>[];
+
+  for (final employee in filteredEmployees) {
+    final status = (employee['status'] ?? '').toString().toLowerCase();
+    if (!const [
+      'inactive',
+      'deactive',
+      'terminated',
+      'resigned',
+    ].contains(status)) {
+      activeEmployees++;
+    }
+
+    final id = employee['id']?.toString() ?? '';
+    if (id.isNotEmpty) {
+      employeeIds.add(id);
+    }
+
+    final uuid = (employee['uuid'] ?? employee['employee_uuid'] ?? '')
+        .toString();
+    if (uuid.isNotEmpty) {
+      employeeUuids.add(uuid);
+    }
+
+    final joinDate = (employee['join_date'] ?? '').toString();
+    if (joinDate.isEmpty) {
+      continue;
+    }
+
+    try {
+      final parsedJoinDate = DateTime.parse(joinDate);
+      if (parsedJoinDate.isAfter(
+            currentMonthStart.subtract(const Duration(days: 1)),
+          ) &&
+          parsedJoinDate.isBefore(
+            currentMonthEnd.add(const Duration(days: 1)),
+          )) {
+        newHires++;
+      }
+
+      recentCandidates.add(employee);
+    } catch (_) {
+      // Ignore invalid dates from the API payload.
+    }
+  }
+
+  recentCandidates.sort((a, b) {
+    try {
+      final aDate = DateTime.parse((a['join_date'] ?? '').toString());
+      final bDate = DateTime.parse((b['join_date'] ?? '').toString());
+      return bDate.compareTo(aDate);
+    } catch (_) {
+      return 0;
+    }
+  });
+
+  final recentActivities = recentCandidates
+      .take(5)
+      .map((employee) {
+        final id = int.tryParse((employee['id'] ?? '').toString()) ?? 0;
+        return <String, dynamic>{
+          'id': id,
+          'name': (employee['name'] ?? '').toString(),
+          'createdAt': (employee['join_date'] ?? '').toString(),
+          'positionName':
+              (employee['position'] ?? employee['position_name'] ?? '')
+                  .toString(),
+        };
+      })
+      .toList(growable: false);
+
+  return <String, dynamic>{
+    'totalEmployees': filteredEmployees.length,
+    'activeEmployees': activeEmployees,
+    'newHires': newHires,
+    'employeeIds': employeeIds,
+    'employeeUuids': employeeUuids,
+    'recentActivities': recentActivities,
+  };
+}
 
 class DashboardProvider with ChangeNotifier {
-  // ================= STATE =================
   bool _isLoading = false;
   String? _error;
 
-  List<Employee> _allEmployees = []; // Semua employees dari API
-  List<Employee> _filteredEmployees = []; // Employees setelah filter c_code
-  
   List<RecentActivity> _recentActivities = [];
 
   int _totalEmployees = 0;
@@ -23,8 +159,8 @@ class DashboardProvider with ChangeNotifier {
   int _openPositions = 0;
 
   String? _currentCompanyCode;
+  bool _isUsingCachedData = false;
 
-  // ================= GETTERS =================
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -34,322 +170,288 @@ class DashboardProvider with ChangeNotifier {
   int get onLeave => _onLeave;
   int get newHires => _newHires;
   int get openPositions => _openPositions;
+  bool get isUsingCachedData => _isUsingCachedData;
 
   List<RecentActivity> get recentActivities => _recentActivities;
 
-  // ================= HELPERS =================
   Future<String> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token') ?? '';
+    return SessionStorage.getToken();
   }
 
-  // Function untuk mengekstrak employees data (sama seperti di React)
-  List<Employee> _extractEmployeesData(dynamic response) {
-    print('📦 Extracting employees data from response');
-    
-    if (response == null) {
-      print('⚠️ No response');
-      return [];
-    }
-    
-    // Cek berbagai kemungkinan struktur data
-    if (response['data'] == null) {
-      print('⚠️ No data in response');
-      return [];
-    }
-    
-    final data = response['data'];
-    
-    // Case 1: response.data adalah array langsung
-    if (data is List) {
-      print('✅ Employees data is direct array, count: ${data.length}');
-      return data.map((e) => Employee.fromJson(e)).toList();
-    }
-    
-    // Case 2: response.data.data adalah array
-    if (data['data'] != null && data['data'] is List) {
-      print('✅ Employees data from data.data array, count: ${data['data'].length}');
-      return (data['data'] as List).map((e) => Employee.fromJson(e)).toList();
-    }
-    
-    // Case 3: response.data.data.data adalah array (pagination)
-    if (data['data'] != null && data['data']['data'] != null && data['data']['data'] is List) {
-      print('✅ Employees data from data.data.data array, count: ${data['data']['data'].length}');
-      return (data['data']['data'] as List).map((e) => Employee.fromJson(e)).toList();
-    }
-    
-    // Case 4: response.data memiliki field employees
-    if (data['employees'] != null && data['employees'] is List) {
-      print('✅ Employees data from employees field, count: ${data['employees'].length}');
-      return (data['employees'] as List).map((e) => Employee.fromJson(e)).toList();
-    }
-    
-    print('❌ Could not extract employees data');
-    return [];
-  }
+  Future<dynamic> _getJsonResponse({
+    required String label,
+    required Uri uri,
+    required Map<String, String> headers,
+    int attempts = 2,
+  }) async {
+    Object? lastError;
 
-  // Function untuk filter berdasarkan company code (sama seperti di React)
-  List<Employee> _filterByCompanyCode(List<Employee> employees, String? companyCode) {
-    if (companyCode == null || companyCode.isEmpty) {
-      print('ℹ️ No company code provided, returning all data');
-      return employees;
-    }
-    
-    if (employees.isEmpty) {
-      print('ℹ️ No data to filter');
-      return employees;
-    }
-    
-    print('🔍 Filtering ${employees.length} employees for company: $companyCode');
-    
-    final filtered = employees.where((emp) {
-      // Coba ambil dari berbagai field yang mungkin
-      final itemCode = emp.cCode ?? emp.companyCode ?? '';
-      return itemCode == companyCode;
-    }).toList();
-    
-    print('✅ Filtered to ${filtered.length} employees for company: $companyCode');
-    
-    // Log sample untuk debugging
-    if (filtered.isNotEmpty) {
-      print('📋 Sample filtered employees:');
-      filtered.take(3).forEach((emp) {
-        print('   - ${emp.name}: c_code=${emp.cCode ?? emp.companyCode}');
-      });
-    } else {
-      // Jika tidak ada yang cocok, tampilkan sample dari all employees
-      print('⚠️ No matches found. Sample from all employees:');
-      employees.take(3).forEach((emp) {
-        print('   - ${emp.name}: c_code=${emp.cCode ?? emp.companyCode}');
-      });
-    }
-    
-    return filtered;
-  }
+    for (int attempt = 1; attempt <= attempts; attempt++) {
+      final response = await http.get(uri, headers: headers);
+      print('GET $label attempt $attempt -> ${response.statusCode}');
 
-  // Hitung active employees (sama seperti di React)
-  int _calculateActiveEmployees(List<Employee> employees) {
-    return employees.where((emp) {
-      final status = (emp.status ?? '').toLowerCase();
-      return !['inactive', 'deactive', 'terminated', 'resigned'].contains(status);
-    }).length;
-  }
-
-  // Hitung new hires bulan ini (sama seperti di React)
-  int _calculateNewHires(List<Employee> employees) {
-    final now = DateTime.now();
-    final currentMonthStart = DateTime(now.year, now.month, 1);
-    final currentMonthEnd = DateTime(now.year, now.month + 1, 0);
-    
-    return employees.where((emp) {
-      if (emp.joinDate.isEmpty) return false;
-      try {
-        final joinDate = DateTime.parse(emp.joinDate);
-        return joinDate.isAfter(currentMonthStart.subtract(const Duration(days: 1))) && 
-               joinDate.isBefore(currentMonthEnd.add(const Duration(days: 1)));
-      } catch (e) {
-        return false;
+      if (response.statusCode != 200) {
+        lastError = Exception('HTTP ${response.statusCode}: ${response.body}');
+        if (attempt < attempts) {
+          await Future.delayed(const Duration(milliseconds: 250));
+          continue;
+        }
+        throw lastError;
       }
-    }).length;
+
+      final rawBody = utf8.decode(response.bodyBytes);
+
+      try {
+        return json.decode(rawBody);
+      } on FormatException catch (e) {
+        lastError = e;
+        print('Invalid JSON from $label on attempt $attempt: $e');
+        if (attempt < attempts) {
+          await Future.delayed(const Duration(milliseconds: 250));
+          continue;
+        }
+        rethrow;
+      }
+    }
+
+    throw lastError ?? Exception('Failed to fetch $label');
   }
 
-  // Get recent activities (sama seperti di React)
-  List<RecentActivity> _getRecentActivities(List<Employee> employees) {
-    final recent = employees
-        .where((emp) => emp.joinDate.isNotEmpty)
-        .toList()
-          ..sort((a, b) {
-            try {
-              final aDate = DateTime.parse(a.joinDate);
-              final bDate = DateTime.parse(b.joinDate);
-              return bDate.compareTo(aDate);
-            } catch (e) {
-              return 0;
-            }
-          });
-    
-    return recent.take(5).map((emp) => RecentActivity(
-      id: int.tryParse(emp.id) ?? 0,
-      name: emp.name,
-      createdAt: emp.joinDate,
-      positionName: emp.position,
-    )).toList();
-  }
-
-  // ================= FETCH =================
   Future<void> fetchDashboardData({String? companyCode}) async {
+    if (_isLoading) {
+      print('Dashboard fetch already running, skip duplicate call.');
+      return;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      print('🔄 =========== START FETCH DASHBOARD ===========');
-      print('🏢 Company Code: $companyCode');
-      
       _currentCompanyCode = companyCode;
-      
+      _isUsingCachedData = false;
+      print('Dashboard init for company: $companyCode');
+
       final token = await _getToken();
-      
       if (token.isEmpty) {
-        print('❌ Token is empty!');
         _error = 'Not authenticated';
-        _isLoading = false;
-        notifyListeners();
         return;
       }
 
-      // ===== FETCH EMPLOYEES =====
-      print('📡 Fetching employees from: ${ApiConstants.baseUrl}/api/employees');
-      final empRes = await http.get(
-        Uri.parse('${ApiConstants.baseUrl}/api/employees'),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+      final authHeaders = <String, String>{
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
+      final employeeBody = await _getJsonResponse(
+        label: 'employees',
+        uri: Uri.parse('${ApiConstants.baseUrl}/api/employees'),
+        headers: authHeaders,
       );
 
-      print('📡 Employees response status: ${empRes.statusCode}');
-      
-      if (empRes.statusCode == 200) {
-        final body = json.decode(empRes.body);
-        
-        // Extract employees data (sama seperti di React)
-        _allEmployees = _extractEmployeesData(body);
-        print('👥 Total employees from API: ${_allEmployees.length}');
-        
-        // Filter berdasarkan company code (sama seperti di React)
-        _filteredEmployees = _filterByCompanyCode(_allEmployees, _currentCompanyCode);
-        
-        // Hitung metrics dari hasil filter
-        _totalEmployees = _filteredEmployees.length;
-        _activeEmployees = _calculateActiveEmployees(_filteredEmployees);
-        _newHires = _calculateNewHires(_filteredEmployees);
-        _recentActivities = _getRecentActivities(_filteredEmployees);
-        
-        print('✅ Filtered employees: ${_filteredEmployees.length}');
-        print('✅ Active employees: $_activeEmployees');
-        print('✅ New hires: $_newHires');
-        print('✅ Recent activities: ${_recentActivities.length}');
-        
-        // Tampilkan unique company codes untuk debugging
-        final uniqueCodes = _allEmployees
-            .map((e) => e.cCode ?? e.companyCode ?? 'null')
-            .toSet()
-            .toList();
-        print('📋 Available company codes in data: $uniqueCodes');
-        
-      } else {
-        print('❌ Failed to fetch employees: ${empRes.statusCode}');
-        print('📦 Response: ${empRes.body}');
-      }
+      final employeeSummary = await compute(_summarizeEmployeesForDashboard, {
+        'response': employeeBody,
+        'companyCode': _currentCompanyCode,
+        'now': DateTime.now().toIso8601String(),
+      });
 
-      // ===== FETCH RECRUITMENT untuk open positions =====
+      final filteredEmployeeIds = List<String>.from(
+        employeeSummary['employeeIds'] as List? ?? const [],
+      );
+      final filteredEmployeeUuids = List<String>.from(
+        employeeSummary['employeeUuids'] as List? ?? const [],
+      );
+      final recentActivityMaps = List<Map<String, dynamic>>.from(
+        employeeSummary['recentActivities'] as List? ?? const [],
+      );
+      _totalEmployees = employeeSummary['totalEmployees'] as int? ?? 0;
+      _activeEmployees = employeeSummary['activeEmployees'] as int? ?? 0;
+      _newHires = employeeSummary['newHires'] as int? ?? 0;
+      _recentActivities = recentActivityMaps
+          .map(
+            (activity) => RecentActivity(
+              id: activity['id'] as int? ?? 0,
+              name: activity['name']?.toString() ?? '',
+              createdAt: activity['createdAt']?.toString() ?? '',
+              positionName: activity['positionName']?.toString() ?? '',
+            ),
+          )
+          .toList(growable: false);
+
+      final recruitmentFuture = _getJsonResponse(
+        label: 'recruitment',
+        uri: Uri.parse('${ApiConstants.baseUrl}/api/recruitment'),
+        headers: authHeaders,
+      );
+      final attendanceFuture = _getJsonResponse(
+        label: 'attendance',
+        uri: Uri.parse('${ApiConstants.baseUrl}/api/attendances?today=true'),
+        headers: authHeaders,
+      );
+      final leaveFuture = _getJsonResponse(
+        label: 'leave',
+        uri: Uri.parse(
+          '${ApiConstants.baseUrl}/api/leave-requests?status=approved&today=true',
+        ),
+        headers: authHeaders,
+      );
+
       try {
-        print('📡 Fetching recruitment data...');
-        final recRes = await http.get(
-          Uri.parse('${ApiConstants.baseUrl}/api/recruitment'),
-          headers: {'Authorization': 'Bearer $token'},
-        );
-        
-        if (recRes.statusCode == 200) {
-          final body = json.decode(recRes.body);
-          
-          if (body['openPositions'] != null && body['openPositions'] is List) {
-            // Filter open positions berdasarkan company code
-            final allPositions = body['openPositions'] as List;
-            _openPositions = allPositions.where((pos) {
-              return pos['c_code'] == _currentCompanyCode || 
-                     pos['company_code'] == _currentCompanyCode;
-            }).length;
-          } else if (body['data'] != null && body['data'] is List) {
-            final allPositions = body['data'] as List;
-            _openPositions = allPositions.where((pos) {
-              return pos['c_code'] == _currentCompanyCode || 
-                     pos['company_code'] == _currentCompanyCode;
-            }).length;
-          }
-          print('✅ Open positions: $_openPositions');
+        final recruitmentBody = await recruitmentFuture;
+
+        if (recruitmentBody is Map<String, dynamic>) {
+          final openPositions = recruitmentBody['openPositions'];
+          final dataPositions = recruitmentBody['data'];
+          final positions = openPositions is List
+              ? openPositions
+              : dataPositions is List
+              ? dataPositions
+              : const [];
+
+          _openPositions = positions.where((position) {
+            if (position is! Map<String, dynamic>) {
+              return false;
+            }
+
+            return position['c_code'] == _currentCompanyCode ||
+                position['company_code'] == _currentCompanyCode;
+          }).length;
+        } else {
+          _openPositions = 0;
         }
       } catch (e) {
-        print('⚠️ Recruitment error: $e');
+        print('Recruitment fetch failed: $e');
         _openPositions = 0;
       }
 
-      // ===== ATTENDANCE =====
       try {
-        print('📡 Fetching attendance...');
-        final attRes = await http.get(
-          Uri.parse('${ApiConstants.baseUrl}/api/attendances?today=true'),
-          headers: {'Authorization': 'Bearer $token'},
-        );
-        
-        if (attRes.statusCode == 200) {
-          final body = json.decode(attRes.body);
-          if (body['success'] == true && body['data'] != null) {
-            if (body['data'] is List) {
-              // Filter attendance berdasarkan employee yang ada di filteredEmployees
-              final allAttendance = body['data'] as List;
-              final filteredEmployeeIds = _filteredEmployees.map((e) => e.id).toSet();
-              
-              _attendanceToday = allAttendance.where((att) {
-                return filteredEmployeeIds.contains(att['employee_id']?.toString());
-              }).length;
+        final attendanceBody = await attendanceFuture;
+
+        if (attendanceBody is Map<String, dynamic> &&
+            attendanceBody['success'] == true &&
+            attendanceBody['data'] is List) {
+          final allAttendance = attendanceBody['data'] as List;
+          final employeeIdSet = filteredEmployeeIds.toSet();
+
+          _attendanceToday = allAttendance.where((attendance) {
+            if (attendance is! Map<String, dynamic>) {
+              return false;
             }
-          }
+
+            return employeeIdSet.contains(
+              attendance['employee_id']?.toString(),
+            );
+          }).length;
+        } else {
+          _attendanceToday = 0;
         }
       } catch (e) {
-        print('⚠️ Attendance error: $e');
+        print('Attendance fetch failed: $e');
         _attendanceToday = 0;
       }
 
-      // ===== LEAVE =====
       try {
-        print('📡 Fetching leave...');
-        final leaveRes = await http.get(
-          Uri.parse('${ApiConstants.baseUrl}/api/leave-requests?status=approved&today=true'),
-          headers: {'Authorization': 'Bearer $token'},
-        );
-        
-        if (leaveRes.statusCode == 200) {
-          final body = json.decode(leaveRes.body);
-          if (body['success'] == true && body['data'] != null) {
-            if (body['data'] is List) {
-              // Filter leave berdasarkan employee yang ada di filteredEmployees
-              final allLeave = body['data'] as List;
-              final filteredEmployeeUuids = _filteredEmployees.map((e) => e.uuid).toSet();
-              
-              _onLeave = allLeave.where((leave) {
-                return filteredEmployeeUuids.contains(leave['employee_uuid']);
-              }).length;
+        final leaveBody = await leaveFuture;
+
+        if (leaveBody is Map<String, dynamic> &&
+            leaveBody['success'] == true &&
+            leaveBody['data'] is List) {
+          final allLeave = leaveBody['data'] as List;
+          final employeeUuidSet = filteredEmployeeUuids.toSet();
+
+          _onLeave = allLeave.where((leave) {
+            if (leave is! Map<String, dynamic>) {
+              return false;
             }
-          }
+
+            return employeeUuidSet.contains(leave['employee_uuid']);
+          }).length;
+        } else {
+          _onLeave = 0;
         }
       } catch (e) {
-        print('⚠️ Leave error: $e');
+        print('Leave fetch failed: $e');
         _onLeave = 0;
       }
-      
-      print('\n✅ =========== DASHBOARD FETCH COMPLETED ===========');
-      print('📊 FINAL METRICS:');
-      print('   - Total Employees: $_totalEmployees');
-      print('   - Active Employees: $_activeEmployees');
-      print('   - Attendance Today: $_attendanceToday');
-      print('   - On Leave: $_onLeave');
-      print('   - New Hires: $_newHires');
-      print('   - Open Positions: $_openPositions');
-      print('================================================\n');
-      
+
+      print(
+        'Dashboard ready: total=$_totalEmployees active=$_activeEmployees attendance=$_attendanceToday leave=$_onLeave new=$_newHires open=$_openPositions',
+      );
+      await OfflineSupport.saveJsonCache(_cacheKey, _toCachePayload());
     } catch (e) {
-      print('❌ Fatal Error: $e');
-      _error = e.toString();
+      print('Dashboard fatal error: $e');
+      final loadedFromCache = await _loadFromCache();
+      if (!loadedFromCache) {
+        _error = e.toString();
+      } else {
+        _isUsingCachedData = true;
+        _error = null;
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
+
+  String get _cacheKey => 'dashboard::${_currentCompanyCode ?? 'default'}';
+
+  Map<String, dynamic> _toCachePayload() {
+    return {
+      'currentCompanyCode': _currentCompanyCode,
+      'totalEmployees': _totalEmployees,
+      'activeEmployees': _activeEmployees,
+      'attendanceToday': _attendanceToday,
+      'onLeave': _onLeave,
+      'newHires': _newHires,
+      'openPositions': _openPositions,
+      'recentActivities': _recentActivities
+          .map(
+            (activity) => {
+              'id': activity.id,
+              'name': activity.name,
+              'createdAt': activity.createdAt,
+              'positionName': activity.positionName,
+            },
+          )
+          .toList(growable: false),
+    };
+  }
+
+  Future<bool> _loadFromCache() async {
+    final cached = await OfflineSupport.getJsonCache(_cacheKey);
+    if (cached is! Map<String, dynamic>) {
+      return false;
+    }
+
+    _currentCompanyCode = cached['currentCompanyCode']?.toString();
+    _totalEmployees = cached['totalEmployees'] as int? ?? 0;
+    _activeEmployees = cached['activeEmployees'] as int? ?? 0;
+    _attendanceToday = cached['attendanceToday'] as int? ?? 0;
+    _onLeave = cached['onLeave'] as int? ?? 0;
+    _newHires = cached['newHires'] as int? ?? 0;
+    _openPositions = cached['openPositions'] as int? ?? 0;
+
+    final activities = cached['recentActivities'];
+    if (activities is List) {
+      _recentActivities = activities
+          .whereType<Map>()
+          .map(
+            (activity) => RecentActivity(
+              id: activity['id'] as int? ?? 0,
+              name: activity['name']?.toString() ?? '',
+              createdAt: activity['createdAt']?.toString() ?? '',
+              positionName: activity['positionName']?.toString() ?? '',
+            ),
+          )
+          .toList(growable: false);
+    } else {
+      _recentActivities = [];
+    }
+
+    return true;
+  }
 }
 
-// ================= MODEL =================
 class RecentActivity {
   final int id;
   final String name;

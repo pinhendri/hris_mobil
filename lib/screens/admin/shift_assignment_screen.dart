@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/widgets/access_denied_state.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/shift_provider.dart';
 import '../../providers/employee_provider.dart';
 import '../../providers/department_provider.dart';
@@ -18,6 +20,36 @@ class ShiftAssignmentScreen extends StatefulWidget {
 class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final canAccessShiftAssignment =
+        authProvider.canAccessShiftAssignmentModule;
+
+    if (!canAccessShiftAssignment) {
+      return Scaffold(
+        backgroundColor: Colors.grey[50],
+        appBar: AppBar(
+          title: const Text(
+            'Shift Assignment',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          backgroundColor: Colors.white,
+          centerTitle: true,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios,
+              color: AppColors.textPrimary,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: const AccessDeniedState(permissionLabel: 'create/edit settings'),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -480,21 +512,27 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                             final q = deptQueryController.text.toLowerCase();
                             if (q.isEmpty) return true;
                             final nameMatch = d.name.toLowerCase().contains(q);
-                            final codeMatch = d.code?.toLowerCase().contains(q) ?? false;
+                            final codeMatch =
+                                d.code?.toLowerCase().contains(q) ?? false;
                             return nameMatch || codeMatch;
                           }).length,
                           itemBuilder: (context, index) {
                             final filtered = departments.where((d) {
                               final q = deptQueryController.text.toLowerCase();
                               if (q.isEmpty) return true;
-                              final nameMatch = d.name.toLowerCase().contains(q);
-                              final codeMatch = d.code?.toLowerCase().contains(q) ?? false;
+                              final nameMatch = d.name.toLowerCase().contains(
+                                q,
+                              );
+                              final codeMatch =
+                                  d.code?.toLowerCase().contains(q) ?? false;
                               return nameMatch || codeMatch;
                             }).toList();
-                            
+
                             final d = filtered[index];
-                            final checked = selectedDepartmentIds.contains(d.id.toString());
-                            
+                            final checked = selectedDepartmentIds.contains(
+                              d.id.toString(),
+                            );
+
                             return ListTile(
                               title: Text(d.name),
                               subtitle: Text('Code: ${d.code ?? 'N/A'}'),
@@ -503,9 +541,13 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                                 onChanged: (v) {
                                   setState(() {
                                     if (v == true) {
-                                      selectedDepartmentIds.add(d.id.toString());
+                                      selectedDepartmentIds.add(
+                                        d.id.toString(),
+                                      );
                                     } else {
-                                      selectedDepartmentIds.remove(d.id.toString());
+                                      selectedDepartmentIds.remove(
+                                        d.id.toString(),
+                                      );
                                     }
                                   });
                                 },
@@ -513,7 +555,9 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                               onTap: () {
                                 setState(() {
                                   if (checked) {
-                                    selectedDepartmentIds.remove(d.id.toString());
+                                    selectedDepartmentIds.remove(
+                                      d.id.toString(),
+                                    );
                                   } else {
                                     selectedDepartmentIds.add(d.id.toString());
                                   }
@@ -553,8 +597,10 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: selectedShiftId == null ||
-                          (selectedEmployeeIds.isEmpty && selectedDepartmentIds.isEmpty)
+                  onPressed:
+                      selectedShiftId == null ||
+                          (selectedEmployeeIds.isEmpty &&
+                              selectedDepartmentIds.isEmpty)
                       ? null
                       : () {
                           Provider.of<ShiftProvider>(

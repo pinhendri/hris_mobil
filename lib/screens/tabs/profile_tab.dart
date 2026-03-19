@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/localization/app_strings.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/language_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/theme/app_theme.dart';
-import '../login_screen.dart'; // TAMBAHKAN IMPORT INI
 
 import '../profile/personal_info_screen.dart';
 import '../profile/employment_details_screen.dart';
@@ -18,27 +18,31 @@ class ProfileTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final languageProvider = Provider.of<LanguageProvider>(context);
     final user = auth.user;
     final isDark = themeProvider.isDarkMode;
+    final currentLanguageLabel = languageProvider.languageCode == 'id'
+        ? context.tr('profile_language_indonesian')
+        : context.tr('profile_language_english');
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[50],
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _buildHeader(user, isDark),
+            _buildHeader(context, user, isDark),
             const SizedBox(height: 20),
 
             // Stats Cards
-            _buildStatsCards(isDark),
+            _buildStatsCards(context, isDark),
             const SizedBox(height: 20),
 
             // Account Section
-            _buildSection(context, 'Account', [
+            _buildSection(context, context.tr('profile_account'), [
               _buildMenuItem(
                 Icons.person_outline,
-                'Personal Information',
-                subtitle: 'Update your personal details',
+                context.tr('profile_personal_information'),
+                subtitle: context.tr('profile_personal_information_subtitle'),
                 color: Colors.blue,
                 onTap: () {
                   Navigator.push(
@@ -52,8 +56,8 @@ class ProfileTab extends StatelessWidget {
               ),
               _buildMenuItem(
                 Icons.work_outline,
-                'Employment Details',
-                subtitle: 'View your job information',
+                context.tr('profile_employment_details'),
+                subtitle: context.tr('profile_employment_details_subtitle'),
                 color: Colors.orange,
                 onTap: () {
                   Navigator.push(
@@ -67,8 +71,8 @@ class ProfileTab extends StatelessWidget {
               ),
               _buildMenuItem(
                 Icons.lock_outline,
-                'Change Password',
-                subtitle: 'Update your password',
+                context.tr('profile_change_password'),
+                subtitle: context.tr('profile_change_password_subtitle'),
                 color: Colors.purple,
                 onTap: () {
                   Navigator.push(
@@ -85,11 +89,13 @@ class ProfileTab extends StatelessWidget {
             const SizedBox(height: 20),
 
             // App Settings Section with Dark Mode Toggle
-            _buildSection(context, 'App Settings', [
+            _buildSection(context, context.tr('profile_app_settings'), [
               _buildMenuItem(
                 Icons.dark_mode_outlined,
-                'Dark Mode',
-                subtitle: isDark ? 'Switch to light theme' : 'Switch to dark theme',
+                context.tr('profile_dark_mode'),
+                subtitle: isDark
+                    ? context.tr('profile_dark_mode_to_light')
+                    : context.tr('profile_dark_mode_to_dark'),
                 color: isDark ? Colors.amber : Colors.indigo,
                 trailing: Switch(
                   value: isDark,
@@ -103,8 +109,8 @@ class ProfileTab extends StatelessWidget {
               ),
               _buildMenuItem(
                 Icons.notifications_none,
-                'Notifications',
-                subtitle: 'Manage your notifications',
+                context.tr('profile_notifications'),
+                subtitle: context.tr('profile_notifications_subtitle'),
                 color: Colors.red,
                 trailing: Switch(
                   value: true,
@@ -115,9 +121,10 @@ class ProfileTab extends StatelessWidget {
               ),
               _buildMenuItem(
                 Icons.language,
-                'Language',
-                subtitle: 'English (US)',
+                context.tr('profile_language'),
+                subtitle: context.tr('profile_language_subtitle'),
                 color: Colors.teal,
+                onTap: () => _showLanguageSheet(context, isDark),
                 trailing: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -130,10 +137,14 @@ class ProfileTab extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.public, size: 16, color: isDark ? Colors.white70 : Colors.grey),
+                      Icon(
+                        Icons.public,
+                        size: 16,
+                        color: isDark ? Colors.white70 : Colors.grey,
+                      ),
                       const SizedBox(width: 4),
                       Text(
-                        'English',
+                        currentLanguageLabel,
                         style: GoogleFonts.poppins(
                           color: isDark ? Colors.white70 : Colors.grey.shade700,
                           fontSize: 13,
@@ -150,19 +161,19 @@ class ProfileTab extends StatelessWidget {
             const SizedBox(height: 20),
 
             // Support Section
-            _buildSection(context, 'Support', [
+            _buildSection(context, context.tr('profile_support'), [
               _buildMenuItem(
                 Icons.help_outline,
-                'Help Center',
-                subtitle: 'Get help and support',
+                context.tr('profile_help_center'),
+                subtitle: context.tr('profile_help_center_subtitle'),
                 color: Colors.blue,
                 onTap: () {},
                 isDark: isDark,
               ),
               _buildMenuItem(
                 Icons.info_outline,
-                'About App',
-                subtitle: 'Version 1.0.0',
+                context.tr('profile_about_app'),
+                subtitle: context.tr('generic_version'),
                 color: Colors.purple,
                 trailing: Container(
                   padding: const EdgeInsets.symmetric(
@@ -188,8 +199,8 @@ class ProfileTab extends StatelessWidget {
               ),
               _buildMenuItem(
                 Icons.privacy_tip_outlined,
-                'Privacy Policy',
-                subtitle: 'Read our privacy policy',
+                context.tr('profile_privacy_policy'),
+                subtitle: context.tr('profile_privacy_policy_subtitle'),
                 color: Colors.teal,
                 onTap: () {},
                 isDark: isDark,
@@ -219,7 +230,7 @@ class ProfileTab extends StatelessWidget {
                     shadowColor: Colors.red.withOpacity(0.3),
                   ),
                   child: Text(
-                    'Log Out',
+                    context.tr('profile_logout'),
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -236,7 +247,7 @@ class ProfileTab extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(dynamic user, bool isDark) {
+  Widget _buildHeader(BuildContext context, dynamic user, bool isDark) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 60, 20, 30),
       decoration: BoxDecoration(
@@ -278,7 +289,9 @@ class ProfileTab extends StatelessWidget {
               radius: 50,
               backgroundColor: Colors.white,
               child: Text(
-                (user?.name.isNotEmpty ?? false) ? user!.name.substring(0, 1).toUpperCase() : 'U',
+                (user?.name.isNotEmpty ?? false)
+                    ? user!.name.substring(0, 1).toUpperCase()
+                    : 'U',
                 style: GoogleFonts.poppins(
                   fontSize: 42,
                   color: isDark ? const Color(0xFF1A237E) : Colors.blue,
@@ -289,7 +302,7 @@ class ProfileTab extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            user?.name ?? 'User',
+            user?.name ?? context.tr('profile_user_fallback'),
             style: GoogleFonts.poppins(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -309,7 +322,10 @@ class ProfileTab extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -317,7 +333,7 @@ class ProfileTab extends StatelessWidget {
                 const Icon(Icons.badge_outlined, color: Colors.white, size: 16),
                 const SizedBox(width: 8),
                 Text(
-                  user?.position ?? 'Employee',
+                  user?.position ?? context.tr('profile_employee_fallback'),
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     color: Colors.white,
@@ -347,7 +363,7 @@ class ProfileTab extends StatelessWidget {
     );
   }
 
-  Widget _buildStatsCards(bool isDark) {
+  Widget _buildStatsCards(BuildContext context, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
@@ -355,7 +371,7 @@ class ProfileTab extends StatelessWidget {
           _buildStatCard(
             icon: Icons.calendar_today_rounded,
             value: '12',
-            label: 'Leave',
+            label: context.tr('profile_leave'),
             gradient: const LinearGradient(
               colors: [Color(0xFF4158D0), Color(0xFFC850C0)],
             ),
@@ -365,7 +381,7 @@ class ProfileTab extends StatelessWidget {
           _buildStatCard(
             icon: Icons.timer_rounded,
             value: '168h',
-            label: 'Overtime',
+            label: context.tr('profile_overtime'),
             gradient: const LinearGradient(
               colors: [Color(0xFFFF9966), Color(0xFFFF5E62)],
             ),
@@ -375,13 +391,121 @@ class ProfileTab extends StatelessWidget {
           _buildStatCard(
             icon: Icons.star_rounded,
             value: '4.5',
-            label: 'Rating',
+            label: context.tr('profile_rating'),
             gradient: const LinearGradient(
               colors: [Color(0xFF8EC5FC), Color(0xFFE0C3FC)],
             ),
             isDark: isDark,
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _showLanguageSheet(BuildContext context, bool isDark) async {
+    final languageProvider = context.read<LanguageProvider>();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        final currentCode = sheetContext.watch<LanguageProvider>().languageCode;
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  sheetContext.tr('profile_select_language'),
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildLanguageOption(
+                  context: sheetContext,
+                  isDark: isDark,
+                  isSelected: currentCode == 'id',
+                  label: sheetContext.tr('profile_language_indonesian'),
+                  onTap: () async {
+                    await languageProvider.setLanguageCode('id');
+                    if (sheetContext.mounted) {
+                      Navigator.pop(sheetContext);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildLanguageOption(
+                  context: sheetContext,
+                  isDark: isDark,
+                  isSelected: currentCode == 'en',
+                  label: sheetContext.tr('profile_language_english'),
+                  onTap: () async {
+                    await languageProvider.setLanguageCode('en');
+                    if (sheetContext.mounted) {
+                      Navigator.pop(sheetContext);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLanguageOption({
+    required BuildContext context,
+    required bool isDark,
+    required bool isSelected,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Colors.blue.withOpacity(isDark ? 0.18 : 0.08)
+                : (isDark ? const Color(0xFF262626) : Colors.grey.shade50),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected
+                  ? Colors.blue
+                  : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (isSelected)
+                Icon(Icons.check_circle, color: Colors.blue.shade400, size: 20),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -433,10 +557,10 @@ class ProfileTab extends StatelessWidget {
   }
 
   Widget _buildSection(
-      BuildContext context,
-      String title,
-      List<Widget> children,
-      ) {
+    BuildContext context,
+    String title,
+    List<Widget> children,
+  ) {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
 
     return Column(
@@ -460,7 +584,9 @@ class ProfileTab extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: isDark ? Colors.black.withOpacity(0.3) : Colors.black.withOpacity(0.05),
+                color: isDark
+                    ? Colors.black.withOpacity(0.3)
+                    : Colors.black.withOpacity(0.05),
                 blurRadius: 20,
                 offset: const Offset(0, 5),
               ),
@@ -473,14 +599,14 @@ class ProfileTab extends StatelessWidget {
   }
 
   Widget _buildMenuItem(
-      IconData icon,
-      String title, {
-        String? subtitle,
-        Color? color,
-        Widget? trailing,
-        VoidCallback? onTap,
-        required bool isDark,
-      }) {
+    IconData icon,
+    String title, {
+    String? subtitle,
+    Color? color,
+    Widget? trailing,
+    VoidCallback? onTap,
+    required bool isDark,
+  }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -590,7 +716,7 @@ class ProfileTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Log Out',
+                  context.tr('profile_logout_title'),
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -599,7 +725,7 @@ class ProfileTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Are you sure you want to log out?',
+                  context.tr('profile_logout_message'),
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     color: isDark ? Colors.white60 : Colors.grey.shade600,
@@ -617,10 +743,12 @@ class ProfileTab extends StatelessWidget {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          foregroundColor: isDark ? Colors.white70 : Colors.grey.shade700,
+                          foregroundColor: isDark
+                              ? Colors.white70
+                              : Colors.grey.shade700,
                         ),
                         child: Text(
-                          'Cancel',
+                          context.tr('profile_cancel'),
                           style: GoogleFonts.poppins(),
                         ),
                       ),
@@ -629,66 +757,15 @@ class ProfileTab extends StatelessWidget {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () async {
-                          // Tutup dialog konfirmasi
                           Navigator.pop(dialogContext);
-
-                          // Tunggu sebentar untuk memastikan dialog benar-benar tertutup
-                          await Future.delayed(const Duration(milliseconds: 100));
-
                           if (!context.mounted) return;
 
-                          // Tampilkan loading dialog
-                          showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (loadingContext) => WillPopScope(
-                              onWillPop: () async => false,
-                              child: Dialog(
-                                backgroundColor: Colors.transparent,
-                                elevation: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const CircularProgressIndicator(),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        'Logging out...',
-                                        style: GoogleFonts.poppins(
-                                          color: isDark ? Colors.white : Colors.black87,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-
-                          // Tunggu proses logout selesai
                           await auth.logout();
 
-                          // Tambahkan delay kecil untuk memastikan state sudah diupdate
-                          await Future.delayed(const Duration(milliseconds: 300));
-
                           if (context.mounted) {
-                            // Tutup loading dialog jika masih ada
-                            try {
-                              Navigator.pop(context);
-                            } catch (e) {
-                              // Abaikan error jika dialog sudah tertutup
-                            }
-
-                            // Hapus semua route dan navigasi ke login
-                            Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(builder: (context) => const LoginScreen()), // SEKARANG INI AKAN MENGARAH KE LOGIN_SCREEN YANG BENAR
-                                  (route) => false,
-                            );
+                            Navigator.of(
+                              context,
+                            ).pushNamedAndRemoveUntil('/', (route) => false);
                           }
                         },
                         style: ElevatedButton.styleFrom(
@@ -700,7 +777,7 @@ class ProfileTab extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          'Log Out',
+                          context.tr('profile_logout'),
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.w600,
                           ),
@@ -717,7 +794,6 @@ class ProfileTab extends StatelessWidget {
     );
   }
 }
-
 
 // HAPUS BAGIAN INI:
 // class LoginScreen extends StatelessWidget {

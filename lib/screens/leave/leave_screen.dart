@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/leave_provider.dart';
 import '../../models/leave_model.dart';
-import '../../providers/notification_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../core/utils/image_helper.dart';
 
@@ -132,6 +131,11 @@ class _LeaveScreenState extends State<LeaveScreen>
       case 'rejected':
         color = Colors.red;
         icon = Icons.cancel;
+        break;
+      case 'pending sync':
+        color = Colors.orange;
+        icon = Icons.cloud_upload_outlined;
+        displayStatus = 'Pending Sync';
         break;
       case 'pending':
         color = Colors.orange;
@@ -299,7 +303,8 @@ class _LeaveScreenState extends State<LeaveScreen>
         final request = requests[index];
 
         final bool isMyRequest = request.uuid == currentUser.uuid;
-        final bool isImmediateSupervisor = currentUser.uuid == request.immediateSupervisor;
+        final bool isImmediateSupervisor =
+            currentUser.uuid == request.immediateSupervisor;
 
         final bool showApproveRejectButtons =
             request.status.toLowerCase() == 'pending' && !isMyRequest;
@@ -325,10 +330,16 @@ class _LeaveScreenState extends State<LeaveScreen>
                           CircleAvatar(
                             radius: 20,
                             backgroundColor: Colors.blue.withOpacity(0.1),
-                            backgroundImage: ImageHelper.avatar(request.avatarUrl),
-                            child: (request.avatarUrl == null || request.avatarUrl!.isEmpty)
+                            backgroundImage: ImageHelper.avatar(
+                              request.avatarUrl,
+                            ),
+                            child:
+                                (request.avatarUrl == null ||
+                                    request.avatarUrl!.isEmpty)
                                 ? Text(
-                                    request.employeeName.substring(0, 2).toUpperCase(),
+                                    request.employeeName
+                                        .substring(0, 2)
+                                        .toUpperCase(),
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
@@ -379,7 +390,9 @@ class _LeaveScreenState extends State<LeaveScreen>
                                       ),
                                     ),
                                   ),
-                                if (isImmediateSupervisor && !isMyRequest && request.status.toLowerCase() == 'pending')
+                                if (isImmediateSupervisor &&
+                                    !isMyRequest &&
+                                    request.status.toLowerCase() == 'pending')
                                   Container(
                                     margin: const EdgeInsets.only(top: 4),
                                     padding: const EdgeInsets.symmetric(
@@ -470,7 +483,11 @@ class _LeaveScreenState extends State<LeaveScreen>
                     children: [
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () => _handleApproveReject(context, request, 'Approved'),
+                          onPressed: () => _handleApproveReject(
+                            context,
+                            request,
+                            'Approved',
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white,
@@ -481,7 +498,11 @@ class _LeaveScreenState extends State<LeaveScreen>
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () => _handleApproveReject(context, request, 'Rejected'),
+                          onPressed: () => _handleApproveReject(
+                            context,
+                            request,
+                            'Rejected',
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
@@ -503,7 +524,9 @@ class _LeaveScreenState extends State<LeaveScreen>
                         decoration: BoxDecoration(
                           color: Colors.orange.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                          border: Border.all(
+                            color: Colors.orange.withOpacity(0.2),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -534,7 +557,9 @@ class _LeaveScreenState extends State<LeaveScreen>
                         decoration: BoxDecoration(
                           color: Colors.green.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.green.withOpacity(0.2)),
+                          border: Border.all(
+                            color: Colors.green.withOpacity(0.2),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -558,36 +583,38 @@ class _LeaveScreenState extends State<LeaveScreen>
                       ),
                     )
                   else if (request.status.toLowerCase() == 'rejected')
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.red.withOpacity(0.2)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.cancel,
-                                size: 16,
-                                color: Colors.red,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Your request has been rejected.',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.red[800],
-                                  ),
-                                ),
-                              ),
-                            ],
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.2),
                           ),
                         ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.cancel,
+                              size: 16,
+                              color: Colors.red,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Your request has been rejected.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.red[800],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                    ),
                 ],
               ],
             ),
@@ -597,12 +624,12 @@ class _LeaveScreenState extends State<LeaveScreen>
     );
   }
 
-// 🔴 METHOD UNTUK HANDLE APPROVE/REJECT
+  // 🔴 METHOD UNTUK HANDLE APPROVE/REJECT
   Future<void> _handleApproveReject(
-      BuildContext context,
-      LeaveRequest request,
-      String status
-      ) async {
+    BuildContext context,
+    LeaveRequest request,
+    String status,
+  ) async {
     final provider = Provider.of<LeaveProvider>(context, listen: false);
 
     try {
@@ -638,20 +665,11 @@ class _LeaveScreenState extends State<LeaveScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
         ),
       ],
     );
@@ -754,18 +772,12 @@ class _LeaveScreenState extends State<LeaveScreen>
                     const SizedBox(height: 4),
                     Text(
                       'Employee: $_employeeName',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Company: $_companyCode',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                   ],
                 ),
@@ -788,8 +800,9 @@ class _LeaveScreenState extends State<LeaveScreen>
                     labelText: 'Leave Type',
                   ),
                   value: _selectedType,
-                  items: ['Annual Leave', 'Sick Leave', 'Personal Leave']
-                      .map((type) {
+                  items: ['Annual Leave', 'Sick Leave', 'Personal Leave'].map((
+                    type,
+                  ) {
                     final remaining = _getRemainingDays(type) ?? 0;
                     return DropdownMenuItem(
                       value: type,
@@ -978,14 +991,15 @@ class _LeaveScreenState extends State<LeaveScreen>
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: _isSubmitting ||
-                    remainingDays < _calculateDays(_startDate, _endDate)
+                onPressed:
+                    _isSubmitting ||
+                        remainingDays < _calculateDays(_startDate, _endDate)
                     ? null
                     : () async {
-                  if (_formKey.currentState!.validate()) {
-                    await _submitLeaveRequest(context, provider);
-                  }
-                },
+                        if (_formKey.currentState!.validate()) {
+                          await _submitLeaveRequest(context, provider);
+                        }
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -995,17 +1009,18 @@ class _LeaveScreenState extends State<LeaveScreen>
                 ),
                 child: _isSubmitting
                     ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor:
-                    AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
                     : Text(
-                  'Request ${_calculateDays(_startDate, _endDate)} ${_calculateDays(_startDate, _endDate) == 1 ? 'day' : 'days'} Leave',
-                ),
+                        'Request ${_calculateDays(_startDate, _endDate)} ${_calculateDays(_startDate, _endDate) == 1 ? 'day' : 'days'} Leave',
+                      ),
               ),
             ),
 
@@ -1026,20 +1041,11 @@ class _LeaveScreenState extends State<LeaveScreen>
   Widget _buildBalanceInfo(String label, int days) {
     return Column(
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
         const SizedBox(height: 4),
         Text(
           '$days days',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ],
     );
@@ -1048,174 +1054,178 @@ class _LeaveScreenState extends State<LeaveScreen>
   Future<void> _submitLeaveRequest(
     BuildContext context,
     LeaveProvider provider,
-    ) async {
-  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+  ) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-  // Validasi user login
-  if (authProvider.user == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('User not logged in'),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
-  }
-
-  // 🔴 CEK APAKAH PROVIDER SUDAH PUNYA NUMERIC EMPLOYEE_ID
-  if (provider.correctEmployeeId == null) {
-    // Tampilkan loading dan fetch data dulu
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Loading employee data...'),
-        duration: Duration(seconds: 1),
-      ),
-    );
-
-    // Fetch leave data untuk mendapatkan employee_id yang benar
-    await provider.fetchLeaveData();
-
-    if (provider.correctEmployeeId == null) {
+    // Validasi user login
+    if (authProvider.user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not get employee ID. Please try again.'),
+          content: Text('User not logged in'),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
-  }
 
-  // 🔴 CEK COMPANY CODE
-  String companyCode = _companyCode ?? '';
-  if (companyCode.isEmpty) {
-    companyCode = authProvider.getCompanyCode();
-    if (companyCode.isNotEmpty) {
-      setState(() {
-        _companyCode = companyCode;
-      });
-    }
-  }
-
-  if (companyCode.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Company code not found'),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
-  }
-
-  final days = _calculateDays(_startDate, _endDate);
-  final remaining = _getRemainingDays(_selectedType) ?? 0;
-
-  if (days > remaining) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Insufficient balance. You only have $remaining days left.'),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
-  }
-
-  setState(() {
-    _isSubmitting = true;
-  });
-
-  try {
-    // PANGGIL METHOD DENGAN COMPANY CODE
-    final success = await provider.submitLeaveRequest(
-      type: _selectedType,
-      startDate: _startDate,
-      endDate: _endDate,
-      days: days,
-      reason: _reasonController.text,
-      cCode: companyCode,
-    );
-
-    if (success && context.mounted) {
+    // 🔴 CEK APAKAH PROVIDER SUDAH PUNYA NUMERIC EMPLOYEE_ID
+    if (provider.correctEmployeeId == null) {
+      // Tampilkan loading dan fetch data dulu
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Leave requested successfully for $days days'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
+        const SnackBar(
+          content: Text('Loading employee data...'),
+          duration: Duration(seconds: 1),
         ),
       );
 
-      // Reset form
-      _reasonController.clear();
-      setState(() {
-        _startDate = DateTime.now();
-        _endDate = DateTime.now();
-        _selectedType = 'Annual Leave';
-        _isSubmitting = false;
-      });
-
-      // Switch to Requests tab
-      _tabController.animateTo(0);
-
-      // Refresh data
+      // Fetch leave data untuk mendapatkan employee_id yang benar
       await provider.fetchLeaveData();
 
-      // Update balance
-      if (provider.leaveBalance != null) {
+      if (provider.correctEmployeeId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not get employee ID. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+
+    // 🔴 CEK COMPANY CODE
+    String companyCode = _companyCode ?? '';
+    if (companyCode.isEmpty) {
+      companyCode = authProvider.getCompanyCode();
+      if (companyCode.isNotEmpty) {
         setState(() {
-          _userBalance = {
-            'annual': {
-              'used': provider.leaveBalance?.annualUsed ?? 0,
-              'total': provider.leaveBalance?.annualTotal ?? 25,
-            },
-            'sick': {
-              'used': provider.leaveBalance?.sickUsed ?? 0,
-              'total': provider.leaveBalance?.sickTotal ?? 10,
-            },
-            'personal': {
-              'used': provider.leaveBalance?.personalUsed ?? 0,
-              'total': provider.leaveBalance?.personalTotal ?? 5,
-            },
-          };
+          _companyCode = companyCode;
         });
       }
+    }
 
-      // 🔴 HAPUS BAGIAN NOTIFIKASI INI KARENA SUDAH DITANGANI BACKEND
-      // Notifikasi akan dibuat otomatis oleh backend (Laravel)
-      // Ke atasan: "Staff {$employee->name} mengajukan {$leaveRequest->type}..."
+    if (companyCode.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Company code not found'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
-    } else if (context.mounted) {
+    final days = _calculateDays(_startDate, _endDate);
+    final remaining = _getRemainingDays(_selectedType) ?? 0;
+
+    if (days > remaining) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Insufficient balance. You only have $remaining days left.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      // PANGGIL METHOD DENGAN COMPANY CODE
+      final success = await provider.submitLeaveRequest(
+        type: _selectedType,
+        startDate: _startDate,
+        endDate: _endDate,
+        days: days,
+        reason: _reasonController.text,
+        cCode: companyCode,
+      );
+
+      if (success && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              provider.lastActionMessage ??
+                  'Leave requested successfully for $days days',
+            ),
+            backgroundColor: provider.lastActionQueued
+                ? Colors.orange
+                : Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Reset form
+        _reasonController.clear();
+        setState(() {
+          _startDate = DateTime.now();
+          _endDate = DateTime.now();
+          _selectedType = 'Annual Leave';
+          _isSubmitting = false;
+        });
+
+        // Switch to Requests tab
+        _tabController.animateTo(0);
+
+        // Refresh data
+        await provider.fetchLeaveData();
+
+        // Update balance
+        if (provider.leaveBalance != null) {
+          setState(() {
+            _userBalance = {
+              'annual': {
+                'used': provider.leaveBalance?.annualUsed ?? 0,
+                'total': provider.leaveBalance?.annualTotal ?? 25,
+              },
+              'sick': {
+                'used': provider.leaveBalance?.sickUsed ?? 0,
+                'total': provider.leaveBalance?.sickTotal ?? 10,
+              },
+              'personal': {
+                'used': provider.leaveBalance?.personalUsed ?? 0,
+                'total': provider.leaveBalance?.personalTotal ?? 5,
+              },
+            };
+          });
+        }
+
+        // 🔴 HAPUS BAGIAN NOTIFIKASI INI KARENA SUDAH DITANGANI BACKEND
+        // Notifikasi akan dibuat otomatis oleh backend (Laravel)
+        // Ke atasan: "Staff {$employee->name} mengajukan {$leaveRequest->type}..."
+      } else if (context.mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(provider.error ?? 'Failed to submit request'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
       setState(() {
         _isSubmitting = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(provider.error ?? 'Failed to submit request'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  } catch (e) {
-    setState(() {
-      _isSubmitting = false;
-    });
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
-}
 
   Widget _buildBalanceView() {
     if (_userBalance == null) {
-      return const Center(
-        child: Text('No balance data available'),
-      );
+      return const Center(child: Text('No balance data available'));
     }
 
     return SingleChildScrollView(
@@ -1256,9 +1266,7 @@ class _LeaveScreenState extends State<LeaveScreen>
 
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(

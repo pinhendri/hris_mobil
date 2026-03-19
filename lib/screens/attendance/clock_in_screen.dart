@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/api_constants.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../data/models/attendance_location.dart';
@@ -22,6 +23,13 @@ class ClockInScreen extends StatefulWidget {
 }
 
 class _ClockInScreenState extends State<ClockInScreen> {
+  static const LatLng _fallbackLatLng = LatLng(-6.2088, 106.8456);
+  static const LatLng _defaultEmulatorLatLng = LatLng(37.4219983, -122.084);
+  static const String _tileUrlTemplate =
+      '${ApiConstants.baseUrl}${ApiConstants.mapTilesEndpoint}';
+  static const String _tileFallbackUrlTemplate =
+      '${ApiConstants.baseUrl}${ApiConstants.mapTilesProxyEndpoint}';
+
   File? _photo;
   String? _photoBase64;
   Position? _currentPosition;
@@ -49,6 +57,7 @@ class _ClockInScreenState extends State<ClockInScreen> {
   Future<void> _startLocationStream() async {
     setState(() {
       _isLoadingLocation = true;
+      _locationError = '';
     });
 
     bool serviceEnabled;
@@ -97,12 +106,12 @@ class _ClockInScreenState extends State<ClockInScreen> {
         distanceFilter: 5,
       );
 
-      _positionStream = Geolocator.getPositionStream(
-        locationSettings: locationSettings,
-      ).listen((Position position) {
-        if (mounted) _updatePosition(position);
-      });
-
+      _positionStream =
+          Geolocator.getPositionStream(
+            locationSettings: locationSettings,
+          ).listen((Position position) {
+            if (mounted) _updatePosition(position);
+          });
     } catch (e) {
       print('Location error: $e');
       if (mounted) {
@@ -117,16 +126,25 @@ class _ClockInScreenState extends State<ClockInScreen> {
   void _updatePosition(Position position) {
     if (!mounted) return;
 
+    final isDefaultEmulatorLocation =
+        (position.latitude - _defaultEmulatorLatLng.latitude).abs() < 0.001 &&
+        (position.longitude - _defaultEmulatorLatLng.longitude).abs() < 0.001;
+
     setState(() {
       _currentPosition = position;
       _isLoadingLocation = false;
       _isMockLocation = position.isMocked;
+      _locationError = isDefaultEmulatorLocation
+          ? 'Lokasi yang terbaca masih lokasi default emulator. Atur lokasi device atau emulator, lalu refresh.'
+          : '';
     });
 
     if (_isMapReady) {
       try {
         _mapController.move(
-          LatLng(position.latitude, position.longitude),
+          isDefaultEmulatorLocation
+              ? _fallbackLatLng
+              : LatLng(position.latitude, position.longitude),
           16.0,
         );
       } catch (e) {
@@ -204,7 +222,10 @@ class _ClockInScreenState extends State<ClockInScreen> {
   }
 
   Future<void> _refreshLocation() async {
-    setState(() => _isLoadingLocation = true);
+    setState(() {
+      _isLoadingLocation = true;
+      _locationError = '';
+    });
     try {
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -224,6 +245,29 @@ class _ClockInScreenState extends State<ClockInScreen> {
     }
   }
 
+  LatLng get _currentLatLng {
+    final position = _currentPosition;
+    if (position == null || _isLikelyDefaultEmulatorLocation) {
+      return _fallbackLatLng;
+    }
+
+    return LatLng(position.latitude, position.longitude);
+  }
+
+  bool get _isLikelyDefaultEmulatorLocation {
+    final position = _currentPosition;
+    if (position == null) {
+      return false;
+    }
+
+    return (position.latitude - _defaultEmulatorLatLng.latitude).abs() <
+            0.001 &&
+        (position.longitude - _defaultEmulatorLatLng.longitude).abs() < 0.001;
+  }
+
+  bool get _hasValidCurrentLocation =>
+      _currentPosition != null && !_isLikelyDefaultEmulatorLocation;
+
   Future<void> _submitClockIn() async {
     final provider = Provider.of<AttendanceProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -232,6 +276,18 @@ class _ClockInScreenState extends State<ClockInScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Foto wajib diambil'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_isLikelyDefaultEmulatorLocation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Lokasi device masih memakai koordinat default emulator. Atur lokasi device atau emulator dulu.',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -253,7 +309,9 @@ class _ClockInScreenState extends State<ClockInScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Peringatan'),
-          content: const Text('Anda menggunakan lokasi mock. Apakah Anda yakin ingin melanjutkan?'),
+          content: const Text(
+            'Anda menggunakan lokasi mock. Apakah Anda yakin ingin melanjutkan?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -270,7 +328,8 @@ class _ClockInScreenState extends State<ClockInScreen> {
       if (confirm != true) return;
     }
 
-    final employeeUuid = authProvider.user?.employeeUuid ?? authProvider.user?.uuid ?? '';
+    final employeeUuid =
+        authProvider.user?.employeeUuid ?? authProvider.user?.uuid ?? '';
 
     if (employeeUuid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -285,9 +344,7 @@ class _ClockInScreenState extends State<ClockInScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
     final success = await provider.clockIn(
@@ -305,9 +362,11 @@ class _ClockInScreenState extends State<ClockInScreen> {
     if (success) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Clock In Berhasil'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: Text(provider.lastActionMessage ?? 'Clock In Berhasil'),
+          backgroundColor: provider.lastActionQueued
+              ? Colors.orange
+              : Colors.green,
         ),
       );
     } else {
@@ -342,14 +401,7 @@ class _ClockInScreenState extends State<ClockInScreen> {
       }
     }
 
-    LatLng initialCenter;
-    if (_currentPosition != null) {
-      initialCenter = LatLng(_currentPosition!.latitude, _currentPosition!.longitude);
-    } else if (allowedLocations.isNotEmpty) {
-      initialCenter = LatLng(allowedLocations.first.latitude, allowedLocations.first.longitude);
-    } else {
-      initialCenter = const LatLng(-6.2088, 106.8456);
-    }
+    final initialCenter = _currentLatLng;
 
     final circles = allowedLocations
         .map(
@@ -411,7 +463,11 @@ class _ClockInScreenState extends State<ClockInScreen> {
                                 color: Colors.green,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.check, color: Colors.white, size: 16),
+                              child: const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 16,
+                              ),
                             ),
                           ),
                       ],
@@ -419,10 +475,19 @@ class _ClockInScreenState extends State<ClockInScreen> {
                   : Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.camera_alt, size: 50, color: Colors.grey),
+                        const Icon(
+                          Icons.camera_alt,
+                          size: 50,
+                          color: Colors.grey,
+                        ),
                         const SizedBox(height: 8),
-                        Text('Foto Belum Diambil',
-                            style: GoogleFonts.poppins(color: Colors.grey[600], fontSize: 14)),
+                        Text(
+                          'Foto Belum Diambil',
+                          style: GoogleFonts.poppins(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        ),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
                           onPressed: _takePhoto,
@@ -460,86 +525,129 @@ class _ClockInScreenState extends State<ClockInScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Lokasi Anda',
-                      style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(
+                    'Lokasi Anda',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   if (_isMockLocation)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.orange.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text('Mock Location',
-                          style: GoogleFonts.poppins(
-                              fontSize: 10, color: Colors.orange[800], fontWeight: FontWeight.bold)),
+                      child: Text(
+                        'Mock Location',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          color: Colors.orange[800],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                 ],
               ),
             ),
             const SizedBox(height: 8),
 
+            if (_isLikelyDefaultEmulatorLocation)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue[800]),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Koordinat yang terbaca masih lokasi default emulator Android. Untuk testing absensi, set lokasi emulator ke Jakarta atau gunakan device fisik lalu tekan refresh lokasi.',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: Colors.blue[900],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             SizedBox(
               height: 250,
               child: _isLoadingLocation && _currentPosition == null
                   ? const Center(child: CircularProgressIndicator())
                   : _locationError.isNotEmpty && _currentPosition == null
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.location_off, size: 48, color: Colors.red[300]),
-                              const SizedBox(height: 16),
-                              Text(_locationError),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: _startLocationStream,
-                                child: const Text('Coba Lagi'),
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.location_off,
+                            size: 48,
+                            color: Colors.red[300],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(_locationError),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: _startLocationStream,
+                            child: const Text('Coba Lagi'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: initialCenter,
+                        initialZoom: 16.0,
+                        onMapReady: () {
+                          setState(() {
+                            _isMapReady = true;
+                          });
+                          if (_hasValidCurrentLocation) {
+                            _mapController.move(_currentLatLng, 16.0);
+                          }
+                        },
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate: _tileUrlTemplate,
+                          fallbackUrl: _tileFallbackUrlTemplate,
+                          userAgentPackageName: 'com.example.hris_mobile',
+                        ),
+                        if (circles.isNotEmpty) CircleLayer(circles: circles),
+                        MarkerLayer(
+                          markers: [
+                            if (_hasValidCurrentLocation)
+                              Marker(
+                                point: _currentLatLng,
+                                width: 40,
+                                height: 40,
+                                child: const Icon(
+                                  Icons.person_pin_circle,
+                                  color: Colors.red,
+                                  size: 40,
+                                ),
                               ),
-                            ],
-                          ),
-                        )
-                      : FlutterMap(
-                          mapController: _mapController,
-                          options: MapOptions(
-                            initialCenter: initialCenter,
-                            initialZoom: 16.0,
-                            onMapReady: () {
-                              setState(() {
-                                _isMapReady = true;
-                              });
-                              if (_currentPosition != null) {
-                                _mapController.move(
-                                  LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-                                  16.0,
-                                );
-                              }
-                            },
-                          ),
-                          children: [
-                            TileLayer(
-                              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              userAgentPackageName: 'com.example.hris_mobile',
-                            ),
-                            if (circles.isNotEmpty) CircleLayer(circles: circles),
-                            MarkerLayer(
-                              markers: [
-                                if (_currentPosition != null)
-                                  Marker(
-                                    point: LatLng(
-                                        _currentPosition!.latitude, _currentPosition!.longitude),
-                                    width: 40,
-                                    height: 40,
-                                    child: const Icon(
-                                      Icons.person_pin_circle,
-                                      color: Colors.red,
-                                      size: 40,
-                                    ),
-                                  ),
-                                ...locationMarkers,
-                              ],
-                            ),
+                            ...locationMarkers,
                           ],
                         ),
+                      ],
+                    ),
             ),
 
             if (_currentPosition != null && !_isLoadingLocation)
@@ -567,9 +675,11 @@ class _ClockInScreenState extends State<ClockInScreen> {
                     decoration: BoxDecoration(
                       color: _isLoadingLocation
                           ? Colors.orange.withOpacity(0.1)
+                          : _isLikelyDefaultEmulatorLocation
+                          ? Colors.orange.withOpacity(0.1)
                           : isWithinRange
-                              ? Colors.green.withOpacity(0.1)
-                              : Colors.red.withOpacity(0.1),
+                          ? Colors.green.withOpacity(0.1)
+                          : Colors.red.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -577,14 +687,18 @@ class _ClockInScreenState extends State<ClockInScreen> {
                         Icon(
                           _isLoadingLocation
                               ? Icons.hourglass_empty
+                              : _isLikelyDefaultEmulatorLocation
+                              ? Icons.warning_amber_rounded
                               : isWithinRange
-                                  ? Icons.check_circle
-                                  : Icons.error,
+                              ? Icons.check_circle
+                              : Icons.error,
                           color: _isLoadingLocation
                               ? Colors.orange
+                              : _isLikelyDefaultEmulatorLocation
+                              ? Colors.orange
                               : isWithinRange
-                                  ? Colors.green
-                                  : Colors.red,
+                              ? Colors.green
+                              : Colors.red,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -594,19 +708,33 @@ class _ClockInScreenState extends State<ClockInScreen> {
                               Text(
                                 _isLoadingLocation
                                     ? 'Memuat Lokasi...'
+                                    : _isLikelyDefaultEmulatorLocation
+                                    ? 'Lokasi Device Belum Valid'
                                     : isWithinRange
-                                        ? 'Dalam Jangkauan'
-                                        : 'Luar Jangkauan',
+                                    ? 'Dalam Jangkauan'
+                                    : 'Luar Jangkauan',
                                 style: GoogleFonts.poppins(
                                   fontWeight: FontWeight.w600,
                                   color: _isLoadingLocation
                                       ? Colors.orange
+                                      : _isLikelyDefaultEmulatorLocation
+                                      ? Colors.orange
                                       : isWithinRange
-                                          ? Colors.green
-                                          : Colors.red,
+                                      ? Colors.green
+                                      : Colors.red,
                                 ),
                               ),
-                              if (!_isLoadingLocation && _currentPosition != null)
+                              if (!_isLoadingLocation &&
+                                  _isLikelyDefaultEmulatorLocation)
+                                Text(
+                                  'Lokasi masih membaca koordinat default emulator. Refresh setelah lokasi device diperbarui.',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                )
+                              else if (!_isLoadingLocation &&
+                                  _currentPosition != null)
                                 Text(
                                   '${minDistance == double.infinity ? "?" : minDistance.toStringAsFixed(0)}m dari ${nearestLocation?.name ?? "lokasi terdekat"}',
                                   style: GoogleFonts.poppins(
@@ -641,10 +769,14 @@ class _ClockInScreenState extends State<ClockInScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            _isPhotoTaken ? 'Foto sudah diambil' : 'Foto belum diambil',
+                            _isPhotoTaken
+                                ? 'Foto sudah diambil'
+                                : 'Foto belum diambil',
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w600,
-                              color: _isPhotoTaken ? Colors.green : Colors.orange,
+                              color: _isPhotoTaken
+                                  ? Colors.green
+                                  : Colors.orange,
                             ),
                           ),
                         ),
@@ -658,10 +790,11 @@ class _ClockInScreenState extends State<ClockInScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: (_photo != null &&
+                      onPressed:
+                          (_photo != null &&
                               isWithinRange &&
                               !_isLoadingLocation &&
-                              _currentPosition != null)
+                              _hasValidCurrentLocation)
                           ? _submitClockIn
                           : null,
                       style: ElevatedButton.styleFrom(
@@ -683,12 +816,28 @@ class _ClockInScreenState extends State<ClockInScreen> {
                     ),
                   ),
 
-                  if (!isWithinRange && _currentPosition != null)
+                  if (_isLikelyDefaultEmulatorLocation)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Lokasi device belum valid. Update lokasi device atau emulator sebelum melakukan clock in',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.orange,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+
+                  if (!isWithinRange && _hasValidCurrentLocation)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
                         'Anda berada di luar area yang diizinkan untuk clock in',
-                        style: GoogleFonts.poppins(fontSize: 12, color: Colors.red),
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.red,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -698,7 +847,10 @@ class _ClockInScreenState extends State<ClockInScreen> {
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
                         'Ambil foto terlebih dahulu',
-                        style: GoogleFonts.poppins(fontSize: 12, color: Colors.orange),
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.orange,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),

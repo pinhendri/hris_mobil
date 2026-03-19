@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/localization/app_strings.dart';
 import '../../providers/auth_provider.dart';
 
 class EmploymentDetailsScreen extends StatelessWidget {
@@ -12,7 +13,7 @@ class EmploymentDetailsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Employment Details'),
+        title: Text(context.tr('employment_title')),
         centerTitle: true,
         backgroundColor: Colors.white,
       ),
@@ -21,16 +22,19 @@ class EmploymentDetailsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _tile('Name', user?.name ?? '-'),
-            _tile('Position', user?.position ?? '-'),
-            _tile('Employee UUID', user?.uuid ?? '-'),
-            _tile('Selected Company', user?.selectedCCode ?? '-'),
+            _tile(context.tr('employment_name'), user?.name ?? '-'),
+            _tile(context.tr('employment_position'), user?.position ?? '-'),
+            _tile(context.tr('employment_employee_uuid'), user?.uuid ?? '-'),
+            _tile(
+              context.tr('employment_selected_company'),
+              user?.selectedCCode ?? '-',
+            ),
             const Spacer(),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+                child: Text(context.tr('employment_close')),
               ),
             ),
           ],
