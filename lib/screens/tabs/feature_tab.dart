@@ -6,6 +6,7 @@ import '../../core/localization/app_strings.dart';
 import '../../core/widgets/access_denied_state.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/claim_provider.dart';
+import '../../providers/discovery_provider.dart';
 import '../../providers/document_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../providers/payroll_provider.dart';
@@ -15,6 +16,7 @@ import '../../providers/training_provider.dart';
 import '../attendance/attendance_screen.dart';
 import '../location/my_location_screen.dart';
 import '../documents/document_screen.dart';
+import '../discovery/discovery_screen.dart';
 import '../clients/client_screen.dart';
 import '../corrections/correction_screen.dart';
 import '../leave/leave_screen.dart';
@@ -22,9 +24,11 @@ import '../payroll/payslip_screen.dart';
 import '../performance/performance_screen.dart';
 import '../recruitment/recruitment_screen.dart';
 import '../inventory/inventory_screen.dart';
+import '../saas/saas_workspace_screen.dart';
 import '../training/training_screen.dart';
 import '../tasks/tasks_screen.dart';
 import '../claims/claims_screen.dart';
+import '../admin/event_management_screen.dart';
 
 class FeatureTab extends StatefulWidget {
   const FeatureTab({super.key});
@@ -541,6 +545,14 @@ class _FeatureTabState extends State<FeatureTab>
         categoryKey: 'feature_category_operations',
         isPopular: true,
       ),
+      FeatureItem(
+        icon: Icons.event_available,
+        labelKey: 'feature_label_event_management',
+        gradient: const [Color(0xFF1D976C), Color(0xFF93F9B9)],
+        screenBuilder: (_) => const EventManagementScreen(),
+        categoryKey: 'feature_category_operations',
+        isPopular: true,
+      ),
       if (authProvider.canAccessDocumentsModule)
         FeatureItem(
           icon: Icons.folder_open,
@@ -552,6 +564,20 @@ class _FeatureTabState extends State<FeatureTab>
           ),
           categoryKey: 'feature_category_operations',
           isPopular: false,
+        ),
+      if (authProvider.canAccessDocumentsModule)
+        FeatureItem(
+          icon: Icons.auto_awesome,
+          labelKey: 'feature_label_discovery',
+          gradient: const [Color(0xFF0F2027), Color(0xFF2C5364)],
+          screenBuilder: (context) => ChangeNotifierProvider(
+            create: (_) => DiscoveryProvider(
+              Provider.of<AuthProvider>(context, listen: false),
+            ),
+            child: const DiscoveryScreen(),
+          ),
+          categoryKey: 'feature_category_operations',
+          isPopular: true,
         ),
       if (authProvider.canAccessClientModule)
         FeatureItem(
@@ -571,6 +597,16 @@ class _FeatureTabState extends State<FeatureTab>
           categoryKey: 'feature_category_core_hr',
           isPopular: false,
         ),
+      FeatureItem(
+        icon: Icons.shield_outlined,
+        labelKey: 'feature_label_saas',
+        gradient: const [Color(0xFF1565C0), Color(0xFF26C6DA)],
+        screenBuilder: (_) => const SaasWorkspaceScreen(),
+        categoryKey: 'feature_category_workspace',
+        isPopular:
+            authProvider.companyAssignments.length > 1 ||
+            authProvider.canAccessPlatformAdmin,
+      ),
     ];
   }
 

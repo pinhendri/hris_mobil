@@ -4,26 +4,69 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/localization/app_strings.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/language_provider.dart';
+import '../../providers/leave_provider.dart';
+import '../../providers/saas_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../models/company.dart';
+import '../../models/user.dart';
+import '../../services/api_service.dart';
 
 import '../profile/personal_info_screen.dart';
 import '../profile/employment_details_screen.dart';
 import '../profile/change_password_screen.dart';
+import '../saas/saas_workspace_screen.dart';
 
-class ProfileTab extends StatelessWidget {
+class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
+
+  @override
+  State<ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<ProfileTab> {
+  final ApiService _apiService = ApiService();
+
+  String? _lastLoadedCompanyCode;
+  double _overtimeHours = 0;
+  bool _isLoadingStats = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final companyCode = context.read<AuthProvider>().getCompanyCode();
+    if (_isLoadingStats || companyCode == _lastLoadedCompanyCode) {
+      return;
+    }
+
+    _lastLoadedCompanyCode = companyCode;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadProfileStats();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final leaveProvider = Provider.of<LeaveProvider>(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
     final languageProvider = Provider.of<LanguageProvider>(context);
+    final saasProvider = Provider.of<SaasProvider>(context);
     final user = auth.user;
     final isDark = themeProvider.isDarkMode;
     final currentLanguageLabel = languageProvider.languageCode == 'id'
         ? context.tr('profile_language_indonesian')
         : context.tr('profile_language_english');
+    final currentCompany = saasProvider.currentCompany ?? auth.selectedCompany;
+    final trialSubtitle = _buildTrialSubtitle(context, saasProvider);
+    final companySubtitle = _buildCompanySubtitle(
+      context,
+      currentCompany,
+      auth.companyAssignments.length,
+    );
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey[50],
@@ -34,7 +77,62 @@ class ProfileTab extends StatelessWidget {
             const SizedBox(height: 20),
 
             // Stats Cards
-            _buildStatsCards(context, isDark),
+            _buildStatsCards(
+              context,
+              isDark,
+              leaveDays: _getLeaveDays(leaveProvider),
+              overtimeHours: _overtimeHours,
+            ),
+            const SizedBox(height: 20),
+
+            _buildSection(context, context.tr('profile_saas_workspace'), [
+              _buildMenuItem(
+                Icons.shield_outlined,
+                context.tr('saas_workspace_title'),
+                subtitle: context.tr('profile_saas_workspace_subtitle'),
+                color: Colors.indigo,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SaasWorkspaceScreen(),
+                    ),
+                  );
+                },
+                isDark: isDark,
+              ),
+              _buildMenuItem(
+                Icons.apartment_outlined,
+                context.tr('saas_current_company'),
+                subtitle: companySubtitle,
+                color: Colors.blue,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SaasWorkspaceScreen(),
+                    ),
+                  );
+                },
+                isDark: isDark,
+              ),
+              _buildMenuItem(
+                Icons.card_membership_outlined,
+                context.tr('saas_trial_status'),
+                subtitle: trialSubtitle,
+                color: Colors.orange,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SaasWorkspaceScreen(),
+                    ),
+                  );
+                },
+                isDark: isDark,
+              ),
+            ]),
+
             const SizedBox(height: 20),
 
             // Account Section
@@ -363,14 +461,19 @@ class ProfileTab extends StatelessWidget {
     );
   }
 
-  Widget _buildStatsCards(BuildContext context, bool isDark) {
+  Widget _buildStatsCards(
+    BuildContext context,
+    bool isDark, {
+    required int leaveDays,
+    required double overtimeHours,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
           _buildStatCard(
             icon: Icons.calendar_today_rounded,
-            value: '12',
+            value: leaveDays.toString(),
             label: context.tr('profile_leave'),
             gradient: const LinearGradient(
               colors: [Color(0xFF4158D0), Color(0xFFC850C0)],
@@ -380,7 +483,7 @@ class ProfileTab extends StatelessWidget {
           const SizedBox(width: 12),
           _buildStatCard(
             icon: Icons.timer_rounded,
-            value: '168h',
+            value: _formatOvertimeHours(overtimeHours),
             label: context.tr('profile_overtime'),
             gradient: const LinearGradient(
               colors: [Color(0xFFFF9966), Color(0xFFFF5E62)],
@@ -792,6 +895,166 @@ class ProfileTab extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _buildCompanySubtitle(
+    BuildContext context,
+    Company? currentCompany,
+    int companyCount,
+  ) {
+    final parts = <String>[];
+
+    if (currentCompany?.companyName.isNotEmpty == true) {
+      parts.add(currentCompany!.companyName);
+    }
+
+    if (currentCompany?.cCode.isNotEmpty == true) {
+      parts.add(currentCompany!.cCode);
+    }
+
+    final summary = parts.isEmpty
+        ? context.tr('saas_company_not_selected')
+        : parts.join(' • ');
+
+    return '$summary • $companyCount ${context.tr('profile_switch_company_count')}';
+  }
+
+  String _buildTrialSubtitle(BuildContext context, SaasProvider saasProvider) {
+    final trialStatus = saasProvider.trialStatus;
+
+    if (trialStatus == null) {
+      return context.tr('saas_trial_unavailable');
+    }
+
+    if (trialStatus.isExpired) {
+      return context.tr('saas_trial_expired');
+    }
+
+    if (trialStatus.isInGracePeriod) {
+      return context.tr('saas_grace_period');
+    }
+
+    if (trialStatus.isTrial) {
+      if (trialStatus.daysRemaining != null) {
+        return context
+            .tr('saas_trial_days_remaining')
+            .replaceAll('{count}', trialStatus.daysRemaining.toString());
+      }
+
+      return context.tr('saas_trial_active');
+    }
+
+    return context.tr('saas_active_plan');
+  }
+
+  Future<void> _loadProfileStats() async {
+    if (_isLoadingStats) {
+      return;
+    }
+
+    final authProvider = context.read<AuthProvider>();
+    final leaveProvider = context.read<LeaveProvider>();
+    final companyCode = authProvider.getCompanyCode();
+
+    setState(() {
+      _isLoadingStats = true;
+    });
+
+    leaveProvider.setCompanyCode(companyCode);
+
+    try {
+      await leaveProvider.fetchLeaveData();
+    } catch (_) {
+      // Leave provider already keeps its own error state; profile falls back to 0.
+    }
+
+    double overtimeHours = 0;
+
+    try {
+      final response = await _apiService.get('/overtime');
+      if (response is Map<String, dynamic> && response['success'] == true) {
+        final payload = response['data'];
+        final requests = payload is Map<String, dynamic>
+            ? payload['requests']
+            : null;
+        overtimeHours = _calculateOvertimeHours(
+          requests is List ? requests : const [],
+          authProvider.user,
+        );
+      }
+    } catch (_) {
+      overtimeHours = 0;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _overtimeHours = overtimeHours;
+      _isLoadingStats = false;
+    });
+  }
+
+  int _getLeaveDays(LeaveProvider leaveProvider) {
+    final balance = leaveProvider.leaveBalance;
+    if (balance == null) {
+      return 0;
+    }
+
+    final remaining = balance.annualTotal - balance.annualUsed;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  double _calculateOvertimeHours(List<dynamic> rawRequests, User? user) {
+    if (user == null) {
+      return 0;
+    }
+
+    final identifiers = <String>{
+      user.employeeUuid?.trim() ?? '',
+      user.uuid.trim(),
+    }..removeWhere((value) => value.isEmpty);
+
+    if (identifiers.isEmpty) {
+      return 0;
+    }
+
+    double totalHours = 0;
+
+    for (final item in rawRequests) {
+      if (item is! Map) {
+        continue;
+      }
+
+      final request = Map<String, dynamic>.from(item);
+      final employee = request['employee'];
+      final employeeUuid = employee is Map<String, dynamic>
+          ? employee['uuid']?.toString().trim() ?? ''
+          : '';
+      final status = request['status']?.toString().trim().toLowerCase() ?? '';
+
+      if (!identifiers.contains(employeeUuid) || status != 'approved') {
+        continue;
+      }
+
+      totalHours += double.tryParse(request['hours']?.toString() ?? '0') ?? 0;
+    }
+
+    return totalHours;
+  }
+
+  String _formatOvertimeHours(double value) {
+    if (value <= 0) {
+      return '0h';
+    }
+
+    final rounded = value.roundToDouble();
+    if ((value - rounded).abs() < 0.01) {
+      return '${rounded.toInt()}h';
+    }
+
+    return '${value.toStringAsFixed(1)}h';
   }
 }
 

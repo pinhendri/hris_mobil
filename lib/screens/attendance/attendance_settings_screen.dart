@@ -4,20 +4,53 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/attendance_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/session_storage.dart';
 
 class AttendanceSettingsScreen extends StatefulWidget {
   const AttendanceSettingsScreen({super.key});
 
   @override
-  State<AttendanceSettingsScreen> createState() => _AttendanceSettingsScreenState();
+  State<AttendanceSettingsScreen> createState() =>
+      _AttendanceSettingsScreenState();
 }
 
 class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
   final ApiService _apiService = ApiService();
   List<dynamic> _entities = [];
   bool _isLoadingEntities = false;
+
+  bool _isTruthy(dynamic value) {
+    if (value == null) {
+      return false;
+    }
+
+    if (value is bool) {
+      return value;
+    }
+
+    if (value is num) {
+      return value != 0;
+    }
+
+    final normalized = value.toString().trim().toLowerCase();
+    return normalized == '1' ||
+        normalized == 'true' ||
+        normalized == 'yes' ||
+        normalized == 'active' ||
+        normalized == 'enabled' ||
+        normalized == 'aktif' ||
+        normalized == 'on';
+  }
+
+  bool _isEntityActive(Map<String, dynamic> entity) {
+    return _isTruthy(entity['is_active']) ||
+        _isTruthy(entity['active']) ||
+        _isTruthy(entity['status']) ||
+        _isTruthy(entity['status_active']);
+  }
 
   @override
   void initState() {
@@ -30,19 +63,31 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
       _isLoadingEntities = true;
     });
 
+    final authProvider = context.read<AuthProvider>();
+
     try {
       print('🔄 Fetching entities...');
+      final companyCode = authProvider.getCompanyCode().trim();
+      if (companyCode.isNotEmpty) {
+        await SessionStorage.saveCompanyCode(companyCode);
+      }
+      await authProvider.syncSelectedCompanyContext();
       final response = await _apiService.get('/entities');
-      
+
       print('📥 Response: $response');
-      
+
       if (response is Map<String, dynamic>) {
         final success = response['success'] ?? false;
         final data = response['data'];
-        
-        if (success == true && data is List) {
+        final entities = data is List
+            ? data
+            : (data is Map<String, dynamic> && data['data'] is List)
+            ? List<dynamic>.from(data['data'] as List)
+            : <dynamic>[];
+
+        if (success == true) {
           setState(() {
-            _entities = data;
+            _entities = entities;
           });
           print('✅ Loaded ${_entities.length} entities');
           print('📊 Entity data: $_entities');
@@ -97,10 +142,10 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
           //   }
           //   return false;
           // }).toList();
-          
+
           // Gunakan semua entities
           final allEntities = _entities;
-          
+
           final settings = provider.settings;
 
           return RefreshIndicator(
@@ -128,7 +173,7 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Lokasi absensi diambil dari pengaturan perusahaan. Untuk mengubah lokasi, hubungi administrator.',
+                              'Lokasi absensi akan memakai client/vendor assignment terlebih dahulu. Jika tidak ada, sistem mengambil default entity aktif. Jika entity aktif juga tidak ada, baru memakai koordinat dari setting.',
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
                                 color: Colors.blue[900],
@@ -220,10 +265,12 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
                       ),
                     )
                   else
-                    ...allEntities.map((entity) => _buildLocationCard(entity)).toList(),
-                  
+                    ...allEntities
+                        .map((entity) => _buildLocationCard(entity))
+                        .toList(),
+
                   const SizedBox(height: 20),
-                  
+
                   // Default Location Info
                   if (allEntities.isNotEmpty)
                     Card(
@@ -235,7 +282,11 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
                         padding: const EdgeInsets.all(12),
                         child: Row(
                           children: [
-                            Icon(Icons.info, size: 16, color: Colors.green[700]),
+                            Icon(
+                              Icons.info,
+                              size: 16,
+                              color: Colors.green[700],
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -281,10 +332,7 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
             flex: 2,
             child: Text(
               label,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+              style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey[600]),
             ),
           ),
           Expanded(
@@ -308,25 +356,28 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
     // Extract data dari Map
     final String name = entity['name'] ?? '-';
     final String? address = entity['address'];
-    final double? latitude = entity['latitude'] != null 
-        ? (entity['latitude'] is int 
-            ? (entity['latitude'] as int).toDouble() 
-            : entity['latitude'] as double)
+    final double? latitude = entity['latitude'] != null
+        ? (entity['latitude'] is int
+              ? (entity['latitude'] as int).toDouble()
+              : entity['latitude'] as double)
         : null;
     final double? longitude = entity['longitude'] != null
-        ? (entity['longitude'] is int 
-            ? (entity['longitude'] as int).toDouble() 
-            : entity['longitude'] as double)
+        ? (entity['longitude'] is int
+              ? (entity['longitude'] as int).toDouble()
+              : entity['longitude'] as double)
         : null;
-    final bool isActive = entity['is_active'] ?? false;
+    final bool isActive = _isEntityActive(Map<String, dynamic>.from(entity));
+    final double radius = entity['radius'] != null
+        ? (entity['radius'] is int
+              ? (entity['radius'] as int).toDouble()
+              : (entity['radius'] as num).toDouble())
+        : 100.0;
 
     print('📊 Building card for: $name, isActive: $isActive');
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -381,7 +432,7 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: isActive 
+                    color: isActive
                         ? Colors.green.withOpacity(0.1)
                         : Colors.grey.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -399,7 +450,9 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
                         isActive ? 'Active' : 'Inactive',
                         style: GoogleFonts.poppins(
                           fontSize: 10,
-                          color: isActive ? Colors.green[700] : Colors.grey[600],
+                          color: isActive
+                              ? Colors.green[700]
+                              : Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -428,7 +481,7 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
                 Expanded(
                   child: _buildLocationDetail(
                     'Radius',
-                    '100 m',
+                    '${radius.toStringAsFixed(radius == radius.roundToDouble() ? 0 : 1)} m',
                   ),
                 ),
               ],
@@ -445,10 +498,7 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.poppins(
-            fontSize: 10,
-            color: Colors.grey[500],
-          ),
+          style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey[500]),
         ),
         const SizedBox(height: 2),
         Text(

@@ -23,10 +23,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadData() async {
-    final dashboardProvider =
-    Provider.of<DashboardProvider>(context, listen: false);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final dashboardProvider = Provider.of<DashboardProvider>(
+      context,
+      listen: false,
+    );
 
-    await dashboardProvider.fetchDashboardData();
+    await dashboardProvider.fetchDashboardData(
+      companyCode: authProvider.getCompanyCode(),
+    );
   }
 
   @override
@@ -94,10 +99,36 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
 
-          final data = dashboard.data;
-          if (data == null) {
-            return const Center(child: Text('No data available'));
-          }
+          final metrics = [
+            (
+              title: 'Total Employees',
+              value: dashboard.totalEmployees.toString(),
+              change: 'Active: ${dashboard.activeEmployees}',
+              trend: 'up',
+              icon: Icons.people,
+            ),
+            (
+              title: 'Attendance Today',
+              value: dashboard.attendanceToday.toString(),
+              change: 'Checked in today',
+              trend: dashboard.attendanceToday > 0 ? 'up' : 'neutral',
+              icon: Icons.check_circle,
+            ),
+            (
+              title: 'On Leave',
+              value: dashboard.onLeave.toString(),
+              change: 'Approved leaves today',
+              trend: dashboard.onLeave > 0 ? 'down' : 'neutral',
+              icon: Icons.event_note,
+            ),
+            (
+              title: 'New Hires',
+              value: dashboard.newHires.toString(),
+              change: 'This month',
+              trend: dashboard.newHires > 0 ? 'up' : 'neutral',
+              icon: Icons.trending_up,
+            ),
+          ];
 
           return RefreshIndicator(
             onRefresh: _loadData,
@@ -129,36 +160,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     childAspectRatio: 1.3,
-                    children: [
-                      MetricCard(
-                        title: data.metrics[0].title,
-                        value: data.metrics[0].value,
-                        change: data.metrics[0].change,
-                        trend: data.metrics[0].trend,
-                        icon: Icons.people,
-                      ),
-                      MetricCard(
-                        title: data.metrics[1].title,
-                        value: data.metrics[1].value,
-                        change: data.metrics[1].change,
-                        trend: data.metrics[1].trend,
-                        icon: Icons.person_add,
-                      ),
-                      MetricCard(
-                        title: data.metrics[2].title,
-                        value: data.metrics[2].value,
-                        change: data.metrics[2].change,
-                        trend: data.metrics[2].trend,
-                        icon: Icons.work,
-                      ),
-                      MetricCard(
-                        title: data.metrics[3].title,
-                        value: data.metrics[3].value,
-                        change: data.metrics[3].change,
-                        trend: data.metrics[3].trend,
-                        icon: Icons.trending_up,
-                      ),
-                    ],
+                    children: metrics
+                        .map(
+                          (metric) => MetricCard(
+                            title: metric.title,
+                            value: metric.value,
+                            change: metric.change,
+                            trend: metric.trend,
+                            icon: metric.icon,
+                          ),
+                        )
+                        .toList(growable: false),
                   ),
 
                   const SizedBox(height: 32),
@@ -181,11 +193,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: data.recentActivities.length,
+                      itemCount: dashboard.recentActivities.length,
                       separatorBuilder: (context, index) =>
                           const Divider(height: 1),
                       itemBuilder: (context, index) {
-                        final activity = data.recentActivities[index];
+                        final activity = dashboard.recentActivities[index];
+                        final createdAt =
+                            DateTime.tryParse(activity.createdAt) ??
+                            DateTime.now();
                         return ListTile(
                           leading: CircleAvatar(
                             backgroundColor: AppColors.primaryLight,
@@ -204,7 +219,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               children: [
                                 TextSpan(
-                                  text: ' ${activity.description}',
+                                  text: activity.positionName.isNotEmpty
+                                      ? ' joined as ${activity.positionName}'
+                                      : ' updated recently',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.normal,
                                   ),
@@ -213,9 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           subtitle: Text(
-                            DateFormat.yMMMd().add_jm().format(
-                              activity.createdAt,
-                            ),
+                            DateFormat.yMMMd().add_jm().format(createdAt),
                             style: const TextStyle(fontSize: 12),
                           ),
                         );
@@ -243,68 +258,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
-                        children: data.departmentStats.map((dept) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 16.0),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    dept.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 3,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Stack(
-                                        children: [
-                                          Container(
-                                            height: 8,
-                                            decoration: BoxDecoration(
-                                              color: AppColors.background,
-                                              borderRadius:
-                                                  BorderRadius.circular(4),
-                                            ),
-                                          ),
-                                          FractionallySizedBox(
-                                            widthFactor: (dept.employees / 100)
-                                                .clamp(0.0, 1.0),
-                                            child: Container(
-                                              height: 8,
-                                              decoration: BoxDecoration(
-                                                color: AppColors.primary,
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                SizedBox(
-                                  width: 40,
-                                  child: Text(
-                                    dept.employees.toString(),
-                                    textAlign: TextAlign.end,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
+                        children: [
+                          _buildDepartmentPlaceholderRow(
+                            label: 'Active Employees',
+                            value: dashboard.activeEmployees,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDepartmentPlaceholderRow(
+                            label: 'On Leave Today',
+                            value: dashboard.onLeave,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDepartmentPlaceholderRow(
+                            label: 'New Hires',
+                            value: dashboard.newHires,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -315,6 +284,58 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildDepartmentPlaceholderRow({
+    required String label,
+    required int value,
+  }) {
+    final normalized = (value / 100).clamp(0.0, 1.0);
+
+    return Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+        ),
+        Expanded(
+          flex: 3,
+          child: Stack(
+            children: [
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              FractionallySizedBox(
+                widthFactor: normalized,
+                child: Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        SizedBox(
+          width: 40,
+          child: Text(
+            value.toString(),
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -8,6 +8,9 @@ class SessionStorage {
   static const String companyCodeKey = 'company_code';
   static const String userDataKey = 'user_data';
   static const String companyAssignmentsKey = 'company_assignments';
+  static const String rememberMeKey = 'remember_me';
+  static const String rememberedEmailKey = 'remembered_email';
+  static const String rememberedPasswordKey = 'remembered_password';
   static const List<String> _legacyTokenKeys = <String>[
     'auth_token',
     'token',
@@ -20,13 +23,7 @@ class SessionStorage {
     'session_token',
   ];
 
-  static final FlutterSecureStorage _secureStorage = FlutterSecureStorage(
-    aOptions: _androidOptions,
-  );
-
-  static const AndroidOptions _androidOptions = AndroidOptions(
-    encryptedSharedPreferences: true,
-  );
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   static Future<void> saveToken(String token) async {
     await _secureStorage.write(key: tokenKey, value: token);
@@ -77,6 +74,42 @@ class SessionStorage {
   static Future<void> saveCompanyAssignments(String rawJson) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(companyAssignmentsKey, rawJson);
+  }
+
+  static Future<void> saveRememberedCredentials({
+    required String email,
+    required String password,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(rememberMeKey, true);
+    await prefs.setString(rememberedEmailKey, email);
+    await _secureStorage.write(key: rememberedPasswordKey, value: password);
+  }
+
+  static Future<Map<String, String?>> getRememberedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rememberMe = prefs.getBool(rememberMeKey) ?? false;
+
+    if (!rememberMe) {
+      return {'email': null, 'password': null};
+    }
+
+    final email = prefs.getString(rememberedEmailKey);
+    final password = await _secureStorage.read(key: rememberedPasswordKey);
+
+    return {'email': email, 'password': password};
+  }
+
+  static Future<bool> isRememberMeEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(rememberMeKey) ?? false;
+  }
+
+  static Future<void> clearRememberedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(rememberMeKey);
+    await prefs.remove(rememberedEmailKey);
+    await _secureStorage.delete(key: rememberedPasswordKey);
   }
 
   static Future<void> clearSession() async {

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/calendar_event_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/employee_provider.dart';
 import '../../providers/event_provider.dart';
 import 'add_edit_event_screen.dart';
@@ -19,10 +20,11 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final companyCode = context.read<AuthProvider>().getCompanyCode();
       context.read<EventProvider>().fetchManagedEvents();
-      if (context.read<EmployeeProvider>().employees.isEmpty) {
-        context.read<EmployeeProvider>().fetchAllEmployees();
-      }
+      context.read<EmployeeProvider>().fetchAllEmployees(
+        companyCode: companyCode,
+      );
     });
   }
 

@@ -3,12 +3,14 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/localization/app_strings.dart';
 import '../../models/calendar_event_model.dart';
+import '../../models/saas_models.dart';
 import '../../providers/claim_provider.dart';
 import '../../providers/event_provider.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/saas_provider.dart';
 import '../../data/models/notification_model.dart'; // TAMBAHKAN IMPORT INI
 import '../admin/claim_reports_screen.dart';
 import '../admin/event_management_screen.dart';
@@ -16,6 +18,7 @@ import '../attendance/clock_in_screen.dart';
 import '../employee/add_employee_screen.dart';
 import '../leave/leave_screen.dart';
 import '../notifications/notification_screen.dart';
+import '../saas/saas_workspace_screen.dart';
 
 // ================= DASHBOARD TAB =================
 class DashboardTab extends StatefulWidget {
@@ -73,10 +76,11 @@ class _DashboardTabState extends State<DashboardTab>
       final authProvider = context.read<AuthProvider>();
       final companyCode = authProvider.getCompanyCode();
 
-      print('🏢 Initializing Dashboard with company code: $companyCode');
-
       context.read<DashboardProvider>().fetchDashboardData(
         companyCode: companyCode,
+      );
+      context.read<SaasProvider>().loadWorkspace(
+        includeAdminOverview: authProvider.canAccessPlatformAdmin,
       );
       context.read<NotificationProvider>().fetchNotifications();
       context.read<EventProvider>().fetchUpcomingEvents();
@@ -97,13 +101,12 @@ class _DashboardTabState extends State<DashboardTab>
     final themeProvider = context.watch<ThemeProvider>();
     final notificationProvider = context.watch<NotificationProvider>();
     final eventProvider = context.watch<EventProvider>();
+    final saasProvider = context.watch<SaasProvider>();
     final isDark = themeProvider.isDarkMode;
 
     final firstName = (auth.user?.name ?? context.tr('profile_user_fallback'))
         .split(' ')
         .first;
-    final companyCode = auth.getCompanyCode();
-
     return Scaffold(
       backgroundColor: isDark
           ? const Color(0xFF0A0A0A)
@@ -120,19 +123,17 @@ class _DashboardTabState extends State<DashboardTab>
                   context.read<DashboardProvider>().fetchDashboardData(
                     companyCode: newCompanyCode,
                   ),
+                  context.read<SaasProvider>().loadWorkspace(
+                    includeAdminOverview: authProvider.canAccessPlatformAdmin,
+                    force: true,
+                  ),
                   context.read<NotificationProvider>().fetchNotifications(),
                   context.read<EventProvider>().fetchUpcomingEvents(),
                 ]);
               },
               child: CustomScrollView(
                 slivers: [
-                  _buildHeader(
-                    firstName,
-                    isDark,
-                    notificationProvider,
-                    companyCode,
-                    dashboard,
-                  ),
+                  _buildHeader(firstName, isDark, notificationProvider),
                   if (_showNotifications)
                     SliverToBoxAdapter(
                       child: AnimatedBuilder(
@@ -183,6 +184,18 @@ class _DashboardTabState extends State<DashboardTab>
                               firstName,
                               isDark,
                               dashboard,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: SlideTransition(
+                            position: _slideAnimation,
+                            child: _buildSaasSummarySection(
+                              isDark,
+                              auth,
+                              saasProvider,
                             ),
                           ),
                         ),
@@ -268,10 +281,6 @@ class _DashboardTabState extends State<DashboardTab>
 
   // MARK: - Stats Section
   Widget _buildStatsSection(DashboardProvider dashboard, bool isDark) {
-    print(
-      '📊 Building stats - Total: ${dashboard.totalEmployees}, Active: ${dashboard.activeEmployees}',
-    );
-
     final stats = [
       _StatItem(
         title: context.tr('dashboard_stat_total_employees'),
@@ -343,8 +352,6 @@ class _DashboardTabState extends State<DashboardTab>
     String firstName,
     bool isDark,
     NotificationProvider notificationProvider,
-    String? companyCode,
-    DashboardProvider dashboard,
   ) {
     return SliverAppBar(
       expandedHeight: 180,
@@ -460,30 +467,6 @@ class _DashboardTabState extends State<DashboardTab>
                               ],
                             ),
                           ),
-                          if (companyCode != null &&
-                              companyCode.isNotEmpty &&
-                              !isCompactHeader)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.1),
-                                ),
-                              ),
-                              child: Text(
-                                companyCode,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
                           SizedBox(width: isCompactHeader ? 4 : 8),
                           Stack(
                             clipBehavior: Clip.none,
@@ -569,26 +552,6 @@ class _DashboardTabState extends State<DashboardTab>
                           ],
                         ],
                       ),
-                      if (!isCompactHeader) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.people,
-                              size: 14,
-                              color: Colors.white70,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${context.tr('dashboard_stat_total_employees')}: ${dashboard.totalEmployees}',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -812,6 +775,132 @@ class _DashboardTabState extends State<DashboardTab>
     );
   }
 
+  Widget _buildSaasSummarySection(
+    bool isDark,
+    AuthProvider auth,
+    SaasProvider saasProvider,
+  ) {
+    final currentCompany = saasProvider.currentCompany ?? auth.selectedCompany;
+    final trialStatus = saasProvider.trialStatus;
+    final trialColor = _trialTone(trialStatus);
+
+    return _buildSectionCard(
+      title: context.tr('saas_workspace_title'),
+      isDark: isDark,
+      actionText: context.tr('saas_open_workspace'),
+      onActionTap: _openSaasWorkspace,
+      child: InkWell(
+        onTap: _openSaasWorkspace,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDark
+                  ? [const Color(0xFF0F172A), const Color(0xFF1D4ED8)]
+                  : [Colors.blue.shade50, Colors.indigo.shade50],
+            ),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(isDark ? 0.12 : 0.8),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.shield_outlined,
+                      color: isDark ? Colors.white : Colors.indigo,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          currentCompany?.companyName.isNotEmpty == true
+                              ? currentCompany!.companyName
+                              : context.tr('saas_company_not_selected'),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : Colors.grey.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          currentCompany?.cCode.isNotEmpty == true
+                              ? '${context.tr('saas_company_code')}: ${currentCompany!.cCode}'
+                              : context.tr('saas_workspace_subtitle'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? Colors.white70
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: trialColor.withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _trialLabel(trialStatus),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: trialColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _buildSaasMetricChip(
+                    icon: Icons.timelapse_outlined,
+                    label: context.tr('saas_days_remaining'),
+                    value: trialStatus?.daysRemaining?.toString() ?? '-',
+                    isDark: isDark,
+                  ),
+                  _buildSaasMetricChip(
+                    icon: Icons.business_outlined,
+                    label: context.tr('saas_accessible_companies'),
+                    value:
+                        '${saasProvider.companies.isNotEmpty ? saasProvider.companies.length : auth.companyAssignments.length}',
+                    isDark: isDark,
+                  ),
+                  _buildSaasMetricChip(
+                    icon: Icons.mark_email_unread_outlined,
+                    label: context.tr('saas_pending_invitations'),
+                    value: '${saasProvider.pendingInvitationsCount}',
+                    isDark: isDark,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // MARK: - Quick Actions Section
   Widget _buildQuickActionsSection(bool isDark, AuthProvider auth) {
     final actions = <_QuickAction>[
@@ -934,6 +1023,100 @@ class _DashboardTabState extends State<DashboardTab>
 
   Future<void> _pushScreen(Widget screen) async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  }
+
+  void _openSaasWorkspace() {
+    _pushScreen(const SaasWorkspaceScreen());
+  }
+
+  Widget _buildSaasMetricChip({
+    required IconData icon,
+    required String label,
+    required String value,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(isDark ? 0.1 : 0.75),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: isDark ? Colors.white70 : Colors.indigo),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isDark ? Colors.white60 : Colors.grey.shade600,
+                ),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : Colors.grey.shade900,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _trialTone(TrialStatus? trialStatus) {
+    if (trialStatus == null) {
+      return Colors.blueGrey;
+    }
+
+    if (trialStatus.isExpired) {
+      return Colors.red;
+    }
+
+    if (trialStatus.isInGracePeriod ||
+        (trialStatus.daysRemaining != null &&
+            trialStatus.daysRemaining! <= 3)) {
+      return Colors.orange;
+    }
+
+    if (trialStatus.isTrial) {
+      return Colors.blue;
+    }
+
+    return Colors.green;
+  }
+
+  String _trialLabel(TrialStatus? trialStatus) {
+    if (trialStatus == null) {
+      return context.tr('saas_trial_unavailable');
+    }
+
+    if (trialStatus.isExpired) {
+      return context.tr('saas_trial_expired');
+    }
+
+    if (trialStatus.isInGracePeriod) {
+      return context.tr('saas_grace_period');
+    }
+
+    if (trialStatus.isTrial) {
+      if (trialStatus.daysRemaining != null) {
+        return context
+            .tr('saas_trial_days')
+            .replaceAll('{count}', trialStatus.daysRemaining.toString());
+      }
+
+      return context.tr('saas_trial_active');
+    }
+
+    return context.tr('saas_active_plan');
   }
 
   void _showQuickActionGuide(List<_QuickAction> actions, bool isDark) {
@@ -1141,121 +1324,20 @@ class _DashboardTabState extends State<DashboardTab>
 
   // MARK: - Upcoming Section
   Widget _buildUpcomingSection(bool isDark, EventProvider eventProvider) {
-    final auth = context.read<AuthProvider>();
-    return _buildDynamicUpcomingSection(isDark, eventProvider, auth);
-    return _buildSectionCard(
-      title: 'Upcoming Events',
-      isDark: isDark,
-      actionText: 'Calendar',
-      onActionTap: () {},
-      child: Column(
-        children: [
-          _buildEventItem(
-            'Team Meeting',
-            '10:00 AM • Today',
-            Icons.group,
-            Colors.blue,
-            isDark,
-          ),
-          const SizedBox(height: 12),
-          _buildEventItem(
-            'Project Deadline',
-            'Tomorrow • 5:00 PM',
-            Icons.event,
-            Colors.red,
-            isDark,
-          ),
-          const SizedBox(height: 12),
-          _buildEventItem(
-            'Training Session',
-            'Wed • 2:00 PM',
-            Icons.school,
-            Colors.green,
-            isDark,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEventItem(
-    String title,
-    String time,
-    IconData icon,
-    Color color,
-    bool isDark,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 16),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.black87,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  time,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.white60 : Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.notifications_none, color: color, size: 18),
-          ),
-        ],
-      ),
-    );
+    return _buildDynamicUpcomingSection(isDark, eventProvider);
   }
 
   Widget _buildDynamicUpcomingSection(
     bool isDark,
     EventProvider eventProvider,
-    AuthProvider auth,
   ) {
     final events = eventProvider.upcomingEvents.take(3).toList(growable: false);
-    final canManageEvents = auth.hasAnyPermission([
-      'view-settings',
-      'edit-settings',
-      'create-settings',
-    ]);
 
     return _buildSectionCard(
       title: context.tr('dashboard_upcoming_events'),
       isDark: isDark,
-      actionText: canManageEvents ? context.tr('dashboard_manage') : null,
-      onActionTap: canManageEvents ? _openEventManagement : null,
+      actionText: context.tr('dashboard_manage'),
+      onActionTap: _openEventManagement,
       child: eventProvider.isLoading && events.isEmpty
           ? const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
@@ -1321,14 +1403,12 @@ class _DashboardTabState extends State<DashboardTab>
                     color: isDark ? Colors.white60 : Colors.grey.shade600,
                   ),
                 ),
-                if (canManageEvents) ...[
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    onPressed: _openEventManagement,
-                    icon: const Icon(Icons.add),
-                    label: Text(context.tr('dashboard_create_event')),
-                  ),
-                ],
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: _openEventManagement,
+                  icon: const Icon(Icons.add),
+                  label: Text(context.tr('dashboard_create_event')),
+                ),
               ],
             )
           : Column(
@@ -1418,18 +1498,6 @@ class _DashboardTabState extends State<DashboardTab>
   }
 
   void _openEventManagement() {
-    final authProvider = context.read<AuthProvider>();
-    if (!authProvider.hasAnyPermission([
-      'view-settings',
-      'edit-settings',
-      'create-settings',
-    ])) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('dashboard_no_event_access'))),
-      );
-      return;
-    }
-
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const EventManagementScreen()),

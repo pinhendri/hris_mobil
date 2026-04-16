@@ -118,7 +118,11 @@ class EmployeeProvider with ChangeNotifier {
   }
 
   // Fetch all employees tanpa pagination (untuk dropdown admin dll)
-  Future<void> fetchAllEmployees({String? search, String? department}) async {
+  Future<void> fetchAllEmployees({
+    String? search,
+    String? department,
+    String? companyCode,
+  }) async {
     _isLoading = true;
     _error = null;
     _isUsingCachedData = false;
@@ -127,13 +131,20 @@ class EmployeeProvider with ChangeNotifier {
     try {
       var url = '/employees/list';
       final queryParams = <String>[];
+      final normalizedCompanyCode = companyCode?.trim() ?? '';
 
       if (search != null && search.isNotEmpty) {
-        queryParams.add('search=$search');
+        queryParams.add('search=${Uri.encodeQueryComponent(search)}');
       }
 
       if (department != null && department.isNotEmpty) {
-        queryParams.add('department=$department');
+        queryParams.add('department=${Uri.encodeQueryComponent(department)}');
+      }
+
+      if (normalizedCompanyCode.isNotEmpty) {
+        queryParams.add(
+          'c_code=${Uri.encodeQueryComponent(normalizedCompanyCode)}',
+        );
       }
 
       if (queryParams.isNotEmpty) {
@@ -157,7 +168,11 @@ class EmployeeProvider with ChangeNotifier {
 
         _error = null;
         await _saveEmployeeCache(
-          _allCacheKey(search: search, department: department),
+          _allCacheKey(
+            search: search,
+            department: department,
+            companyCode: normalizedCompanyCode,
+          ),
           _employees,
           currentPage: 1,
           lastPage: 1,
@@ -172,7 +187,11 @@ class EmployeeProvider with ChangeNotifier {
     } catch (e) {
       print('Error fetching all employees: $e');
       final loadedFromCache = await _loadEmployeeCache(
-        _allCacheKey(search: search, department: department),
+        _allCacheKey(
+          search: search,
+          department: department,
+          companyCode: companyCode,
+        ),
       );
       if (!loadedFromCache) {
         _error = e.toString();
@@ -568,8 +587,9 @@ class EmployeeProvider with ChangeNotifier {
 
       if (response['success'] == true) {
         final data = _extractSingleEmployeePayload(response);
-        _selectedEmployee =
-            data != null ? Employee.fromJson(data) : updatedEmployee;
+        _selectedEmployee = data != null
+            ? Employee.fromJson(data)
+            : updatedEmployee;
         await fetchEmployees();
         _error = null;
         return true;
@@ -707,8 +727,12 @@ class EmployeeProvider with ChangeNotifier {
     return 'employees::list::${search ?? ''}::${department ?? ''}::$page::$perPage';
   }
 
-  String _allCacheKey({String? search, String? department}) {
-    return 'employees::all::${search ?? ''}::${department ?? ''}';
+  String _allCacheKey({
+    String? search,
+    String? department,
+    String? companyCode,
+  }) {
+    return 'employees::all::${companyCode?.trim() ?? ''}::${search ?? ''}::${department ?? ''}';
   }
 
   String _detailCacheKey(String uuid) => 'employees::detail::$uuid';

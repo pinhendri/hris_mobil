@@ -113,9 +113,56 @@ class AuthProvider with ChangeNotifier {
         companyName: '',
       );
       _companyCode = userData['selected_c_code']; // <-- SIMPAN COMPANY CODE
+      await SessionStorage.saveCompanyCode(_companyCode!.toString());
     }
 
     notifyListeners();
+  }
+
+  Future<void> _syncSelectedCompanyContextSilently() async {
+    final selectedCompany = _selectedCompany;
+    if (selectedCompany == null ||
+        selectedCompany.id <= 0 ||
+        selectedCompany.cCode.trim().isEmpty) {
+      return;
+    }
+
+    final token = await SessionStorage.getToken();
+    if (token.isEmpty) {
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse(
+          ApiConstants.baseUrl + ApiConstants.setSelectedCompanyEndpoint,
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'company_id': selectedCompany.id,
+          'c_code': selectedCompany.cCode,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        _companyCode = selectedCompany.cCode;
+        await SessionStorage.saveCompanyCode(selectedCompany.cCode);
+      } else {
+        print(
+          '⚠️ Silent company sync failed (${response.statusCode}): ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('❌ Silent company sync error: $e');
+    }
+  }
+
+  Future<void> syncSelectedCompanyContext() async {
+    await _syncSelectedCompanyContextSilently();
   }
 
   // ===== LOGIN =====
@@ -181,10 +228,22 @@ class AuthProvider with ChangeNotifier {
           print('✅ Company code saved: $companyCode');
         }
 
-        // Jika hanya ada 1 company, langsung set sebagai selected
-        if (_companyAssignments.length == 1) {
+        if (companyCode != null && companyCode.isNotEmpty) {
+          try {
+            _selectedCompany = _companyAssignments.firstWhere(
+              (company) => company.cCode == companyCode,
+            );
+          } catch (_) {
+            if (_companyAssignments.length == 1) {
+              _selectedCompany = _companyAssignments.first;
+            }
+          }
+        } else if (_companyAssignments.length == 1) {
+          // Jika hanya ada 1 company, langsung set sebagai selected
           _selectedCompany = _companyAssignments.first;
         }
+
+        await _syncSelectedCompanyContextSilently();
 
         _isAuthenticated = true;
         _isLoading = false;
@@ -556,6 +615,8 @@ class AuthProvider with ChangeNotifier {
         }
       }
 
+      await _syncSelectedCompanyContextSilently();
+
       // Coba ambil user info dari server untuk update
       final result = await getUserInfo();
       final statusCode = result['status_code'] as int?;
@@ -684,6 +745,15 @@ class AuthProvider with ChangeNotifier {
 
   bool get canAccessAdminPanel {
     return hasAnyPermission(_adminPermissions) || hasAnyRole(_adminRoles);
+  }
+
+  bool get canAccessPlatformAdmin {
+    return hasAnyRole([
+      'super-admin',
+      'superadmin',
+      'platform-admin',
+      'platform_admin',
+    ]);
   }
 
   bool get canAccessEmployeeModule {

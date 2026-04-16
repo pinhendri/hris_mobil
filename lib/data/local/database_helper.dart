@@ -25,7 +25,7 @@ class DatabaseHelper {
     final path = join(dir.path, 'hris_mobile.db');
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await _createNotificationsTable(db);
         await _createOfflineQueueTable(db);
@@ -40,17 +40,23 @@ class DatabaseHelper {
         if (oldVersion < 3) {
           await _createAppCacheTable(db);
         }
+        if (oldVersion < 4) {
+          await _ensureOfflineQueueSchema(db);
+          await _ensureAttendanceDraftsSchema(db);
+        }
       },
       onOpen: (db) async {
         await _createNotificationsTable(db);
         await _createOfflineQueueTable(db);
         await _createAttendanceDraftsTable(db);
         await _createAppCacheTable(db);
+        await _ensureOfflineQueueSchema(db);
+        await _ensureAttendanceDraftsSchema(db);
       },
     );
   }
 
-  Future<void> _createNotificationsTable(Database db) async {
+  Future<void> _createNotificationsTable(DatabaseExecutor db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS $_notificationsTable(
         id TEXT PRIMARY KEY,
@@ -63,7 +69,7 @@ class DatabaseHelper {
     ''');
   }
 
-  Future<void> _createOfflineQueueTable(Database db) async {
+  Future<void> _createOfflineQueueTable(DatabaseExecutor db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS $_offlineQueueTable(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,6 +79,7 @@ class DatabaseHelper {
         method TEXT NOT NULL,
         payload TEXT NOT NULL,
         employee_uuid TEXT,
+        c_code TEXT,
         date TEXT,
         created_at INTEGER NOT NULL,
         retry_count INTEGER NOT NULL DEFAULT 0,
@@ -81,11 +88,12 @@ class DatabaseHelper {
     ''');
   }
 
-  Future<void> _createAttendanceDraftsTable(Database db) async {
+  Future<void> _createAttendanceDraftsTable(DatabaseExecutor db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS $_attendanceDraftsTable(
         employee_uuid TEXT NOT NULL,
         date TEXT NOT NULL,
+        c_code TEXT NOT NULL DEFAULT '',
         clock_in TEXT,
         clock_out TEXT,
         clock_in_photo TEXT,
@@ -94,12 +102,12 @@ class DatabaseHelper {
         clock_out_location TEXT,
         sync_status TEXT NOT NULL DEFAULT 'pending',
         updated_at INTEGER NOT NULL,
-        PRIMARY KEY (employee_uuid, date)
+        PRIMARY KEY (employee_uuid, date, c_code)
       )
     ''');
   }
 
-  Future<void> _createAppCacheTable(Database db) async {
+  Future<void> _createAppCacheTable(DatabaseExecutor db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS $_appCacheTable(
         cache_key TEXT PRIMARY KEY,
@@ -107,6 +115,138 @@ class DatabaseHelper {
         updated_at INTEGER NOT NULL
       )
     ''');
+  }
+
+  Future<void> _ensureOfflineQueueSchema(Database db) async {
+    final columns = await _tableColumns(db, _offlineQueueTable);
+    if (columns.isEmpty) {
+      await _createOfflineQueueTable(db);
+      return;
+    }
+
+    if (!columns.contains('c_code')) {
+      await db.execute(
+        'ALTER TABLE $_offlineQueueTable ADD COLUMN c_code TEXT',
+      );
+    }
+  }
+
+  Future<void> _ensureAttendanceDraftsSchema(Database db) async {
+    final columns = await _tableColumns(db, _attendanceDraftsTable);
+    if (columns.isEmpty) {
+      await _createAttendanceDraftsTable(db);
+      return;
+    }
+
+    final primaryKeyColumns = await _tablePrimaryKeyColumns(
+      db,
+      _attendanceDraftsTable,
+    );
+    final requiresMigration =
+        !columns.contains('c_code') ||
+        primaryKeyColumns.length != 3 ||
+        primaryKeyColumns[0] != 'employee_uuid' ||
+        primaryKeyColumns[1] != 'date' ||
+        primaryKeyColumns[2] != 'c_code';
+
+    if (!requiresMigration) {
+      return;
+    }
+
+    const legacyTable = 'attendance_drafts_legacy';
+    final legacyHasCompanyCode = columns.contains('c_code');
+
+    await db.transaction((txn) async {
+      await txn.execute('DROP TABLE IF EXISTS $legacyTable');
+      await txn.execute(
+        'ALTER TABLE $_attendanceDraftsTable RENAME TO $legacyTable',
+      );
+      await _createAttendanceDraftsTable(txn);
+
+      final selectCompanyCode = legacyHasCompanyCode
+          ? "COALESCE(c_code, '')"
+          : "''";
+
+      await txn.execute('''
+        INSERT OR REPLACE INTO $_attendanceDraftsTable (
+          employee_uuid,
+          date,
+          c_code,
+          clock_in,
+          clock_out,
+          clock_in_photo,
+          clock_out_photo,
+          clock_in_location,
+          clock_out_location,
+          sync_status,
+          updated_at
+        )
+        SELECT
+          employee_uuid,
+          date,
+          $selectCompanyCode,
+          clock_in,
+          clock_out,
+          clock_in_photo,
+          clock_out_photo,
+          clock_in_location,
+          clock_out_location,
+          sync_status,
+          updated_at
+        FROM $legacyTable
+      ''');
+
+      await txn.execute('DROP TABLE IF EXISTS $legacyTable');
+    });
+  }
+
+  Future<Set<String>> _tableColumns(
+    DatabaseExecutor db,
+    String tableName,
+  ) async {
+    if (!await _tableExists(db, tableName)) {
+      return <String>{};
+    }
+
+    final rows = await db.rawQuery('PRAGMA table_info($tableName)');
+    return rows
+        .map((row) => row['name']?.toString() ?? '')
+        .where((name) => name.isNotEmpty)
+        .toSet();
+  }
+
+  Future<List<String>> _tablePrimaryKeyColumns(
+    DatabaseExecutor db,
+    String tableName,
+  ) async {
+    if (!await _tableExists(db, tableName)) {
+      return const <String>[];
+    }
+
+    final rows = await db.rawQuery('PRAGMA table_info($tableName)');
+    final primaryKeyRows = rows
+        .map((row) => Map<String, Object?>.from(row))
+        .toList();
+    primaryKeyRows.sort(
+      (a, b) => ((a['pk'] as int?) ?? 0).compareTo(((b['pk'] as int?) ?? 0)),
+    );
+
+    return primaryKeyRows
+        .where((row) => ((row['pk'] as int?) ?? 0) > 0)
+        .map((row) => row['name']?.toString() ?? '')
+        .where((name) => name.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<bool> _tableExists(DatabaseExecutor db, String tableName) async {
+    final rows = await db.query(
+      'sqlite_master',
+      columns: ['name'],
+      where: 'type = ? AND name = ?',
+      whereArgs: ['table', tableName],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
   }
 
   Future<List<Map<String, dynamic>>> getNotifications() async {
@@ -151,6 +291,7 @@ class DatabaseHelper {
   Future<List<Map<String, dynamic>>> getOfflineQueueItems({
     String? feature,
     String? employeeUuid,
+    String? companyCode,
   }) async {
     final db = await database;
     final whereClauses = <String>[];
@@ -164,6 +305,11 @@ class DatabaseHelper {
     if (employeeUuid != null) {
       whereClauses.add('employee_uuid = ?');
       whereArgs.add(employeeUuid);
+    }
+
+    if (companyCode != null) {
+      whereClauses.add('c_code = ?');
+      whereArgs.add(companyCode);
     }
 
     return db.query(
@@ -177,6 +323,7 @@ class DatabaseHelper {
   Future<int> countOfflineQueueItems({
     String? feature,
     String? employeeUuid,
+    String? companyCode,
   }) async {
     final db = await database;
     final whereClauses = <String>[];
@@ -190,6 +337,11 @@ class DatabaseHelper {
     if (employeeUuid != null) {
       whereClauses.add('employee_uuid = ?');
       whereArgs.add(employeeUuid);
+    }
+
+    if (companyCode != null) {
+      whereClauses.add('c_code = ?');
+      whereArgs.add(companyCode);
     }
 
     final whereSql = whereClauses.isNotEmpty
@@ -225,12 +377,13 @@ class DatabaseHelper {
   Future<Map<String, dynamic>?> getAttendanceDraft(
     String employeeUuid,
     String date,
+    String companyCode,
   ) async {
     final db = await database;
     final result = await db.query(
       _attendanceDraftsTable,
-      where: 'employee_uuid = ? AND date = ?',
-      whereArgs: [employeeUuid, date],
+      where: 'employee_uuid = ? AND date = ? AND c_code = ?',
+      whereArgs: [employeeUuid, date, companyCode],
       limit: 1,
     );
 
@@ -243,22 +396,40 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getAttendanceDrafts({
     String? employeeUuid,
+    String? companyCode,
   }) async {
     final db = await database;
+    final whereClauses = <String>[];
+    final whereArgs = <Object?>[];
+
+    if (employeeUuid != null) {
+      whereClauses.add('employee_uuid = ?');
+      whereArgs.add(employeeUuid);
+    }
+
+    if (companyCode != null) {
+      whereClauses.add('c_code = ?');
+      whereArgs.add(companyCode);
+    }
+
     return db.query(
       _attendanceDraftsTable,
-      where: employeeUuid != null ? 'employee_uuid = ?' : null,
-      whereArgs: employeeUuid != null ? [employeeUuid] : null,
+      where: whereClauses.isNotEmpty ? whereClauses.join(' AND ') : null,
+      whereArgs: whereArgs.isNotEmpty ? whereArgs : null,
       orderBy: 'date DESC, updated_at DESC',
     );
   }
 
-  Future<void> deleteAttendanceDraft(String employeeUuid, String date) async {
+  Future<void> deleteAttendanceDraft(
+    String employeeUuid,
+    String date,
+    String companyCode,
+  ) async {
     final db = await database;
     await db.delete(
       _attendanceDraftsTable,
-      where: 'employee_uuid = ? AND date = ?',
-      whereArgs: [employeeUuid, date],
+      where: 'employee_uuid = ? AND date = ? AND c_code = ?',
+      whereArgs: [employeeUuid, date, companyCode],
     );
   }
 

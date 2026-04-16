@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -20,7 +22,16 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String? _employeeUuid;
+  String _currentCompanyCode = '';
   bool _isInitialized = false; // Flag untuk menandai sudah diinisialisasi
+  bool _isTodayTabLoading = false;
+  bool _isHistoryTabLoading = false;
+  bool _isHistoryLoadingMore = false;
+  int _todayLoadSequence = 0;
+  int _historyLoadSequence = 0;
+  int _initialLoadSequence = 0;
+  String? _todayError;
+  String? _historyError;
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -38,13 +49,29 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   }
 
   void _handleScroll() {
+    if (!_scrollController.hasClients || _tabController.index != 1) {
+      return;
+    }
+
+    if (_isHistoryTabLoading || _isHistoryLoadingMore) {
+      return;
+    }
+
+    final position = _scrollController.position;
+    if (position.maxScrollExtent <= 0) {
+      return;
+    }
+
+    final provider = Provider.of<AttendanceProvider>(context, listen: false);
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
-      final provider = Provider.of<AttendanceProvider>(context, listen: false);
-      if (_tabController.index == 1 &&
-          !provider.isLoading &&
-          provider.currentPage < provider.lastPage) {
-        provider.loadNextPage();
+      if (provider.currentPage < provider.lastPage) {
+        unawaited(
+          _loadHistoryData(
+            attendanceProvider: provider,
+            loadNextPage: true,
+          ),
+        );
       }
     }
   }
@@ -61,9 +88,12 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final authProvider = Provider.of<AuthProvider>(context);
+    final activeCompanyCode = authProvider.getCompanyCode().trim();
 
-    // Hanya load data sekali
-    if (!_isInitialized) {
+    // Load ulang saat company aktif berubah
+    if (!_isInitialized || _currentCompanyCode != activeCompanyCode) {
+      _currentCompanyCode = activeCompanyCode;
       _loadInitialData();
       _isInitialized = true;
     }
@@ -72,6 +102,8 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   Future<void> _loadInitialData() async {
     if (!mounted) return;
 
+    final loadSequence = ++_initialLoadSequence;
+
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final attendanceProvider = Provider.of<AttendanceProvider>(
@@ -79,33 +111,148 @@ class _AttendanceScreenState extends State<AttendanceScreen>
         listen: false,
       );
 
-      // Set employee UUID
-      _employeeUuid =
-          authProvider.user?.employeeUuid ?? authProvider.user?.uuid;
+      attendanceProvider.clearError();
+      if (mounted) {
+        setState(() {
+          _todayError = null;
+          _historyError = null;
+          _isTodayTabLoading = true;
+          if (attendanceProvider.attendances.isEmpty) {
+            _isHistoryTabLoading = true;
+          }
+        });
+      }
 
-      if (_employeeUuid != null) {
-        // Cek apakah data sudah ada sebelumnya
-        if (attendanceProvider.attendances.isEmpty &&
-            attendanceProvider.todayAttendance == null) {
-          // Load data secara parallel hanya jika belum ada data
-          await Future.wait([
-            attendanceProvider.fetchAttendances(),
-            attendanceProvider.getAttendanceSummary(),
-          ]);
+      await attendanceProvider.ensureReady();
+      if (!mounted || loadSequence != _initialLoadSequence) {
+        return;
+      }
+
+      _employeeUuid = await attendanceProvider.resolveCurrentEmployeeUuid();
+      if (!mounted || loadSequence != _initialLoadSequence) {
+        return;
+      }
+
+      _currentCompanyCode = authProvider.getCompanyCode().trim();
+
+      if (_employeeUuid != null && _employeeUuid!.isNotEmpty) {
+        await _loadTodayData(attendanceProvider);
+        if (mounted && loadSequence == _initialLoadSequence) {
+          unawaited(_loadHistoryData(attendanceProvider: attendanceProvider));
         }
       } else {
         print('Employee UUID not found');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Data karyawan tidak ditemukan'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+        if (mounted && loadSequence == _initialLoadSequence) {
+          setState(() {
+            _isTodayTabLoading = false;
+            _isHistoryTabLoading = false;
+          });
         }
       }
     } catch (e) {
       print('Error loading initial data: $e');
+      if (mounted && loadSequence == _initialLoadSequence) {
+        setState(() {
+          _todayError = 'Gagal memuat data attendance.';
+          _historyError = 'Gagal memuat data attendance.';
+          _isTodayTabLoading = false;
+          _isHistoryTabLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadTodayData(AttendanceProvider attendanceProvider) async {
+    final loadSequence = ++_todayLoadSequence;
+
+    if (mounted) {
+      setState(() {
+        _isTodayTabLoading = true;
+        _todayError = null;
+      });
+    }
+
+    try {
+      await Future.wait([
+        attendanceProvider.fetchTodayAttendance(),
+        attendanceProvider.getAttendanceSummary(),
+      ]);
+    } catch (e) {
+      if (mounted && loadSequence == _todayLoadSequence) {
+        setState(() {
+          _todayError = 'Gagal memuat status attendance hari ini.';
+        });
+      }
+    } finally {
+      if (mounted && loadSequence == _todayLoadSequence) {
+        setState(() {
+          _isTodayTabLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadHistoryData({
+    required AttendanceProvider attendanceProvider,
+    bool loadNextPage = false,
+  }) async {
+    if (loadNextPage) {
+      if (_isHistoryTabLoading ||
+          _isHistoryLoadingMore ||
+          attendanceProvider.currentPage >= attendanceProvider.lastPage) {
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _isHistoryLoadingMore = true;
+        });
+      }
+
+      try {
+        await attendanceProvider.loadNextPage();
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isHistoryLoadingMore = false;
+          });
+        }
+      }
+      return;
+    }
+
+    final loadSequence = ++_historyLoadSequence;
+
+    if (mounted) {
+      setState(() {
+        _isHistoryTabLoading = true;
+        _historyError = null;
+      });
+    }
+
+    try {
+      attendanceProvider.clearError();
+      await attendanceProvider.fetchAttendances();
+      final resolvedError = attendanceProvider.attendances.isEmpty
+          ? attendanceProvider.error
+          : null;
+      if (mounted && loadSequence == _historyLoadSequence) {
+        setState(() {
+          _historyError = resolvedError;
+        });
+      }
+    } catch (e) {
+      if (mounted && loadSequence == _historyLoadSequence) {
+        setState(() {
+          _historyError = 'Gagal memuat riwayat attendance.';
+        });
+      }
+    } finally {
+      if (mounted && loadSequence == _historyLoadSequence) {
+        setState(() {
+          _isHistoryTabLoading = false;
+        });
+      }
     }
   }
 
@@ -113,12 +260,15 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final attendanceProvider = Provider.of<AttendanceProvider>(context);
-    final authProvider = Provider.of<AuthProvider>(context);
     final isDark = themeProvider.isDarkMode;
+    final hasEmployeeId = _employeeUuid?.isNotEmpty ?? false;
 
     final todayAttendance = attendanceProvider.todayAttendance;
-    final canClockIn = todayAttendance == null || !todayAttendance.hasClockIn;
+    final canClockIn =
+        hasEmployeeId &&
+        (todayAttendance == null || !todayAttendance.hasClockIn);
     final canClockOut =
+        hasEmployeeId &&
         todayAttendance != null &&
         todayAttendance.hasClockIn &&
         !todayAttendance.hasClockOut;
@@ -153,7 +303,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
             context,
             isDark,
             attendanceProvider,
-            authProvider,
+            hasEmployeeId,
             canClockIn,
             canClockOut,
           ),
@@ -170,16 +320,17 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     BuildContext context,
     bool isDark,
     AttendanceProvider provider,
-    AuthProvider authProvider,
+    bool hasEmployeeId,
     bool canClockIn,
     bool canClockOut,
   ) {
-    // Loading state hanya jika benar-benar loading dan data kosong
-    if (provider.isLoading && provider.todayAttendance == null) {
+    if (_isTodayTabLoading && provider.todayAttendance == null) {
       return const LoadingWidget(message: 'Loading attendance data...');
     }
 
-    if (provider.error != null) {
+    if (!_isTodayTabLoading &&
+        _todayError != null &&
+        provider.todayAttendance == null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -198,7 +349,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                provider.error!,
+                _todayError!,
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   color: Colors.red.shade400,
@@ -208,6 +359,10 @@ class _AttendanceScreenState extends State<AttendanceScreen>
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: () {
+                  setState(() {
+                    _todayError = null;
+                    _historyError = null;
+                  });
                   provider.clearError();
                   _loadInitialData();
                 },
@@ -356,13 +511,14 @@ class _AttendanceScreenState extends State<AttendanceScreen>
           const SizedBox(height: 24),
 
           // Action Buttons
-          if (canClockIn)
-            _buildClockInButton(context, isDark, provider, authProvider),
+          if (!hasEmployeeId) _buildMissingEmployeeCard(isDark),
 
-          if (canClockOut)
-            _buildClockOutButton(context, isDark, provider, authProvider),
+          if (canClockIn) _buildClockInButton(context, provider),
 
-          if (!canClockIn && !canClockOut) _buildCompletedCard(isDark),
+          if (canClockOut) _buildClockOutButton(context, provider),
+
+          if (hasEmployeeId && !canClockIn && !canClockOut)
+            _buildCompletedCard(isDark, todayAttendance),
 
           const SizedBox(height: 24),
 
@@ -408,17 +564,13 @@ class _AttendanceScreenState extends State<AttendanceScreen>
 
   Widget _buildClockInButton(
     BuildContext context,
-    bool isDark,
     AttendanceProvider provider,
-    AuthProvider authProvider,
   ) {
     return Container(
       width: double.infinity,
       height: 56,
       child: ElevatedButton.icon(
-        onPressed: provider.isClockingIn
-            ? null
-            : () => _handleClockIn(context, provider, authProvider),
+        onPressed: provider.isClockingIn ? null : () => _handleClockIn(context),
         icon: provider.isClockingIn
             ? const SizedBox(
                 width: 20,
@@ -445,11 +597,48 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     );
   }
 
+  Widget _buildMissingEmployeeCard(bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0x33F59E0B) : const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.badge_outlined, color: Color(0xFFF59E0B)),
+              const SizedBox(width: 10),
+              Text(
+                'Employee ID Belum Tersedia',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Clock in dan clock out tidak bisa dilakukan sampai akun ini memiliki employee ID.',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: isDark ? Colors.white70 : Colors.grey.shade700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildClockOutButton(
     BuildContext context,
-    bool isDark,
     AttendanceProvider provider,
-    AuthProvider authProvider,
   ) {
     return Container(
       width: double.infinity,
@@ -457,7 +646,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
       child: ElevatedButton.icon(
         onPressed: provider.isClockingOut
             ? null
-            : () => _handleClockOut(context, provider, authProvider),
+            : () => _handleClockOut(context),
         icon: provider.isClockingOut
             ? const SizedBox(
                 width: 20,
@@ -484,7 +673,15 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     );
   }
 
-  Widget _buildCompletedCard(bool isDark) {
+  Widget _buildCompletedCard(bool isDark, Attendance? attendance) {
+    final hasClockIn = attendance?.hasClockIn == true;
+    final hasClockOut = attendance?.hasClockOut == true;
+    final detailText = hasClockIn && hasClockOut
+        ? 'Clock In ${attendance!.clockInTimeFormatted} • Clock Out ${attendance.clockOutTimeFormatted}'
+        : hasClockIn
+        ? 'Clock In ${attendance!.clockInTimeFormatted}'
+        : 'You have completed your attendance for today';
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -522,7 +719,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'You have completed your attendance for today',
+                  detailText,
                   style: GoogleFonts.poppins(
                     fontSize: 12,
                     color: isDark ? Colors.white60 : Colors.grey.shade600,
@@ -590,12 +787,57 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     bool isDark,
     AttendanceProvider provider,
   ) {
-    // Loading state hanya jika benar-benar loading dan data kosong
-    if (provider.isLoading && provider.attendances.isEmpty) {
+    if (_isHistoryTabLoading && provider.attendances.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (provider.attendances.isEmpty && !provider.isLoading) {
+    if (!_isHistoryTabLoading &&
+        _historyError != null &&
+        provider.attendances.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.history_toggle_off, size: 56, color: Colors.red[300]),
+              const SizedBox(height: 14),
+              Text(
+                'Riwayat attendance belum berhasil dimuat',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _historyError!,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: isDark ? Colors.white70 : Colors.grey.shade700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 18),
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _historyError = null;
+                  });
+                  _loadHistoryData(attendanceProvider: provider);
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Muat Ulang History'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (provider.attendances.isEmpty && !_isHistoryTabLoading) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -627,34 +869,24 @@ class _AttendanceScreenState extends State<AttendanceScreen>
       );
     }
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: (ScrollNotification scrollInfo) {
-        if (!provider.isLoading &&
-            provider.currentPage < provider.lastPage &&
-            scrollInfo.metrics.pixels >=
-                scrollInfo.metrics.maxScrollExtent * 0.8) {
-          provider.loadNextPage();
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(16),
+      itemCount:
+          provider.attendances.length + (_isHistoryLoadingMore ? 1 : 0),
+      cacheExtent: 500,
+      itemBuilder: (context, index) {
+        if (index == provider.attendances.length) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          );
         }
-        return true;
+        final attendance = provider.attendances[index];
+        return _buildHistoryItem(attendance, isDark);
       },
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        itemCount: provider.attendances.length + (provider.isLoading ? 1 : 0),
-        cacheExtent: 500,
-        itemBuilder: (context, index) {
-          if (index == provider.attendances.length) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
-          final attendance = provider.attendances[index];
-          return _buildHistoryItem(attendance, isDark);
-        },
-      ),
     );
   }
 
@@ -885,58 +1117,42 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   }
 
   // MARK: - Handlers
-  Future<void> _handleClockIn(
-    BuildContext context,
-    AttendanceProvider provider,
-    AuthProvider authProvider,
-  ) async {
-    if (_employeeUuid == null) {
+  Future<void> _handleClockIn(BuildContext context) async {
+    if (_employeeUuid == null || _employeeUuid!.isEmpty) {
       _showErrorSnackBar('Data karyawan tidak ditemukan');
       return;
     }
 
-    final result = await Navigator.push(
+    final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (context) => const ClockInScreen()),
     );
 
     if (result == true && mounted) {
-      await provider.refreshData();
+      final provider = Provider.of<AttendanceProvider>(context, listen: false);
+      await _loadTodayData(provider);
+      unawaited(_loadHistoryData(attendanceProvider: provider));
     }
   }
 
-  Future<void> _handleClockOut(
-    BuildContext context,
-    AttendanceProvider provider,
-    AuthProvider authProvider,
-  ) async {
-    if (_employeeUuid == null) {
+  Future<void> _handleClockOut(BuildContext context) async {
+    if (_employeeUuid == null || _employeeUuid!.isEmpty) {
       _showErrorSnackBar('Data karyawan tidak ditemukan');
       return;
     }
 
-    final success = await provider.clockOut(employeeUuid: _employeeUuid!);
-
-    if (success && mounted) {
-      await provider.refreshData();
-      _showSuccessSnackBar(
-        provider.lastActionMessage ?? 'Clock out berhasil',
-        isQueued: provider.lastActionQueued,
-      );
-    } else if (mounted && provider.error != null) {
-      _showErrorSnackBar(provider.error!);
-    }
-  }
-
-  void _showSuccessSnackBar(String message, {bool isQueued = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isQueued ? Colors.orange : Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ClockInScreen(isClockOut: true),
       ),
     );
+
+    if (result == true && mounted) {
+      final provider = Provider.of<AttendanceProvider>(context, listen: false);
+      await _loadTodayData(provider);
+      unawaited(_loadHistoryData(attendanceProvider: provider));
+    }
   }
 
   void _showErrorSnackBar(String message) {

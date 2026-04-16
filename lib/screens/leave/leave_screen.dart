@@ -302,12 +302,15 @@ class _LeaveScreenState extends State<LeaveScreen>
       itemBuilder: (context, index) {
         final request = requests[index];
 
-        final bool isMyRequest = request.uuid == currentUser.uuid;
+        final bool isMyRequest =
+            request.uuid == (currentUser.employeeUuid ?? currentUser.uuid);
         final bool isImmediateSupervisor =
             currentUser.uuid == request.immediateSupervisor;
 
         final bool showApproveRejectButtons =
-            request.status.toLowerCase() == 'pending' && !isMyRequest;
+            request.status.toLowerCase() == 'pending' &&
+            !isMyRequest &&
+            !request.isCompanyLeave;
 
         return Card(
           margin: const EdgeInsets.only(bottom: 16),
@@ -370,6 +373,26 @@ class _LeaveScreenState extends State<LeaveScreen>
                                     color: Colors.grey[600],
                                   ),
                                 ),
+                                if (request.isCompanyLeave)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'Company Leave',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.blue,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
                                 if (isMyRequest)
                                   Container(
                                     margin: const EdgeInsets.only(top: 4),
@@ -469,7 +492,11 @@ class _LeaveScreenState extends State<LeaveScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        request.reason.isNotEmpty ? request.reason : '-',
+                        request.reason.isNotEmpty
+                            ? request.reason
+                            : (request.isCompanyLeave
+                                  ? 'Company leave assigned by HR/Admin.'
+                                  : '-'),
                         style: const TextStyle(fontSize: 14),
                       ),
                     ],

@@ -2,11 +2,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart' show Distance, LatLng;
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
@@ -14,9 +15,97 @@ import '../../core/constants/api_constants.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../data/models/attendance_location.dart';
+import '../../services/session_storage.dart';
+
+enum _AttendanceCaptureStep { location, photo }
+
+class _LocationValidationState {
+  const _LocationValidationState({
+    required this.isWithinRange,
+    required this.minDistance,
+    required this.nearestLocation,
+    required this.displayedLocation,
+    required this.emulatorTestLocation,
+    required this.isUsingEmulatorTestLocation,
+  });
+
+  final bool isWithinRange;
+  final double minDistance;
+  final AttendanceLocation? nearestLocation;
+  final AttendanceLocation? displayedLocation;
+  final AttendanceLocation? emulatorTestLocation;
+  final bool isUsingEmulatorTestLocation;
+}
+
+class _PhotoGuidePainter extends CustomPainter {
+  const _PhotoGuidePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final guidePaint = Paint()
+      ..color = Colors.white.withOpacity(0.92)
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+
+    final guideWidth = size.width * 0.54;
+    final guideHeight = size.height * 0.72;
+    final guideLeft = (size.width - guideWidth) / 2;
+    final guideTop = size.height * 0.08;
+    final guideRect = Rect.fromLTWH(
+      guideLeft,
+      guideTop,
+      guideWidth,
+      guideHeight,
+    );
+    final guideFrame = RRect.fromRectAndRadius(
+      guideRect,
+      Radius.circular(guideWidth * 0.28),
+    );
+
+    canvas.drawRRect(guideFrame, guidePaint);
+
+    final headRadius = guideWidth * 0.16;
+    final headCenter = Offset(size.width / 2, guideTop + guideHeight * 0.22);
+    canvas.drawCircle(headCenter, headRadius, guidePaint);
+
+    final shoulderWidth = guideWidth * 0.7;
+    final shoulderHeight = guideHeight * 0.26;
+    final shoulderRect = Rect.fromCenter(
+      center: Offset(size.width / 2, guideTop + guideHeight * 0.6),
+      width: shoulderWidth,
+      height: shoulderHeight,
+    );
+    final shoulderPath = Path()
+      ..moveTo(shoulderRect.left, shoulderRect.bottom)
+      ..quadraticBezierTo(
+        shoulderRect.left,
+        shoulderRect.top,
+        size.width / 2,
+        shoulderRect.top,
+      )
+      ..quadraticBezierTo(
+        shoulderRect.right,
+        shoulderRect.top,
+        shoulderRect.right,
+        shoulderRect.bottom,
+      );
+    canvas.drawPath(shoulderPath, guidePaint);
+
+    canvas.drawLine(
+      Offset(size.width / 2, shoulderRect.top + 8),
+      Offset(size.width / 2, guideRect.bottom - 18),
+      guidePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
 
 class ClockInScreen extends StatefulWidget {
-  const ClockInScreen({super.key});
+  const ClockInScreen({super.key, this.isClockOut = false});
+
+  final bool isClockOut;
 
   @override
   State<ClockInScreen> createState() => _ClockInScreenState();
@@ -26,7 +115,7 @@ class _ClockInScreenState extends State<ClockInScreen> {
   static const LatLng _fallbackLatLng = LatLng(-6.2088, 106.8456);
   static const LatLng _defaultEmulatorLatLng = LatLng(37.4219983, -122.084);
   static const String _tileUrlTemplate =
-      '${ApiConstants.baseUrl}${ApiConstants.mapTilesEndpoint}';
+      ApiConstants.openStreetMapTilesEndpoint;
   static const String _tileFallbackUrlTemplate =
       '${ApiConstants.baseUrl}${ApiConstants.mapTilesProxyEndpoint}';
 
@@ -39,13 +128,24 @@ class _ClockInScreenState extends State<ClockInScreen> {
   StreamSubscription<Position>? _positionStream;
   bool _isPhotoTaken = false;
   bool _isMapReady = false;
+  bool _isLoadingAttendanceArea = true;
+  String _employeeUuid = '';
+  String _activeCompanyCode = '';
+  _AttendanceCaptureStep _captureStep = _AttendanceCaptureStep.location;
 
   final MapController _mapController = MapController();
+
+  bool get _isClockOutMode => widget.isClockOut;
+  String get _actionLabel => _isClockOutMode ? 'Clock Out' : 'Clock In';
+  String get _actionLabelLower => _isClockOutMode ? 'clock out' : 'clock in';
+  bool get _hasEmployeeContext => _employeeUuid.isNotEmpty;
+  bool get _hasCompanyContext => _activeCompanyCode.isNotEmpty;
+  bool get _isPhotoStep => _captureStep == _AttendanceCaptureStep.photo;
 
   @override
   void initState() {
     super.initState();
-    _startLocationStream();
+    _prepareAttendanceAction();
   }
 
   @override
@@ -54,7 +154,68 @@ class _ClockInScreenState extends State<ClockInScreen> {
     super.dispose();
   }
 
+  Future<void> _prepareAttendanceAction() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final provider = Provider.of<AttendanceProvider>(context, listen: false);
+    final employeeUuid =
+        (await provider.resolveCurrentEmployeeUuid())?.trim() ?? '';
+    final companyCode = authProvider.getCompanyCode().trim();
+
+    setState(() {
+      _employeeUuid = employeeUuid;
+      _activeCompanyCode = companyCode;
+      _captureStep = _AttendanceCaptureStep.location;
+      _isLoadingAttendanceArea = true;
+      _isLoadingLocation = true;
+      _locationError = '';
+    });
+
+    if (employeeUuid.isEmpty) {
+      setState(() {
+        _locationError =
+            'Employee ID tidak ditemukan. Attendance tidak bisa dilakukan.';
+        _isLoadingLocation = false;
+        _isLoadingAttendanceArea = false;
+      });
+      return;
+    }
+
+    if (companyCode.isEmpty) {
+      setState(() {
+        _locationError =
+            'C_CODE aktif tidak ditemukan. Pilih company aktif terlebih dahulu.';
+        _isLoadingLocation = false;
+        _isLoadingAttendanceArea = false;
+      });
+      return;
+    }
+
+    try {
+      await SessionStorage.saveCompanyCode(companyCode);
+      await authProvider.syncSelectedCompanyContext();
+      unawaited(_startLocationStream());
+      await provider.loadLocations(forceRefresh: true);
+      _updateMapViewport(provider.allowedLocations);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingAttendanceArea = false;
+        });
+      }
+    }
+  }
+
   Future<void> _startLocationStream() async {
+    await _positionStream?.cancel();
+    _positionStream = null;
+
+    if (!_hasEmployeeContext || !_hasCompanyContext) {
+      setState(() {
+        _isLoadingLocation = false;
+      });
+      return;
+    }
+
     setState(() {
       _isLoadingLocation = true;
       _locationError = '';
@@ -93,14 +254,6 @@ class _ClockInScreenState extends State<ClockInScreen> {
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.best,
-        ),
-      );
-
-      if (mounted) _updatePosition(position);
-
       const locationSettings = LocationSettings(
         accuracy: LocationAccuracy.bestForNavigation,
         distanceFilter: 5,
@@ -109,9 +262,41 @@ class _ClockInScreenState extends State<ClockInScreen> {
       _positionStream =
           Geolocator.getPositionStream(
             locationSettings: locationSettings,
-          ).listen((Position position) {
-            if (mounted) _updatePosition(position);
-          });
+          ).listen(
+            (Position position) {
+              if (mounted) _updatePosition(position);
+            },
+            onError: (Object error) {
+              if (!mounted) return;
+
+              setState(() {
+                _locationError = 'Gagal memperbarui lokasi: $error';
+                _isLoadingLocation = false;
+              });
+            },
+          );
+
+      final lastKnownPosition = await Geolocator.getLastKnownPosition();
+      if (lastKnownPosition != null && mounted) {
+        _updatePosition(lastKnownPosition);
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+        ),
+      ).timeout(const Duration(seconds: 12));
+
+      if (mounted) _updatePosition(position);
+    } on TimeoutException {
+      print('Location timeout while getting current position');
+      if (mounted) {
+        setState(() {
+          _locationError =
+              'Lokasi belum berhasil didapatkan. Peta tetap ditampilkan, lalu tekan refresh jika perlu.';
+          _isLoadingLocation = false;
+        });
+      }
     } catch (e) {
       print('Location error: $e');
       if (mounted) {
@@ -139,18 +324,9 @@ class _ClockInScreenState extends State<ClockInScreen> {
           : '';
     });
 
-    if (_isMapReady) {
-      try {
-        _mapController.move(
-          isDefaultEmulatorLocation
-              ? _fallbackLatLng
-              : LatLng(position.latitude, position.longitude),
-          16.0,
-        );
-      } catch (e) {
-        print('Error moving map: $e');
-      }
-    }
+    _updateMapViewport(
+      Provider.of<AttendanceProvider>(context, listen: false).allowedLocations,
+    );
   }
 
   Future<void> _takePhoto() async {
@@ -213,12 +389,81 @@ class _ClockInScreenState extends State<ClockInScreen> {
   double _calculateDistance(AttendanceLocation location) {
     if (_currentPosition == null) return double.infinity;
 
-    const Distance distance = Distance();
-    return distance.as(
-      LengthUnit.Meter,
+    const distanceCalculator = Distance();
+    return distanceCalculator(
       LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
       LatLng(location.latitude, location.longitude),
     );
+  }
+
+  AttendanceLocation? _nearestAllowedLocation(
+    List<AttendanceLocation> allowedLocations,
+  ) {
+    if (allowedLocations.isEmpty) {
+      return null;
+    }
+
+    if (_currentPosition == null) {
+      return allowedLocations.first;
+    }
+
+    AttendanceLocation? nearestLocation;
+    double minDistance = double.infinity;
+
+    for (final location in allowedLocations) {
+      final distance = _calculateDistance(location);
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestLocation = location;
+      }
+    }
+
+    return nearestLocation ?? allowedLocations.first;
+  }
+
+  void _updateMapViewport(List<AttendanceLocation> allowedLocations) {
+    if (!_isMapReady) {
+      return;
+    }
+
+    final focusLocation = _nearestAllowedLocation(allowedLocations);
+    final userPoint = _hasValidCurrentLocation ? _currentLatLng : null;
+    final officePoint = focusLocation == null
+        ? null
+        : LatLng(focusLocation.latitude, focusLocation.longitude);
+
+    try {
+      if (userPoint != null && officePoint != null) {
+        final samePoint =
+            (userPoint.latitude - officePoint.latitude).abs() < 0.00005 &&
+            (userPoint.longitude - officePoint.longitude).abs() < 0.00005;
+
+        if (samePoint) {
+          _mapController.move(userPoint, 16.5);
+          return;
+        }
+
+        _mapController.fitCamera(
+          CameraFit.coordinates(
+            coordinates: [userPoint, officePoint],
+            padding: const EdgeInsets.all(48),
+            maxZoom: 16.5,
+          ),
+        );
+        return;
+      }
+
+      if (userPoint != null) {
+        _mapController.move(userPoint, 16.0);
+        return;
+      }
+
+      if (officePoint != null) {
+        _mapController.move(officePoint, 16.0);
+      }
+    } catch (e) {
+      print('Error updating map viewport: $e');
+    }
   }
 
   Future<void> _refreshLocation() async {
@@ -227,6 +472,11 @@ class _ClockInScreenState extends State<ClockInScreen> {
       _locationError = '';
     });
     try {
+      await Provider.of<AttendanceProvider>(
+        context,
+        listen: false,
+      ).loadLocations(forceRefresh: true);
+
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.best,
@@ -268,12 +518,173 @@ class _ClockInScreenState extends State<ClockInScreen> {
   bool get _hasValidCurrentLocation =>
       _currentPosition != null && !_isLikelyDefaultEmulatorLocation;
 
-  Future<void> _submitClockIn() async {
-    final provider = Provider.of<AttendanceProvider>(context, listen: false);
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+  String _formatCoordinate(double value) => value.toStringAsFixed(6);
+
+  AttendanceLocation? _emulatorTestLocation(
+    List<AttendanceLocation> allowedLocations,
+  ) {
+    if (!Platform.isAndroid ||
+        kReleaseMode ||
+        !_isLikelyDefaultEmulatorLocation ||
+        allowedLocations.isEmpty) {
+      return null;
+    }
+
+    return allowedLocations.first;
+  }
+
+  _LocationValidationState _resolveLocationValidationState(
+    List<AttendanceLocation> allowedLocations,
+  ) {
+    final emulatorTestLocation = _emulatorTestLocation(allowedLocations);
+    final isUsingEmulatorTestLocation = emulatorTestLocation != null;
+
+    bool isWithinRange = false;
+    double minDistance = double.infinity;
+    AttendanceLocation? nearestLocation;
+
+    if (isUsingEmulatorTestLocation) {
+      isWithinRange = true;
+      minDistance = 0;
+      nearestLocation = emulatorTestLocation;
+    } else if (_currentPosition != null && allowedLocations.isNotEmpty) {
+      for (final location in allowedLocations) {
+        final distance = _calculateDistance(location);
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestLocation = location;
+        }
+        if (distance <= location.radius) {
+          isWithinRange = true;
+        }
+      }
+    }
+
+    return _LocationValidationState(
+      isWithinRange: isWithinRange,
+      minDistance: minDistance,
+      nearestLocation: nearestLocation,
+      displayedLocation:
+          nearestLocation ??
+          (allowedLocations.isNotEmpty ? allowedLocations.first : null),
+      emulatorTestLocation: emulatorTestLocation,
+      isUsingEmulatorTestLocation: isUsingEmulatorTestLocation,
+    );
+  }
+
+  String? _locationValidationMessage(
+    _LocationValidationState state, {
+    required bool isPreparingAttendanceArea,
+  }) {
+    if (!_hasEmployeeContext) {
+      return 'Employee ID tidak ditemukan.';
+    }
+
+    if (!_hasCompanyContext) {
+      return 'C_CODE aktif tidak ditemukan.';
+    }
+
+    if (isPreparingAttendanceArea) {
+      return 'Area absensi masih dimuat dari server.';
+    }
+
+    if (state.displayedLocation == null) {
+      return 'Lokasi absensi belum tersedia.';
+    }
+
+    if (_isLikelyDefaultEmulatorLocation &&
+        !state.isUsingEmulatorTestLocation) {
+      return 'Lokasi device masih memakai koordinat default emulator.';
+    }
+
+    if (_currentPosition == null && !state.isUsingEmulatorTestLocation) {
+      return 'Lokasi tidak tersedia.';
+    }
+
+    if (!state.isWithinRange) {
+      return 'Anda berada di luar area yang diizinkan untuk $_actionLabelLower.';
+    }
+
+    return null;
+  }
+
+  String? _photoStepValidationMessage(
+    _LocationValidationState state, {
+    required bool isPreparingAttendanceArea,
+  }) {
+    final locationMessage = _locationValidationMessage(
+      state,
+      isPreparingAttendanceArea: isPreparingAttendanceArea,
+    );
+    if (locationMessage != null) {
+      return locationMessage;
+    }
 
     if (!_isPhotoTaken || _photoBase64 == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      return 'Ambil foto terlebih dahulu.';
+    }
+
+    return null;
+  }
+
+  void _showFeedback(String message, {Color color = Colors.orange}) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
+  }
+
+  void _goToPhotoStep() {
+    final provider = Provider.of<AttendanceProvider>(context, listen: false);
+    final state = _resolveLocationValidationState(provider.allowedLocations);
+    final isPreparingAttendanceArea =
+        _isLoadingAttendanceArea && provider.allowedLocations.isEmpty;
+    final validationMessage = _locationValidationMessage(
+      state,
+      isPreparingAttendanceArea: isPreparingAttendanceArea,
+    );
+
+    if (validationMessage != null) {
+      _showFeedback(validationMessage);
+      return;
+    }
+
+    setState(() {
+      _captureStep = _AttendanceCaptureStep.photo;
+    });
+  }
+
+  Future<void> _submitAttendance() async {
+    final provider = Provider.of<AttendanceProvider>(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final locationState = _resolveLocationValidationState(
+      provider.allowedLocations,
+    );
+    final emulatorTestLocation = locationState.emulatorTestLocation;
+    final isPreparingAttendanceArea =
+        _isLoadingAttendanceArea && provider.allowedLocations.isEmpty;
+    final validationMessage = _photoStepValidationMessage(
+      locationState,
+      isPreparingAttendanceArea: isPreparingAttendanceArea,
+    );
+
+    if (validationMessage != null) {
+      _showFeedback(
+        validationMessage,
+        color: validationMessage.contains('tidak ditemukan')
+            ? Colors.red
+            : Colors.orange,
+      );
+      if (!_hasEmployeeContext || !_hasCompanyContext) {
+        setState(() {
+          _captureStep = _AttendanceCaptureStep.location;
+        });
+      }
+      return;
+    }
+
+    if (!_isPhotoTaken || _photoBase64 == null) {
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Foto wajib diambil'),
           backgroundColor: Colors.orange,
@@ -282,8 +693,8 @@ class _ClockInScreenState extends State<ClockInScreen> {
       return;
     }
 
-    if (_isLikelyDefaultEmulatorLocation) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (_isLikelyDefaultEmulatorLocation && emulatorTestLocation == null) {
+      messenger.showSnackBar(
         const SnackBar(
           content: Text(
             'Lokasi device masih memakai koordinat default emulator. Atur lokasi device atau emulator dulu.',
@@ -294,8 +705,8 @@ class _ClockInScreenState extends State<ClockInScreen> {
       return;
     }
 
-    if (_currentPosition == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (_currentPosition == null && emulatorTestLocation == null) {
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Lokasi tidak tersedia'),
           backgroundColor: Colors.orange,
@@ -328,18 +739,7 @@ class _ClockInScreenState extends State<ClockInScreen> {
       if (confirm != true) return;
     }
 
-    final employeeUuid =
-        authProvider.user?.employeeUuid ?? authProvider.user?.uuid ?? '';
-
-    if (employeeUuid.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Data karyawan tidak ditemukan'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
+    if (!mounted) return;
 
     showDialog(
       context: context,
@@ -347,32 +747,50 @@ class _ClockInScreenState extends State<ClockInScreen> {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
-    final success = await provider.clockIn(
-      employeeUuid: employeeUuid,
-      latitude: _currentPosition!.latitude,
-      longitude: _currentPosition!.longitude,
-      location: '${_currentPosition!.latitude}, ${_currentPosition!.longitude}',
-      photo: _photoBase64,
-    );
+    final submitLatitude =
+        emulatorTestLocation?.latitude ?? _currentPosition!.latitude;
+    final submitLongitude =
+        emulatorTestLocation?.longitude ?? _currentPosition!.longitude;
+    final success = _isClockOutMode
+        ? await provider.clockOut(
+            employeeUuid: _employeeUuid,
+            latitude: submitLatitude,
+            longitude: submitLongitude,
+            location: '$submitLatitude, $submitLongitude',
+            photo: _photoBase64,
+          )
+        : await provider.clockIn(
+            employeeUuid: _employeeUuid,
+            latitude: submitLatitude,
+            longitude: submitLongitude,
+            location: '$submitLatitude, $submitLongitude',
+            photo: _photoBase64,
+          );
 
     if (!mounted) return;
 
-    Navigator.pop(context);
+    navigator.pop();
 
     if (success) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
-          content: Text(provider.lastActionMessage ?? 'Clock In Berhasil'),
+          content: Text(
+            provider.lastActionMessage ??
+                (_isClockOutMode ? 'Clock Out Berhasil' : 'Clock In Berhasil'),
+          ),
           backgroundColor: provider.lastActionQueued
               ? Colors.orange
               : Colors.green,
         ),
       );
+      navigator.pop(true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
-          content: Text(provider.error ?? 'Clock In Gagal'),
+          content: Text(
+            provider.error ??
+                (_isClockOutMode ? 'Clock Out Gagal' : 'Clock In Gagal'),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -383,25 +801,26 @@ class _ClockInScreenState extends State<ClockInScreen> {
   Widget build(BuildContext context) {
     final provider = Provider.of<AttendanceProvider>(context);
     final allowedLocations = provider.allowedLocations;
-
-    bool isWithinRange = false;
-    double minDistance = double.infinity;
-    AttendanceLocation? nearestLocation;
-
-    if (_currentPosition != null && allowedLocations.isNotEmpty) {
-      for (final location in allowedLocations) {
-        final distance = _calculateDistance(location);
-        if (distance < minDistance) {
-          minDistance = distance;
-          nearestLocation = location;
-        }
-        if (distance <= location.radius) {
-          isWithinRange = true;
-        }
-      }
-    }
-
-    final initialCenter = _currentLatLng;
+    final locationState = _resolveLocationValidationState(allowedLocations);
+    final isPreparingAttendanceArea =
+        _isLoadingAttendanceArea && allowedLocations.isEmpty;
+    final initialCenter = locationState.isUsingEmulatorTestLocation
+        ? LatLng(
+            locationState.emulatorTestLocation!.latitude,
+            locationState.emulatorTestLocation!.longitude,
+          )
+        : _currentLatLng;
+    final locationBlockingMessage = _locationValidationMessage(
+      locationState,
+      isPreparingAttendanceArea: isPreparingAttendanceArea,
+    );
+    final photoBlockingMessage = _photoStepValidationMessage(
+      locationState,
+      isPreparingAttendanceArea: isPreparingAttendanceArea,
+    );
+    final isSubmitting = _isClockOutMode
+        ? provider.isClockingOut
+        : provider.isClockingIn;
 
     final circles = allowedLocations
         .map(
@@ -430,434 +849,853 @@ class _ClockInScreenState extends State<ClockInScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Clock In',
+          _isPhotoStep
+              ? 'Ambil Foto $_actionLabel'
+              : 'Cek Lokasi $_actionLabel',
           style: GoogleFonts.poppins(color: Colors.black),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (_isPhotoStep) {
+              setState(() {
+                _captureStep = _AttendanceCaptureStep.location;
+              });
+              return;
+            }
+            Navigator.pop(context);
+          },
         ),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Photo Section
-            Container(
-              height: 250,
-              color: Colors.grey[200],
-              child: _photo != null
-                  ? Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.file(_photo!, fit: BoxFit.cover),
-                        if (_isPhotoTaken)
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.green,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.check,
-                                color: Colors.white,
-                                size: 16,
-                              ),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: _isPhotoStep
+            ? _buildPhotoStep(
+                key: const ValueKey('attendance-photo-step'),
+                locationState: locationState,
+                blockingMessage: photoBlockingMessage,
+                isSubmitting: isSubmitting,
+              )
+            : _buildLocationStep(
+                key: const ValueKey('attendance-location-step'),
+                locationState: locationState,
+                isPreparingAttendanceArea: isPreparingAttendanceArea,
+                initialCenter: initialCenter,
+                circles: circles,
+                locationMarkers: locationMarkers,
+                blockingMessage: locationBlockingMessage,
+              ),
+      ),
+    );
+  }
+
+  Widget _buildLocationStep({
+    required Key key,
+    required _LocationValidationState locationState,
+    required bool isPreparingAttendanceArea,
+    required LatLng initialCenter,
+    required List<CircleMarker> circles,
+    required List<Marker> locationMarkers,
+    required String? blockingMessage,
+  }) {
+    return SingleChildScrollView(
+      key: key,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildStepCard(
+            stepNumber: '1',
+            title: 'Verifikasi Lokasi',
+            description:
+                'Pastikan Anda sudah berada di area absensi sebelum $_actionLabelLower.',
+            icon: Icons.location_on_outlined,
+            accentColor: Colors.blue,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Text(
+                'Lokasi Anda',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              if (_isMockLocation) _buildBadge('Mock Location', Colors.orange),
+              if (_hasCompanyContext) ...[
+                const SizedBox(width: 8),
+                _buildBadge(_activeCompanyCode, Colors.blue),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (locationState.isUsingEmulatorTestLocation)
+            _buildInfoCard(
+              text:
+                  'Mode testing emulator aktif. Koordinat absensi akan memakai lokasi "${locationState.emulatorTestLocation!.name}".',
+              color: Colors.green,
+            )
+          else if (_isLikelyDefaultEmulatorLocation)
+            _buildInfoCard(
+              text:
+                  'Koordinat yang terbaca masih lokasi default emulator. Perbarui lokasi device lalu refresh.',
+              color: Colors.blue,
+            ),
+          if (locationState.isUsingEmulatorTestLocation ||
+              _isLikelyDefaultEmulatorLocation)
+            const SizedBox(height: 12),
+          Container(
+            height: 260,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: initialCenter,
+                    initialZoom: 16.0,
+                    onMapReady: () {
+                      setState(() {
+                        _isMapReady = true;
+                      });
+                      _updateMapViewport(
+                        Provider.of<AttendanceProvider>(
+                          context,
+                          listen: false,
+                        ).allowedLocations,
+                      );
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: _tileUrlTemplate,
+                      fallbackUrl: _tileFallbackUrlTemplate,
+                      userAgentPackageName: 'com.example.hris_mobile',
+                    ),
+                    if (circles.isNotEmpty) CircleLayer(circles: circles),
+                    MarkerLayer(
+                      markers: [
+                        if (_hasValidCurrentLocation)
+                          Marker(
+                            point: _currentLatLng,
+                            width: 40,
+                            height: 40,
+                            child: const Icon(
+                              Icons.person_pin_circle,
+                              color: Colors.red,
+                              size: 40,
+                            ),
+                          )
+                        else if (locationState.isUsingEmulatorTestLocation)
+                          Marker(
+                            point: LatLng(
+                              locationState.emulatorTestLocation!.latitude,
+                              locationState.emulatorTestLocation!.longitude,
+                            ),
+                            width: 40,
+                            height: 40,
+                            child: const Icon(
+                              Icons.person_pin_circle,
+                              color: Colors.orange,
+                              size: 40,
                             ),
                           ),
-                      ],
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.camera_alt,
-                          size: 50,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Foto Belum Diambil',
-                          style: GoogleFonts.poppins(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: _takePhoto,
-                          icon: const Icon(Icons.camera_alt),
-                          label: const Text('Ambil Foto'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
+                        ...locationMarkers,
                       ],
                     ),
-            ),
-
-            if (_photo != null)
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    TextButton.icon(
-                      onPressed: _takePhoto,
-                      icon: const Icon(Icons.camera_alt),
-                      label: const Text('Ambil Ulang'),
+                    RichAttributionWidget(
+                      attributions: const [
+                        TextSourceAttribution('OpenStreetMap contributors'),
+                      ],
                     ),
                   ],
                 ),
-              ),
-
-            const SizedBox(height: 16),
-
-            // Map Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Lokasi Anda',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                if (isPreparingAttendanceArea)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    right: 12,
+                    child: _buildMapOverlayCard(
+                      message: 'Memuat area absensi dari server...',
+                      color: Colors.orange,
+                      showSpinner: true,
+                    ),
+                  )
+                else if (_isLoadingLocation && _currentPosition == null)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    right: 12,
+                    child: _buildMapOverlayCard(
+                      message: 'Mencari lokasi Anda...',
+                      color: Colors.blue,
+                      showSpinner: true,
                     ),
                   ),
-                  if (_isMockLocation)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'Mock Location',
-                        style: GoogleFonts.poppins(
-                          fontSize: 10,
-                          color: Colors.orange[800],
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            if (_isLikelyDefaultEmulatorLocation)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.withOpacity(0.2)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.blue[800]),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Koordinat yang terbaca masih lokasi default emulator Android. Untuk testing absensi, set lokasi emulator ke Jakarta atau gunakan device fisik lalu tekan refresh lokasi.',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            color: Colors.blue[900],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            SizedBox(
-              height: 250,
-              child: _isLoadingLocation && _currentPosition == null
-                  ? const Center(child: CircularProgressIndicator())
-                  : _locationError.isNotEmpty && _currentPosition == null
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.location_off,
-                            size: 48,
-                            color: Colors.red[300],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(_locationError),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _startLocationStream,
-                            child: const Text('Coba Lagi'),
-                          ),
-                        ],
-                      ),
-                    )
-                  : FlutterMap(
-                      mapController: _mapController,
-                      options: MapOptions(
-                        initialCenter: initialCenter,
-                        initialZoom: 16.0,
-                        onMapReady: () {
-                          setState(() {
-                            _isMapReady = true;
-                          });
-                          if (_hasValidCurrentLocation) {
-                            _mapController.move(_currentLatLng, 16.0);
-                          }
-                        },
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate: _tileUrlTemplate,
-                          fallbackUrl: _tileFallbackUrlTemplate,
-                          userAgentPackageName: 'com.example.hris_mobile',
-                        ),
-                        if (circles.isNotEmpty) CircleLayer(circles: circles),
-                        MarkerLayer(
-                          markers: [
-                            if (_hasValidCurrentLocation)
-                              Marker(
-                                point: _currentLatLng,
-                                width: 40,
-                                height: 40,
-                                child: const Icon(
-                                  Icons.person_pin_circle,
-                                  color: Colors.red,
-                                  size: 40,
-                                ),
-                              ),
-                            ...locationMarkers,
-                          ],
-                        ),
-                      ],
-                    ),
-            ),
-
-            if (_currentPosition != null && !_isLoadingLocation)
-              Padding(
-                padding: const EdgeInsets.only(right: 16, top: 8),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: FloatingActionButton.small(
-                    onPressed: _refreshLocation,
-                    backgroundColor: Colors.white,
-                    child: const Icon(Icons.my_location, color: Colors.blue),
-                  ),
-                ),
-              ),
-
-            // Status & Action
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Status Lokasi
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: _isLoadingLocation
-                          ? Colors.orange.withOpacity(0.1)
-                          : _isLikelyDefaultEmulatorLocation
-                          ? Colors.orange.withOpacity(0.1)
-                          : isWithinRange
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _isLoadingLocation
-                              ? Icons.hourglass_empty
-                              : _isLikelyDefaultEmulatorLocation
-                              ? Icons.warning_amber_rounded
-                              : isWithinRange
-                              ? Icons.check_circle
-                              : Icons.error,
-                          color: _isLoadingLocation
-                              ? Colors.orange
-                              : _isLikelyDefaultEmulatorLocation
-                              ? Colors.orange
-                              : isWithinRange
-                              ? Colors.green
-                              : Colors.red,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _isLoadingLocation
-                                    ? 'Memuat Lokasi...'
-                                    : _isLikelyDefaultEmulatorLocation
-                                    ? 'Lokasi Device Belum Valid'
-                                    : isWithinRange
-                                    ? 'Dalam Jangkauan'
-                                    : 'Luar Jangkauan',
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w600,
-                                  color: _isLoadingLocation
-                                      ? Colors.orange
-                                      : _isLikelyDefaultEmulatorLocation
-                                      ? Colors.orange
-                                      : isWithinRange
-                                      ? Colors.green
-                                      : Colors.red,
-                                ),
-                              ),
-                              if (!_isLoadingLocation &&
-                                  _isLikelyDefaultEmulatorLocation)
-                                Text(
-                                  'Lokasi masih membaca koordinat default emulator. Refresh setelah lokasi device diperbarui.',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                )
-                              else if (!_isLoadingLocation &&
-                                  _currentPosition != null)
-                                Text(
-                                  '${minDistance == double.infinity ? "?" : minDistance.toStringAsFixed(0)}m dari ${nearestLocation?.name ?? "lokasi terdekat"}',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Status Foto
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: _isPhotoTaken
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _isPhotoTaken ? Icons.check_circle : Icons.camera_alt,
-                          color: _isPhotoTaken ? Colors.green : Colors.orange,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _isPhotoTaken
-                                ? 'Foto sudah diambil'
-                                : 'Foto belum diambil',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                              color: _isPhotoTaken
-                                  ? Colors.green
-                                  : Colors.orange,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Button Clock In
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed:
-                          (_photo != null &&
-                              isWithinRange &&
-                              !_isLoadingLocation &&
-                              _hasValidCurrentLocation)
-                          ? _submitClockIn
+                if (_locationError.isNotEmpty && _currentPosition == null)
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 12,
+                    child: _buildMapOverlayCard(
+                      message: _locationError,
+                      color: Colors.red,
+                      onRetry: _hasEmployeeContext && _hasCompanyContext
+                          ? _startLocationStream
                           : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        disabledBackgroundColor: Colors.grey[300],
-                      ),
-                      child: Text(
-                        'Clock In',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
                     ),
                   ),
-
-                  if (_isLikelyDefaultEmulatorLocation)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        'Lokasi device belum valid. Update lokasi device atau emulator sebelum melakukan clock in',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.orange,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-
-                  if (!isWithinRange && _hasValidCurrentLocation)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        'Anda berada di luar area yang diizinkan untuk clock in',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.red,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-
-                  if (!_isPhotoTaken)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        'Ambil foto terlebih dahulu',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.orange,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                ],
+              ],
+            ),
+          ),
+          if (_currentPosition != null && !_isLoadingLocation)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FloatingActionButton.small(
+                  heroTag: 'attendance-refresh-location',
+                  onPressed: _refreshLocation,
+                  backgroundColor: Colors.white,
+                  child: const Icon(Icons.my_location, color: Colors.blue),
+                ),
               ),
+            ),
+          if (_currentPosition != null ||
+              locationState.displayedLocation != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: _buildLocationComparisonCard(locationState),
+            ),
+          const SizedBox(height: 14),
+          _buildLocationStatusCard(
+            locationState,
+            isPreparingAttendanceArea: isPreparingAttendanceArea,
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: blockingMessage == null ? _goToPhotoStep : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                disabledBackgroundColor: Colors.grey[300],
+              ),
+              child: Text(
+                'Lanjut ke Foto',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          if (blockingMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                blockingMessage,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: blockingMessage.contains('tidak ditemukan')
+                      ? Colors.red
+                      : Colors.orange,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoStep({
+    required Key key,
+    required _LocationValidationState locationState,
+    required String? blockingMessage,
+    required bool isSubmitting,
+  }) {
+    return SingleChildScrollView(
+      key: key,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildStepCard(
+            stepNumber: '2',
+            title: 'Ambil Foto',
+            description:
+                'Setelah foto berhasil diambil, absensi baru akan dikirim dan data diperbarui.',
+            icon: Icons.camera_alt_outlined,
+            accentColor: AppColors.primary,
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  locationState.displayedLocation?.name ??
+                      'Lokasi absensi belum tersedia',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _currentPosition != null
+                      ? 'Lokasi Anda: ${_formatCoordinate(_currentPosition!.latitude)}, ${_formatCoordinate(_currentPosition!.longitude)}'
+                      : 'Lokasi Anda belum tersedia',
+                  style: GoogleFonts.poppins(fontSize: 12),
+                ),
+                if (locationState.displayedLocation != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Lokasi absensi: ${_formatCoordinate(locationState.displayedLocation!.latitude)}, ${_formatCoordinate(locationState.displayedLocation!.longitude)}',
+                    style: GoogleFonts.poppins(fontSize: 12),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                _buildBadge(
+                  locationState.isUsingEmulatorTestLocation
+                      ? 'Mode Test Emulator'
+                      : locationState.isWithinRange
+                      ? 'Lokasi Sudah Sesuai'
+                      : 'Lokasi Belum Sesuai',
+                  locationState.isUsingEmulatorTestLocation ||
+                          locationState.isWithinRange
+                      ? Colors.green
+                      : Colors.red,
+                ),
+              ],
+            ),
+          ),
+          if (blockingMessage != null &&
+              !blockingMessage.contains('foto terlebih dahulu')) ...[
+            const SizedBox(height: 12),
+            _buildInfoCard(text: blockingMessage, color: Colors.orange),
+          ],
+          const SizedBox(height: 16),
+          Container(
+            height: 280,
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(20),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: _buildPhotoPreview(),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _takePhoto,
+            icon: const Icon(Icons.camera_alt),
+            label: Text(_photo != null ? 'Ambil Ulang Foto' : 'Ambil Foto'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: BorderSide(color: AppColors.primary.withOpacity(0.25)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _isPhotoTaken
+                  ? Colors.green.withOpacity(0.1)
+                  : Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _isPhotoTaken ? Icons.check_circle : Icons.camera_alt,
+                  color: _isPhotoTaken ? Colors.green : Colors.orange,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _isPhotoTaken
+                        ? 'Foto sudah siap untuk dikirim.'
+                        : 'Ambil foto untuk melanjutkan $_actionLabelLower.',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      color: _isPhotoTaken ? Colors.green : Colors.orange,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: blockingMessage == null && !isSubmitting
+                  ? _submitAttendance
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                disabledBackgroundColor: Colors.grey[300],
+              ),
+              child: Text(
+                isSubmitting ? 'Memproses...' : _actionLabel,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: () {
+              setState(() {
+                _captureStep = _AttendanceCaptureStep.location;
+              });
+            },
+            icon: const Icon(Icons.chevron_left),
+            label: const Text('Kembali cek lokasi'),
+          ),
+          if (blockingMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                blockingMessage,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: blockingMessage.contains('foto')
+                      ? Colors.orange
+                      : Colors.red,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationComparisonCard(_LocationValidationState locationState) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Perbandingan Lokasi',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (_currentPosition != null)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.person_pin_circle,
+                  color: Colors.red,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Lokasi Anda\n${_formatCoordinate(_currentPosition!.latitude)}, ${_formatCoordinate(_currentPosition!.longitude)}',
+                    style: GoogleFonts.poppins(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          if (_currentPosition != null &&
+              locationState.displayedLocation != null)
+            const SizedBox(height: 10),
+          if (locationState.displayedLocation != null)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.business, color: Colors.blue, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Lokasi Absensi${locationState.displayedLocation == locationState.nearestLocation ? " Terdekat" : ""}\n${locationState.displayedLocation!.name}\n${_formatCoordinate(locationState.displayedLocation!.latitude)}, ${_formatCoordinate(locationState.displayedLocation!.longitude)}\nRadius ${locationState.displayedLocation!.radius.toStringAsFixed(0)} m',
+                    style: GoogleFonts.poppins(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationStatusCard(
+    _LocationValidationState locationState, {
+    required bool isPreparingAttendanceArea,
+  }) {
+    final isLoading = _isLoadingLocation || isPreparingAttendanceArea;
+    final isSuccess =
+        locationState.isUsingEmulatorTestLocation ||
+        locationState.isWithinRange;
+    final isWarning = _isLikelyDefaultEmulatorLocation && !isSuccess;
+    final icon = isLoading
+        ? Icons.hourglass_empty
+        : isSuccess
+        ? Icons.check_circle
+        : isWarning
+        ? Icons.warning_amber_rounded
+        : Icons.error;
+    final accentColor = isLoading
+        ? Colors.orange
+        : isSuccess
+        ? Colors.green
+        : isWarning
+        ? Colors.orange
+        : Colors.red;
+    final backgroundColor = accentColor.withOpacity(0.1);
+    final title = isPreparingAttendanceArea
+        ? 'Memuat Area Absensi'
+        : _isLoadingLocation
+        ? 'Mencari Lokasi Device'
+        : locationState.isUsingEmulatorTestLocation
+        ? 'Mode Test Emulator'
+        : isWarning
+        ? 'Lokasi Device Belum Valid'
+        : locationState.isWithinRange
+        ? 'Dalam Jangkauan'
+        : 'Luar Jangkauan';
+    final subtitle = isPreparingAttendanceArea
+        ? 'Sedang memuat area absensi dari server...'
+        : _isLoadingLocation
+        ? 'Sedang mencari koordinat device Anda...'
+        : locationState.isUsingEmulatorTestLocation
+        ? 'Koordinat absensi untuk testing diambil dari ${locationState.emulatorTestLocation?.name}.'
+        : isWarning
+        ? 'Lokasi masih membaca koordinat default emulator. Refresh setelah lokasi device diperbarui.'
+        : _currentPosition != null
+        ? '${locationState.minDistance == double.infinity ? "?" : locationState.minDistance.toStringAsFixed(0)}m dari ${locationState.nearestLocation?.name ?? "lokasi terdekat"}'
+        : 'Lokasi Anda belum tersedia.';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: accentColor),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    color: accentColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoPreview() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_photo != null)
+          Image.file(_photo!, fit: BoxFit.cover)
+        else
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.grey.shade300, Colors.grey.shade200],
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.camera_alt, size: 54, color: Colors.grey),
+                const SizedBox(height: 10),
+                Text(
+                  'Foto belum diambil',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[700],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Container(
+          color: Colors.black.withOpacity(_photo != null ? 0.14 : 0.08),
+        ),
+        const IgnorePointer(
+          child: CustomPaint(
+            painter: _PhotoGuidePainter(),
+            child: SizedBox.expand(),
+          ),
+        ),
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 14,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.42),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              'Posisikan wajah dan bahu di dalam garis putih.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+        if (_photo != null)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check, color: Colors.white, size: 16),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMapOverlayCard({
+    required String message,
+    required Color color,
+    bool showSpinner = false,
+    Future<void> Function()? onRetry,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (showSpinner)
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+            )
+          else
+            Icon(Icons.info_outline, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(width: 12),
+            TextButton(
+              onPressed: () => unawaited(onRetry()),
+              style: TextButton.styleFrom(
+                foregroundColor: color,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 36),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Coba Lagi'),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepCard({
+    required String stepNumber,
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color accentColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accentColor.withOpacity(0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: accentColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Center(
+              child: Text(
+                stepNumber,
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: accentColor,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, color: accentColor, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({required String text, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.poppins(fontSize: 12, color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.poppins(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
         ),
       ),
     );

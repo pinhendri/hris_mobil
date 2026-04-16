@@ -4,7 +4,8 @@ class ApiConstants {
   // ===============================
 
   /// Android Emulator
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  static const String baseUrl = 'http://113.11.129.46';
+  // static const String baseUrl = 'http://10.0.2.2:8000' ;
 
   /// Kalau pakai HP asli:
   /// ganti dengan IP laptop kamu
@@ -23,7 +24,17 @@ class ApiConstants {
   static const String changePasswordEndpoint = '/api/change-password';
   static const String logoutEndpoint = '/api/logout';
   static const String getUserInfoEndpoint = meEndpoint;
+  static const String saasContextEndpoint = '/api/saas/context';
+  static const String saasTrialStatusEndpoint = '/api/saas/trial-status';
+  static const String saasCompaniesEndpoint = '/api/saas/companies';
+  static const String saasInvitationsEndpoint = '/api/saas/invitations';
+  static const String saasAdminOverviewEndpoint = '/api/saas/admin/overview';
   static const String settingsEndpoint = '/api/settings';
+  static const String entitiesEndpoint = '/api/entities';
+  static const String activeDefaultEntityEndpoint =
+      '/api/entities/default/active';
+  static const String openStreetMapTilesEndpoint =
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   static const String mapTilesEndpoint = '/map-tile-cache/{z}/{x}/{y}.png';
   static const String mapTilesProxyEndpoint = '/map-tile.php?z={z}&x={x}&y={y}';
 
@@ -92,6 +103,8 @@ class ApiConstants {
   // ===============================
 
   static const String documentsEndpoint = '/api/documents';
+  static const String tasksEndpoint = '/api/tasks';
+  static const String taskStatusEndpoint = '/api/tasks'; // + /{id}/status
 
   // ===============================
   // 🧩 RECRUITMENT

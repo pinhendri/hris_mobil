@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
+import '../services/session_storage.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,6 +13,9 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
+  static const String _demoEmail = 'superadmin@system.local';
+  static const String _demoPassword = 'password';
+
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -45,6 +49,7 @@ class _LoginScreenState extends State<LoginScreen>
         );
 
     _animationController.forward();
+    _loadRememberedCredentials();
   }
 
   @override
@@ -60,28 +65,61 @@ class _LoginScreenState extends State<LoginScreen>
     if (!_formKey.currentState!.validate()) return;
 
     final auth = context.read<AuthProvider>();
+    final navigator = Navigator.of(context);
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
 
-    final result = await auth.login(
-      _emailController.text.trim(),
-      _passwordController.text.trim(),
-    );
+    final result = await auth.login(email, password);
 
     if (!mounted) return;
 
     final bool success = result['success'] == true;
 
     if (success) {
+      if (_rememberMe) {
+        await SessionStorage.saveRememberedCredentials(
+          email: email,
+          password: password,
+        );
+      } else {
+        await SessionStorage.clearRememberedCredentials();
+      }
+
       final user = result['user'] as Map<String, dynamic>? ?? {};
       await auth.setUser(user);
 
-      final currentRoute = ModalRoute.of(context)?.settings.name;
       if (currentRoute != '/' && mounted) {
-        Navigator.pushReplacementNamed(context, '/');
+        navigator.pushReplacementNamed('/');
       }
     } else {
       // Login gagal dengan animasi shake
       _showErrorSnackBar(result['message']?.toString() ?? 'Login gagal');
     }
+  }
+
+  Future<void> _loadRememberedCredentials() async {
+    final rememberMeEnabled = await SessionStorage.isRememberMeEnabled();
+    final rememberedCredentials =
+        await SessionStorage.getRememberedCredentials();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _rememberMe = rememberMeEnabled;
+      _emailController.text = rememberedCredentials['email'] ?? '';
+      _passwordController.text = rememberedCredentials['password'] ?? '';
+    });
+  }
+
+  void _applyDemoCredentials() {
+    setState(() {
+      _emailController.text = _demoEmail;
+      _passwordController.text = _demoPassword;
+      _rememberMe = true;
+    });
   }
 
   void _showErrorSnackBar(String message) {
@@ -115,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen>
     if (value == null || value.isEmpty) {
       return 'Email tidak boleh kosong';
     }
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
     if (!emailRegex.hasMatch(value)) {
       return 'Format email tidak valid';
     }
@@ -568,14 +606,11 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                               child: Column(
                                 children: [
-                                  _buildCredentialRow(
-                                    'Email:',
-                                    'admin@example.com',
-                                  ),
+                                  _buildCredentialRow('Email:', _demoEmail),
                                   const SizedBox(height: 4),
                                   _buildCredentialRow(
                                     'Password:',
-                                    'password123',
+                                    _demoPassword,
                                   ),
                                 ],
                               ),
@@ -585,12 +620,7 @@ class _LoginScreenState extends State<LoginScreen>
                             TextButton.icon(
                               onPressed: !isLoading
                                   ? () {
-                                      setState(() {
-                                        _emailController.text =
-                                            'admin@example.com';
-                                        _passwordController.text =
-                                            'password123';
-                                      });
+                                      _applyDemoCredentials();
                                     }
                                   : null,
                               icon: Icon(

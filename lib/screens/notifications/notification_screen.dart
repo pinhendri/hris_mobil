@@ -218,6 +218,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   IconData _getIcon(String type) {
     switch (type) {
+      case 'company_leave':
+        return Icons.beach_access_outlined;
       case 'warning':
         return Icons.warning_amber_rounded;
       case 'success':
@@ -231,6 +233,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   Color _getIconColor(String type) {
     switch (type) {
+      case 'company_leave':
+        return Colors.blue;
       case 'warning':
         return Colors.orange;
       case 'success':

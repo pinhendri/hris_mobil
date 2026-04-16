@@ -14,7 +14,7 @@ import '../admin/claim_reports_screen.dart';
 import '../admin/correction_management_screen.dart';
 import '../admin/department_list_screen.dart';
 import '../admin/event_management_screen.dart';
-import '../admin/leave_management_screen.dart';
+import '../admin/leave_management_enhanced_screen.dart';
 import '../admin/master_shift_screen.dart';
 import '../admin/shift_assignment_screen.dart';
 import '../attendance/attendance_settings_screen.dart';
@@ -306,7 +306,7 @@ class AdminTab extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const LeaveManagementScreen(),
+                builder: (context) => const LeaveManagementEnhancedScreen(),
               ),
             );
           },
@@ -471,7 +471,7 @@ class AdminTab extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const LeaveManagementScreen(),
+                    builder: (context) => const LeaveManagementEnhancedScreen(),
                   ),
                 );
               },
@@ -536,24 +536,23 @@ class AdminTab extends StatelessWidget {
                 );
               },
             ),
-          if (canAccessSettings)
-            _AdminMenuItem(
-              title: context.tr('admin_event_management'),
-              subtitle: context.tr('admin_event_management_subtitle'),
-              icon: Icons.event_available,
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1D976C), Color(0xFF93F9B9)],
-              ),
-              badge: context.tr('admin_badge_calendar'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const EventManagementScreen(),
-                  ),
-                );
-              },
+          _AdminMenuItem(
+            title: context.tr('admin_event_management'),
+            subtitle: context.tr('admin_event_management_subtitle'),
+            icon: Icons.event_available,
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1D976C), Color(0xFF93F9B9)],
             ),
+            badge: context.tr('admin_badge_calendar'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const EventManagementScreen(),
+                ),
+              );
+            },
+          ),
         ],
       ),
     ];

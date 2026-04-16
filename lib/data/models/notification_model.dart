@@ -39,13 +39,13 @@ class NotificationItem {
     return NotificationItem(
       id: json['id'].toString(),
       title: json['title']?.toString() ?? '',
-      type: json['type'] ?? 'info',
-      message: json['message'] ?? '',
+      type: json['type']?.toString() ?? 'info',
+      message: json['message']?.toString() ?? '',
       data: parsedData,
       createdAt: DateTime.parse(
-        json['created_at'] ?? DateTime.now().toIso8601String(),
+        json['created_at']?.toString() ?? DateTime.now().toIso8601String(),
       ),
-      isRead: json['is_read'] ?? false,
+      isRead: json['is_read'] == true,
     );
   }
 
@@ -73,30 +73,33 @@ class NotificationItem {
     );
   }
 
-  // Helper methods untuk mendapatkan informasi tambahan dari data
   String? get leaveRequestId => data?['leave_request_id']?.toString();
   int? get employeeId => data?['employee_id'];
   String? get startDate => data?['start_date'];
   String? get endDate => data?['end_date'];
   int? get days => data?['days'];
 
-  // Format pesan untuk ditampilkan di UI
   String get formattedMessage {
-    if (type == 'leave_request') {
-      return message;
-    } else if (type == 'leave_approved') {
-      return '✅ $message';
-    } else if (type == 'leave_rejected') {
-      return '❌ $message';
+    switch (type) {
+      case 'leave_request':
+        return message;
+      case 'company_leave':
+        return 'Company leave: $message';
+      case 'leave_approved':
+        return 'Approved: $message';
+      case 'leave_rejected':
+        return 'Rejected: $message';
+      default:
+        return message;
     }
-    return message;
   }
 
-  // Dapatkan icon berdasarkan tipe
   IconData get icon {
     switch (type) {
       case 'leave_request':
         return Icons.event_note;
+      case 'company_leave':
+        return Icons.beach_access;
       case 'leave_approved':
         return Icons.check_circle;
       case 'leave_rejected':
@@ -112,11 +115,12 @@ class NotificationItem {
     }
   }
 
-  // Dapatkan warna berdasarkan tipe
   Color get color {
     switch (type) {
       case 'leave_request':
         return Colors.orange;
+      case 'company_leave':
+        return Colors.blue;
       case 'leave_approved':
         return Colors.green;
       case 'leave_rejected':
@@ -132,7 +136,6 @@ class NotificationItem {
     }
   }
 
-  // Dapatkan judul berdasarkan tipe
   String get displayTitle {
     if (title.isNotEmpty) {
       return title;
@@ -141,6 +144,8 @@ class NotificationItem {
     switch (type) {
       case 'leave_request':
         return 'Pengajuan Cuti Baru';
+      case 'company_leave':
+        return 'Cuti Bersama';
       case 'leave_approved':
         return 'Cuti Disetujui';
       case 'leave_rejected':

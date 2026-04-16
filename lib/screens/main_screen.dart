@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../core/localization/app_strings.dart';
 import '../providers/auth_provider.dart';
+import '../providers/saas_provider.dart';
 import '../providers/theme_provider.dart';
 import 'tabs/admin_tab.dart';
 import 'tabs/dashboard_tab.dart';
@@ -18,6 +19,18 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = context.read<AuthProvider>();
+      context.read<SaasProvider>().loadWorkspace(
+        includeAdminOverview: authProvider.canAccessPlatformAdmin,
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

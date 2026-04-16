@@ -28,6 +28,7 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
   DateTime? _endsAt;
   bool _isCompanyWide = false;
   final Set<String> _selectedInvitees = <String>{};
+  String _loadedCompanyCode = '';
 
   @override
   void initState() {
@@ -40,12 +41,26 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
     _endsAt = event?.endsAt;
     _isCompanyWide = event?.isCompanyWide ?? false;
     _selectedInvitees.addAll(event?.invitedEmployeeUuids ?? const []);
+  }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final companyCode = context.read<AuthProvider>().getCompanyCode().trim();
+    if (_loadedCompanyCode == companyCode) {
+      return;
+    }
+
+    _loadedCompanyCode = companyCode;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final employeeProvider = context.read<EmployeeProvider>();
-      if (employeeProvider.employees.isEmpty) {
-        employeeProvider.fetchAllEmployees();
+      if (!mounted) {
+        return;
       }
+
+      context.read<EmployeeProvider>().fetchAllEmployees(
+        companyCode: companyCode,
+      );
     });
   }
 
@@ -350,20 +365,22 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
     List<Employee> employees,
     String companyCode,
   ) {
+    if (companyCode.isEmpty) {
+      return employees;
+    }
+
     final filtered = employees
         .where((employee) {
-          final eventCompanyCode = employee.cCode ?? employee.companyCode ?? '';
-          if (companyCode.isEmpty) {
+          final eventCompanyCode =
+              (employee.cCode ?? employee.companyCode ?? '').trim();
+
+          if (eventCompanyCode.isEmpty) {
             return true;
           }
 
           return eventCompanyCode == companyCode;
         })
         .toList(growable: false);
-
-    if (filtered.isEmpty) {
-      return employees;
-    }
 
     return filtered;
   }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-class ImageHelper {
-  static const String _baseUrl = 'http://10.0.2.2:8000'; // sesuaikan jika perlu
+import '../constants/api_constants.dart';
 
+class ImageHelper {
   /// Mengembalikan ImageProvider untuk avatar
   /// Jika path null atau kosong, pakai default avatar lokal
   static ImageProvider avatar(String? path) {
@@ -10,7 +10,8 @@ class ImageHelper {
       return const AssetImage('assets/images/default_avatar.png');
     }
 
-    final uri = path.startsWith('http') ? path : '$_baseUrl$path';
+    final uri =
+        path.startsWith('http') ? path : '${ApiConstants.baseUrl}$path';
     return NetworkImage(uri);
   }
 }

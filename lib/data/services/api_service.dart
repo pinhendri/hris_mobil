@@ -58,10 +58,27 @@ class ApiService {
   }
 
   // ===============================
+  // DELETE
+  // ===============================
+  Future<dynamic> delete(String endpoint) async {
+    final headers = await _getHeaders();
+
+    final response = await http
+        .delete(Uri.parse('$_baseUrl$endpoint'), headers: headers)
+        .timeout(const Duration(seconds: 10));
+
+    return _handleResponse(response);
+  }
+
+  // ===============================
   // 📦 RESPONSE HANDLER
   // ===============================
   dynamic _handleResponse(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.body.isEmpty) {
+        return <String, dynamic>{};
+      }
+
       return jsonDecode(response.body);
     } else {
       try {

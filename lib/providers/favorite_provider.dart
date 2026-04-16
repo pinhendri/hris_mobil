@@ -17,26 +17,97 @@ class FeatureItem {
 
 class FavoriteProvider with ChangeNotifier {
   List<String> _favoriteIds = ['attendance', 'leave', 'payslip'];
-  
+
   final List<FeatureItem> _allFeatures = [
-    FeatureItem(id: 'payslip', label: 'Payslip', icon: Icons.receipt_long, color: Colors.blue),
-    FeatureItem(id: 'leave', label: 'Leave', icon: Icons.calendar_today, color: Colors.orange),
-    FeatureItem(id: 'attendance', label: 'Attendance', icon: Icons.access_time, color: Colors.green),
-    FeatureItem(id: 'location', label: 'My Location', icon: Icons.pin_drop, color: Colors.red),
-    FeatureItem(id: 'claims', label: 'Claims', icon: Icons.monetization_on, color: Colors.purple),
-    FeatureItem(id: 'performance', label: 'Performance', icon: Icons.trending_up, color: Colors.redAccent),
-    FeatureItem(id: 'recruitment', label: 'Recruitment', icon: Icons.work_outline, color: Colors.teal),
-    FeatureItem(id: 'inventory', label: 'Inventory', icon: Icons.inventory_2_outlined, color: Colors.indigo),
-    FeatureItem(id: 'training', label: 'Training', icon: Icons.school_outlined, color: Colors.blueGrey),
-    FeatureItem(id: 'tasks', label: 'Tasks', icon: Icons.check_circle_outline, color: Colors.deepOrange),
-    FeatureItem(id: 'documents', label: 'Documents', icon: Icons.folder_open, color: Colors.brown),
-    FeatureItem(id: 'clients', label: 'Clients', icon: Icons.business, color: Colors.indigo),
-    FeatureItem(id: 'corrections', label: 'Corrections', icon: Icons.build_circle_outlined, color: Colors.redAccent),
+    FeatureItem(
+      id: 'payslip',
+      label: 'Payslip',
+      icon: Icons.receipt_long,
+      color: Colors.blue,
+    ),
+    FeatureItem(
+      id: 'leave',
+      label: 'Leave',
+      icon: Icons.calendar_today,
+      color: Colors.orange,
+    ),
+    FeatureItem(
+      id: 'attendance',
+      label: 'Attendance',
+      icon: Icons.access_time,
+      color: Colors.green,
+    ),
+    FeatureItem(
+      id: 'location',
+      label: 'My Location',
+      icon: Icons.pin_drop,
+      color: Colors.red,
+    ),
+    FeatureItem(
+      id: 'claims',
+      label: 'Claims',
+      icon: Icons.monetization_on,
+      color: Colors.purple,
+    ),
+    FeatureItem(
+      id: 'performance',
+      label: 'Performance',
+      icon: Icons.trending_up,
+      color: Colors.redAccent,
+    ),
+    FeatureItem(
+      id: 'recruitment',
+      label: 'Recruitment',
+      icon: Icons.work_outline,
+      color: Colors.teal,
+    ),
+    FeatureItem(
+      id: 'inventory',
+      label: 'Inventory',
+      icon: Icons.inventory_2_outlined,
+      color: Colors.indigo,
+    ),
+    FeatureItem(
+      id: 'training',
+      label: 'Training',
+      icon: Icons.school_outlined,
+      color: Colors.blueGrey,
+    ),
+    FeatureItem(
+      id: 'tasks',
+      label: 'Tasks',
+      icon: Icons.check_circle_outline,
+      color: Colors.deepOrange,
+    ),
+    FeatureItem(
+      id: 'documents',
+      label: 'Documents',
+      icon: Icons.folder_open,
+      color: Colors.brown,
+    ),
+    FeatureItem(
+      id: 'discovery',
+      label: 'Discovery',
+      icon: Icons.auto_awesome,
+      color: Colors.blueAccent,
+    ),
+    FeatureItem(
+      id: 'clients',
+      label: 'Clients',
+      icon: Icons.business,
+      color: Colors.indigo,
+    ),
+    FeatureItem(
+      id: 'corrections',
+      label: 'Corrections',
+      icon: Icons.build_circle_outlined,
+      color: Colors.redAccent,
+    ),
   ];
 
   List<String> get favoriteIds => _favoriteIds;
   List<FeatureItem> get allFeatures => _allFeatures;
-  
+
   List<FeatureItem> get favoriteFeatures {
     return _allFeatures.where((f) => _favoriteIds.contains(f.id)).toList();
   }
@@ -69,13 +140,13 @@ class FavoriteProvider with ChangeNotifier {
         error = "Maximum 5 favorites allowed";
       }
     }
-    
+
     if (error == null) {
       notifyListeners();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('favorite_features', _favoriteIds);
     }
-    
+
     return error;
   }
 

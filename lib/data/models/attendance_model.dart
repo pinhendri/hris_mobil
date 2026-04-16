@@ -38,15 +38,30 @@ class Attendance {
 
   factory Attendance.fromJson(Map<String, dynamic> json) {
     // Handle nested employee object (dari endpoint index)
-    final employeeData = json['employee'] as Map<String, dynamic>?;
+    final employeeRaw = json['employee'];
+    final employeeData = employeeRaw is Map
+        ? Map<String, dynamic>.from(employeeRaw)
+        : null;
 
     // Handle jika dari endpoint lain yang langsung punya field employee_xxx
     final employeeUuid =
-        employeeData?['uuid'] ?? json['employee_uuid'] as String?;
+        employeeData?['uuid']?.toString() ??
+        employeeData?['employee_uuid']?.toString() ??
+        json['employee_uuid']?.toString() ??
+        json['employeeUuid']?.toString();
 
-    final employeeName = employeeData?['name'] as String?;
-    final employeePosition = employeeData?['position'] as String?;
-    final employeeNik = employeeData?['nik_employee'] as String?;
+    final employeeName =
+        employeeData?['name']?.toString() ??
+        json['employee_name']?.toString() ??
+        json['name']?.toString();
+    final employeePosition =
+        employeeData?['position']?.toString() ??
+        json['employee_position']?.toString() ??
+        json['position']?.toString();
+    final employeeNik =
+        employeeData?['nik_employee']?.toString() ??
+        json['employee_nik']?.toString() ??
+        json['nik_employee']?.toString();
 
     return Attendance(
       uuid: json['uuid'] as String?,
@@ -54,9 +69,17 @@ class Attendance {
       employeeName: employeeName,
       employeePosition: employeePosition,
       employeeNik: employeeNik,
-      date: json['date'] ?? DateTime.now().toIso8601String().split('T')[0],
-      clockIn: json['clock_in'] as String?,
-      clockOut: json['clock_out'] as String?,
+      date: _normalizeDate(
+        json['date']?.toString() ?? json['attendance_date']?.toString(),
+      ),
+      clockIn:
+          json['clock_in']?.toString() ??
+          json['clock_in_time']?.toString() ??
+          json['check_in']?.toString(),
+      clockOut:
+          json['clock_out']?.toString() ??
+          json['clock_out_time']?.toString() ??
+          json['check_out']?.toString(),
       clockInPhoto: json['clock_in_photo'] as String?,
       clockInLocation: json['clock_in_location'] as String?,
       clockOutPhoto: json['clock_out_photo'] as String?,
@@ -86,42 +109,12 @@ class Attendance {
   }
 
   // Helper methods
-  bool get hasClockIn => clockIn != null && clockIn!.isNotEmpty;
-  bool get hasClockOut => clockOut != null && clockOut!.isNotEmpty;
+  bool get hasClockIn => _hasMeaningfulTime(clockIn);
+  bool get hasClockOut => _hasMeaningfulTime(clockOut);
 
-  String get clockInTimeFormatted {
-    if (!hasClockIn) return '-';
-    try {
-      // Format: HH:mm:ss atau HH:mm
-      if (clockIn!.contains(':')) {
-        final parts = clockIn!.split(':');
-        if (parts.length >= 2) {
-          return '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
-        }
-      }
-      return clockIn!;
-    } catch (e) {
-      return clockIn!.substring(0, clockIn!.length > 5 ? 5 : clockIn!.length);
-    }
-  }
+  String get clockInTimeFormatted => _formatDisplayTime(clockIn);
 
-  String get clockOutTimeFormatted {
-    if (!hasClockOut) return '-';
-    try {
-      if (clockOut!.contains(':')) {
-        final parts = clockOut!.split(':');
-        if (parts.length >= 2) {
-          return '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
-        }
-      }
-      return clockOut!;
-    } catch (e) {
-      return clockOut!.substring(
-        0,
-        clockOut!.length > 5 ? 5 : clockOut!.length,
-      );
-    }
-  }
+  String get clockOutTimeFormatted => _formatDisplayTime(clockOut);
 
   String get status {
     if (isPendingSync) return 'Pending Sync';
@@ -150,5 +143,56 @@ class Attendance {
     if (hasClockIn && hasClockOut) return 'Complete';
     if (hasClockIn) return 'Active';
     return 'Missed';
+  }
+
+  bool _hasMeaningfulTime(String? value) {
+    final normalized = value?.trim() ?? '';
+    return normalized.isNotEmpty &&
+        normalized != '00:00:00' &&
+        normalized != '00:00';
+  }
+
+  static String _normalizeDate(String? rawValue) {
+    final normalized = rawValue?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return DateTime.now().toIso8601String().split('T')[0];
+    }
+
+    final parsed = DateTime.tryParse(normalized);
+    if (parsed != null) {
+      return parsed.toIso8601String().split('T')[0];
+    }
+
+    final match = RegExp(r'^(\d{4}-\d{2}-\d{2})').firstMatch(normalized);
+    if (match != null) {
+      return match.group(1) ?? normalized;
+    }
+
+    return normalized;
+  }
+
+  String _formatDisplayTime(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (!_hasMeaningfulTime(normalized)) {
+      return '-';
+    }
+
+    final parsedDateTime = DateTime.tryParse(normalized);
+    if (parsedDateTime != null) {
+      final hour = parsedDateTime.hour.toString().padLeft(2, '0');
+      final minute = parsedDateTime.minute.toString().padLeft(2, '0');
+      return '$hour:$minute';
+    }
+
+    final timeMatch = RegExp(r'(\d{1,2}):(\d{2})(?::\d{2})?$').firstMatch(
+      normalized,
+    );
+    if (timeMatch != null) {
+      final hour = timeMatch.group(1)!.padLeft(2, '0');
+      final minute = timeMatch.group(2)!;
+      return '$hour:$minute';
+    }
+
+    return normalized.length > 5 ? normalized.substring(0, 5) : normalized;
   }
 }

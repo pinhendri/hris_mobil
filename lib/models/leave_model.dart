@@ -3,8 +3,7 @@ class LeaveRequest {
   final String uuid;
   final String employeeName;
   final String employeeAvatar;
-  final String?
-  immediateSupervisor; // UUID dari atasan - PENTING UNTUK APPROVE/REJECT
+  final String? immediateSupervisor;
   final String type;
   final String startDate;
   final String endDate;
@@ -20,7 +19,7 @@ class LeaveRequest {
     required this.uuid,
     required this.employeeName,
     required this.employeeAvatar,
-    this.immediateSupervisor, // TAMBAHKAN FIELD INI
+    this.immediateSupervisor,
     required this.type,
     required this.startDate,
     required this.endDate,
@@ -33,31 +32,39 @@ class LeaveRequest {
   });
 
   factory LeaveRequest.fromJson(Map<String, dynamic> json) {
-    final employee = json['employee'] ?? {};
-
-    // Log untuk debugging
-    print('📦 Parsing LeaveRequest:');
-    print(
-      '  - immediate_supervisor from json: ${json['immediate_supervisor']}',
-    );
-    print('  - from employee: ${employee['immediate_supervisor']}');
+    final employee = json['employee'];
+    final employeeMap = employee is Map<String, dynamic>
+        ? employee
+        : <String, dynamic>{};
 
     return LeaveRequest(
       id: json['id']?.toString() ?? '',
-      uuid: json['uuid'] ?? '',
-      employeeName: employee['name'] ?? json['employee_name'] ?? 'Unknown',
-      employeeAvatar: employee['avatar'] ?? json['employee_avatar'] ?? '',
-      // 🔴 AMBIL immediate_supervisor DARI RESPONSE - PENTING UNTUK LOGIC APPROVE/REJECT
+      uuid:
+          employeeMap['uuid']?.toString() ??
+          json['employee_uuid']?.toString() ??
+          json['uuid']?.toString() ??
+          '',
+      employeeName:
+          employeeMap['name']?.toString() ??
+          json['employee_name']?.toString() ??
+          'Unknown',
+      employeeAvatar:
+          employeeMap['avatar']?.toString() ??
+          json['employee_avatar']?.toString() ??
+          '',
       immediateSupervisor:
-          json['immediate_supervisor'] ?? employee['immediate_supervisor'],
-      type: json['type'] ?? 'Annual Leave',
-      startDate: json['start_date'] ?? '',
-      endDate: json['end_date'] ?? '',
-      days: json['days'] ?? 0,
-      status: json['status'] ?? 'Pending',
-      avatarUrl: json['avatar_url'],
-      reason: json['reason'] ?? '',
-      createdAt: json['created_at'] ?? '',
+          json['immediate_supervisor']?.toString() ??
+          employeeMap['immediate_supervisor']?.toString(),
+      type: json['type']?.toString() ?? 'Annual Leave',
+      startDate: json['start_date']?.toString() ?? '',
+      endDate: json['end_date']?.toString() ?? '',
+      days: json['days'] is int
+          ? json['days'] as int
+          : int.tryParse(json['days']?.toString() ?? '0') ?? 0,
+      status: json['status']?.toString() ?? 'Pending',
+      avatarUrl: json['avatar_url']?.toString(),
+      reason: json['reason']?.toString() ?? '',
+      createdAt: json['created_at']?.toString() ?? '',
       isPendingSync: json['is_pending_sync'] == true,
     );
   }
@@ -114,6 +121,8 @@ class LeaveRequest {
       'is_pending_sync': isPendingSync,
     };
   }
+
+  bool get isCompanyLeave => type.toLowerCase().contains('company');
 }
 
 class LeaveBalance {
@@ -134,12 +143,6 @@ class LeaveBalance {
   });
 
   factory LeaveBalance.fromJson(Map<String, dynamic> json) {
-    print('📦 Parsing LeaveBalance from JSON: $json');
-
-    // 🔴 PERBAIKAN: Sesuaikan dengan struktur response dari API
-    // API mengembalikan format: {annual_used: 0, annual_total: 12, ...}
-    // BUKAN format nested {annual: {used: 0, total: 12}}
-
     return LeaveBalance(
       annualUsed: json['annual_used'] ?? json['annual']?['used'] ?? 0,
       annualTotal: json['annual_total'] ?? json['annual']?['total'] ?? 12,
@@ -159,5 +162,68 @@ class LeaveBalance {
       'personal_used': personalUsed,
       'personal_total': personalTotal,
     };
+  }
+}
+
+class CompanyLeaveBatch {
+  final String id;
+  final String uuid;
+  final String title;
+  final String description;
+  final String leaveType;
+  final String startDate;
+  final String endDate;
+  final int days;
+  final int totalEmployees;
+  final int processedEmployees;
+  final int skippedEmployees;
+  final String createdAt;
+  final String creatorName;
+
+  CompanyLeaveBatch({
+    required this.id,
+    required this.uuid,
+    required this.title,
+    required this.description,
+    required this.leaveType,
+    required this.startDate,
+    required this.endDate,
+    required this.days,
+    required this.totalEmployees,
+    required this.processedEmployees,
+    required this.skippedEmployees,
+    required this.createdAt,
+    required this.creatorName,
+  });
+
+  factory CompanyLeaveBatch.fromJson(Map<String, dynamic> json) {
+    final creator = json['creator'];
+    final creatorMap = creator is Map<String, dynamic>
+        ? creator
+        : <String, dynamic>{};
+
+    return CompanyLeaveBatch(
+      id: json['id']?.toString() ?? '',
+      uuid: json['uuid']?.toString() ?? '',
+      title: json['title']?.toString() ?? 'Company Leave',
+      description: json['description']?.toString() ?? '',
+      leaveType: json['leave_type']?.toString() ?? 'Company Leave',
+      startDate: json['start_date']?.toString() ?? '',
+      endDate: json['end_date']?.toString() ?? '',
+      days: json['days'] is int
+          ? json['days'] as int
+          : int.tryParse(json['days']?.toString() ?? '0') ?? 0,
+      totalEmployees: json['total_employees'] is int
+          ? json['total_employees'] as int
+          : int.tryParse(json['total_employees']?.toString() ?? '0') ?? 0,
+      processedEmployees: json['processed_employees'] is int
+          ? json['processed_employees'] as int
+          : int.tryParse(json['processed_employees']?.toString() ?? '0') ?? 0,
+      skippedEmployees: json['skipped_employees'] is int
+          ? json['skipped_employees'] as int
+          : int.tryParse(json['skipped_employees']?.toString() ?? '0') ?? 0,
+      createdAt: json['created_at']?.toString() ?? '',
+      creatorName: creatorMap['name']?.toString() ?? '',
+    );
   }
 }

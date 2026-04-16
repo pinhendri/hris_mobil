@@ -60,16 +60,26 @@ class User {
     final List<String> normalizedRoles = roleNames.isNotEmpty
         ? roleNames
         : (primaryRole.isNotEmpty ? <String>[primaryRole] : const <String>[]);
+    final employeeRaw = map['employee'];
+    final employeeMap = employeeRaw is Map
+        ? Map<String, dynamic>.from(employeeRaw)
+        : null;
+    final resolvedEmployeeUuid =
+        employeeMap?['uuid']?.toString().trim() ??
+        employeeMap?['employee_uuid']?.toString().trim() ??
+        map['employee_uuid']?.toString().trim() ??
+        map['employeeUuid']?.toString().trim() ??
+        map['uuid']?.toString().trim() ??
+        '';
 
     return User(
       id: map['id'] ?? 0,
       name: map['name'] ?? '',
       email: map['email'] ?? '',
       uuid: map['uuid'] ?? '',
-      employeeUuid:
-          map['employee_uuid']?.toString() ??
-          map['employeeUuid']?.toString() ??
-          map['uuid']?.toString(),
+      employeeUuid: resolvedEmployeeUuid.isNotEmpty
+          ? resolvedEmployeeUuid
+          : null,
       position: map['position'] ?? '',
       role: primaryRole,
       roles: normalizedRoles,

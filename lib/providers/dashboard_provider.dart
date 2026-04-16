@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -7,17 +8,30 @@ import '../core/constants/api_constants.dart';
 import '../services/offline_support.dart';
 import '../services/session_storage.dart';
 
+String _normalizeCompanyCode(dynamic value) {
+  return value?.toString().trim().toUpperCase() ?? '';
+}
+
+int? _tryParseInt(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+
+  return int.tryParse(value?.toString() ?? '');
+}
+
 Map<String, dynamic> _summarizeEmployeesForDashboard(
   Map<String, dynamic> payload,
 ) {
   final response = payload['response'];
-  final companyCode = (payload['companyCode'] as String?)?.trim() ?? '';
+  final companyCode = _normalizeCompanyCode(payload['companyCode']);
   final now =
       DateTime.tryParse(payload['now'] as String? ?? '') ?? DateTime.now();
   final currentMonthStart = DateTime(now.year, now.month, 1);
   final currentMonthEnd = DateTime(now.year, now.month + 1, 0);
 
   List<Map<String, dynamic>> employeeMaps = const [];
+  int? totalFromMeta;
 
   if (response is Map<String, dynamic>) {
     final data = response['data'];
@@ -41,6 +55,11 @@ Map<String, dynamic> _summarizeEmployeesForDashboard(
           ? deepNestedList
           : const [];
 
+      final meta = data['meta'];
+      if (meta is Map) {
+        totalFromMeta = _tryParseInt(meta['total']);
+      }
+
       employeeMaps = sourceList
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
@@ -48,17 +67,34 @@ Map<String, dynamic> _summarizeEmployeesForDashboard(
     }
   }
 
+  final discoveredCompanyCodes = employeeMaps
+      .map(
+        (employee) => _normalizeCompanyCode(
+          employee['c_code'] ?? employee['company_code'],
+        ),
+      )
+      .where((code) => code.isNotEmpty)
+      .toSet();
+  final shouldApplyLocalCompanyFilter =
+      companyCode.isNotEmpty && discoveredCompanyCodes.isNotEmpty;
+
   final filteredEmployees = employeeMaps
       .where((employee) {
-        if (companyCode.isEmpty) {
+        if (!shouldApplyLocalCompanyFilter) {
           return true;
         }
 
-        final itemCode = (employee['c_code'] ?? employee['company_code'] ?? '')
-            .toString();
+        final itemCode = _normalizeCompanyCode(
+          employee['c_code'] ?? employee['company_code'],
+        );
         return itemCode == companyCode;
       })
       .toList(growable: false);
+  final serverLikelyFilteredToSelectedCompany =
+      companyCode.isEmpty ||
+      discoveredCompanyCodes.isEmpty ||
+      (discoveredCompanyCodes.length == 1 &&
+          discoveredCompanyCodes.contains(companyCode));
 
   var activeEmployees = 0;
   var newHires = 0;
@@ -136,7 +172,12 @@ Map<String, dynamic> _summarizeEmployeesForDashboard(
       .toList(growable: false);
 
   return <String, dynamic>{
-    'totalEmployees': filteredEmployees.length,
+    'totalEmployees':
+        serverLikelyFilteredToSelectedCompany &&
+            totalFromMeta != null &&
+            totalFromMeta >= filteredEmployees.length
+        ? totalFromMeta
+        : filteredEmployees.length,
     'activeEmployees': activeEmployees,
     'newHires': newHires,
     'employeeIds': employeeIds,
@@ -178,39 +219,72 @@ class DashboardProvider with ChangeNotifier {
     return SessionStorage.getToken();
   }
 
+  Future<String> _resolveCompanyCode(String? companyCode) async {
+    final normalized = companyCode?.trim() ?? '';
+    if (normalized.isNotEmpty) {
+      return normalized;
+    }
+
+    return (await SessionStorage.getCompanyCode())?.trim() ?? '';
+  }
+
+  Uri _buildDashboardUri(
+    String path, {
+    Map<String, String>? queryParameters,
+  }) {
+    final uri = Uri.parse('${ApiConstants.baseUrl}$path');
+    if (queryParameters == null || queryParameters.isEmpty) {
+      return uri;
+    }
+
+    return uri.replace(queryParameters: queryParameters);
+  }
+
   Future<dynamic> _getJsonResponse({
     required String label,
     required Uri uri,
     required Map<String, String> headers,
     int attempts = 2,
+    Duration timeout = const Duration(seconds: 12),
   }) async {
     Object? lastError;
 
     for (int attempt = 1; attempt <= attempts; attempt++) {
-      final response = await http.get(uri, headers: headers);
-      print('GET $label attempt $attempt -> ${response.statusCode}');
-
-      if (response.statusCode != 200) {
-        lastError = Exception('HTTP ${response.statusCode}: ${response.body}');
-        if (attempt < attempts) {
-          await Future.delayed(const Duration(milliseconds: 250));
-          continue;
-        }
-        throw lastError;
-      }
-
-      final rawBody = utf8.decode(response.bodyBytes);
-
       try {
-        return json.decode(rawBody);
-      } on FormatException catch (e) {
+        final response = await http
+            .get(uri, headers: headers)
+            .timeout(timeout);
+
+        if (response.statusCode != 200) {
+          lastError = Exception('HTTP ${response.statusCode}: ${response.body}');
+          if (attempt < attempts) {
+            await Future.delayed(const Duration(milliseconds: 250));
+            continue;
+          }
+          throw lastError;
+        }
+
+        final rawBody = utf8.decode(response.bodyBytes);
+
+        try {
+          return json.decode(rawBody);
+        } on FormatException catch (e) {
+          lastError = e;
+          if (attempt < attempts) {
+            await Future.delayed(const Duration(milliseconds: 250));
+            continue;
+          }
+          rethrow;
+        }
+      } on TimeoutException catch (e) {
         lastError = e;
-        print('Invalid JSON from $label on attempt $attempt: $e');
         if (attempt < attempts) {
           await Future.delayed(const Duration(milliseconds: 250));
           continue;
         }
-        rethrow;
+        throw TimeoutException(
+          'Request $label timeout setelah ${timeout.inSeconds} detik',
+        );
       }
     }
 
@@ -219,7 +293,6 @@ class DashboardProvider with ChangeNotifier {
 
   Future<void> fetchDashboardData({String? companyCode}) async {
     if (_isLoading) {
-      print('Dashboard fetch already running, skip duplicate call.');
       return;
     }
 
@@ -228,9 +301,8 @@ class DashboardProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _currentCompanyCode = companyCode;
+      _currentCompanyCode = await _resolveCompanyCode(companyCode);
       _isUsingCachedData = false;
-      print('Dashboard init for company: $companyCode');
 
       final token = await _getToken();
       if (token.isEmpty) {
@@ -241,11 +313,21 @@ class DashboardProvider with ChangeNotifier {
       final authHeaders = <String, String>{
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
+        if ((_currentCompanyCode ?? '').isNotEmpty)
+          'X-Company-Code': _currentCompanyCode!,
       };
+      final employeeUri = _buildDashboardUri(
+        '/api/employees',
+        queryParameters: {
+          'per_page': '1000',
+          if ((_currentCompanyCode ?? '').isNotEmpty)
+            'c_code': _currentCompanyCode!,
+        },
+      );
 
       final employeeBody = await _getJsonResponse(
         label: 'employees',
-        uri: Uri.parse('${ApiConstants.baseUrl}/api/employees'),
+        uri: employeeUri,
         headers: authHeaders,
       );
 
@@ -280,18 +362,37 @@ class DashboardProvider with ChangeNotifier {
 
       final recruitmentFuture = _getJsonResponse(
         label: 'recruitment',
-        uri: Uri.parse('${ApiConstants.baseUrl}/api/recruitment'),
+        uri: _buildDashboardUri(
+          '/api/recruitment',
+          queryParameters: {
+            if ((_currentCompanyCode ?? '').isNotEmpty)
+              'c_code': _currentCompanyCode!,
+          },
+        ),
         headers: authHeaders,
       );
       final attendanceFuture = _getJsonResponse(
         label: 'attendance',
-        uri: Uri.parse('${ApiConstants.baseUrl}/api/attendances?today=true'),
+        uri: _buildDashboardUri(
+          '/api/attendances',
+          queryParameters: {
+            'today': 'true',
+            if ((_currentCompanyCode ?? '').isNotEmpty)
+              'c_code': _currentCompanyCode!,
+          },
+        ),
         headers: authHeaders,
       );
       final leaveFuture = _getJsonResponse(
         label: 'leave',
-        uri: Uri.parse(
-          '${ApiConstants.baseUrl}/api/leave-requests?status=approved&today=true',
+        uri: _buildDashboardUri(
+          '/api/leave-requests',
+          queryParameters: {
+            'status': 'approved',
+            'today': 'true',
+            if ((_currentCompanyCode ?? '').isNotEmpty)
+              'c_code': _currentCompanyCode!,
+          },
         ),
         headers: authHeaders,
       );
@@ -313,14 +414,19 @@ class DashboardProvider with ChangeNotifier {
               return false;
             }
 
-            return position['c_code'] == _currentCompanyCode ||
-                position['company_code'] == _currentCompanyCode;
+            if ((_currentCompanyCode ?? '').trim().isEmpty) {
+              return true;
+            }
+
+            return _normalizeCompanyCode(position['c_code']) ==
+                    _normalizeCompanyCode(_currentCompanyCode) ||
+                _normalizeCompanyCode(position['company_code']) ==
+                    _normalizeCompanyCode(_currentCompanyCode);
           }).length;
         } else {
           _openPositions = 0;
         }
       } catch (e) {
-        print('Recruitment fetch failed: $e');
         _openPositions = 0;
       }
 
@@ -346,7 +452,6 @@ class DashboardProvider with ChangeNotifier {
           _attendanceToday = 0;
         }
       } catch (e) {
-        print('Attendance fetch failed: $e');
         _attendanceToday = 0;
       }
 
@@ -370,16 +475,11 @@ class DashboardProvider with ChangeNotifier {
           _onLeave = 0;
         }
       } catch (e) {
-        print('Leave fetch failed: $e');
         _onLeave = 0;
       }
 
-      print(
-        'Dashboard ready: total=$_totalEmployees active=$_activeEmployees attendance=$_attendanceToday leave=$_onLeave new=$_newHires open=$_openPositions',
-      );
       await OfflineSupport.saveJsonCache(_cacheKey, _toCachePayload());
     } catch (e) {
-      print('Dashboard fatal error: $e');
       final loadedFromCache = await _loadFromCache();
       if (!loadedFromCache) {
         _error = e.toString();

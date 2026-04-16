@@ -18,7 +18,9 @@ class LeaveProvider with ChangeNotifier {
 
   List<LeaveRequest> _leaveRequests = [];
   LeaveBalance? _leaveBalance;
+  List<CompanyLeaveBatch> _companyLeaveBatches = [];
   bool _isLoading = false;
+  bool _isSubmittingCompanyLeaveBatch = false;
   String? _error;
   String? _selectedCCode;
   int? _correctEmployeeId;
@@ -31,7 +33,9 @@ class LeaveProvider with ChangeNotifier {
 
   List<LeaveRequest> get leaveRequests => _leaveRequests;
   LeaveBalance? get leaveBalance => _leaveBalance;
+  List<CompanyLeaveBatch> get companyLeaveBatches => _companyLeaveBatches;
   bool get isLoading => _isLoading;
+  bool get isSubmittingCompanyLeaveBatch => _isSubmittingCompanyLeaveBatch;
   String? get error => _error;
   int? get correctEmployeeId => _correctEmployeeId;
   bool get isUsingCachedData => _isUsingCachedData;
@@ -39,6 +43,30 @@ class LeaveProvider with ChangeNotifier {
   String? get syncNotice => _syncNotice;
   String? get lastActionMessage => _lastActionMessage;
   bool get lastActionQueued => _lastActionQueued;
+  bool get canManageCompanyLeave {
+    final normalizedRoles = <String>{
+      _normalizeRole(_authProvider.user?.role ?? ''),
+      ..._authProvider.roles.map(_normalizeRole),
+    }..removeWhere((role) => role.isEmpty);
+
+    for (final role in normalizedRoles) {
+      if (const {
+        'administrator',
+        'admin',
+        'superadmin',
+        'super-admin',
+        'platform-admin',
+      }.contains(role)) {
+        return true;
+      }
+
+      if (role.contains('hrd') || role.contains('hr-') || role == 'hr') {
+        return true;
+      }
+    }
+
+    return false;
+  }
 
   Future<void> _bootstrapOfflineSupport() async {
     await _refreshPendingSyncState(notify: false);
@@ -71,7 +99,9 @@ class LeaveProvider with ChangeNotifier {
     try {
       await syncOfflineActions(silent: true, refreshAfterSync: false);
 
-      final requestsResponse = await _apiService.get('/leave-requests');
+      final requestsResponse = await _apiService.get(
+        '/leave-requests$_companyQuerySuffix',
+      );
       if (requestsResponse is! Map<String, dynamic> ||
           requestsResponse['success'] != true) {
         throw Exception(
@@ -81,27 +111,58 @@ class LeaveProvider with ChangeNotifier {
         );
       }
 
-      final balanceResponse = await _apiService.get('/leave-balance');
-      if (balanceResponse is! Map<String, dynamic> ||
-          balanceResponse['success'] != true ||
-          balanceResponse['data'] == null) {
-        throw Exception(
-          balanceResponse is Map<String, dynamic>
-              ? balanceResponse['message'] ?? 'Failed to load leave balance'
-              : 'Failed to load leave balance',
-        );
-      }
-
       final requestItems = (requestsResponse['data'] as List? ?? const [])
           .whereType<Map>()
           .map((json) => LeaveRequest.fromJson(Map<String, dynamic>.from(json)))
           .toList(growable: true);
 
       _leaveRequests = requestItems;
-      _leaveBalance = LeaveBalance.fromJson(
-        Map<String, dynamic>.from(balanceResponse['data']),
-      );
-      _correctEmployeeId = _parseInt(balanceResponse['data']['employee_id']);
+      _leaveBalance = null;
+      _correctEmployeeId = null;
+
+      try {
+        final balanceResponse = await _apiService.get(
+          '/leave-balance$_companyQuerySuffix',
+        );
+        if (balanceResponse is Map<String, dynamic> &&
+            balanceResponse['success'] == true &&
+            balanceResponse['data'] is Map<String, dynamic>) {
+          final balanceData = Map<String, dynamic>.from(
+            balanceResponse['data'],
+          );
+          _leaveBalance = LeaveBalance.fromJson(balanceData);
+          _correctEmployeeId = _parseInt(balanceData['employee_id']);
+        }
+      } catch (_) {
+        _leaveBalance = null;
+        _correctEmployeeId = null;
+      }
+
+      if (canManageCompanyLeave) {
+        try {
+          final batchesResponse = await _apiService.get(
+            '/leave-requests/company-batches$_companyQuerySuffix',
+          );
+          if (batchesResponse is Map<String, dynamic> &&
+              batchesResponse['success'] == true &&
+              batchesResponse['data'] is List) {
+            _companyLeaveBatches = (batchesResponse['data'] as List)
+                .whereType<Map>()
+                .map(
+                  (json) => CompanyLeaveBatch.fromJson(
+                    Map<String, dynamic>.from(json),
+                  ),
+                )
+                .toList(growable: false);
+          } else {
+            _companyLeaveBatches = [];
+          }
+        } catch (_) {
+          _companyLeaveBatches = [];
+        }
+      } else {
+        _companyLeaveBatches = [];
+      }
 
       await _mergePendingOfflineRequests();
       await _saveCache();
@@ -184,7 +245,7 @@ class LeaveProvider with ChangeNotifier {
 
       final effectiveCompanyCode = cCode.isNotEmpty
           ? cCode
-          : (_selectedCCode ?? _authProvider.getCompanyCode());
+          : _effectiveCompanyCode;
 
       final requestData = _buildSubmitPayload(
         employeeId: _correctEmployeeId!,
@@ -234,6 +295,7 @@ class LeaveProvider with ChangeNotifier {
     try {
       final response = await _apiService.put('/leave-requests/$id', {
         'status': 'Approved',
+        if (_effectiveCompanyCode.isNotEmpty) 'c_code': _effectiveCompanyCode,
       });
 
       if (response is Map<String, dynamic> && response['success'] == true) {
@@ -256,6 +318,7 @@ class LeaveProvider with ChangeNotifier {
     try {
       final response = await _apiService.put('/leave-requests/$id', {
         'status': 'Rejected',
+        if (_effectiveCompanyCode.isNotEmpty) 'c_code': _effectiveCompanyCode,
       });
 
       if (response is Map<String, dynamic> && response['success'] == true) {
@@ -267,6 +330,74 @@ class LeaveProvider with ChangeNotifier {
       return false;
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> createCompanyLeaveBatch({
+    required String title,
+    required String description,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String cCode,
+  }) async {
+    _isSubmittingCompanyLeaveBatch = true;
+    _error = null;
+    _lastActionQueued = false;
+    notifyListeners();
+
+    try {
+      final effectiveCompanyCode = cCode.isNotEmpty
+          ? cCode
+          : _effectiveCompanyCode;
+      if (effectiveCompanyCode.isEmpty) {
+        throw Exception('Company code not found');
+      }
+
+      final normalizedStartDate = DateTime(
+        startDate.year,
+        startDate.month,
+        startDate.day,
+      );
+      final normalizedEndDate = DateTime(
+        endDate.year,
+        endDate.month,
+        endDate.day,
+      );
+
+      final payload = {
+        'title': title.trim(),
+        'description': description.trim(),
+        'leave_type': 'Company Leave',
+        'start_date': DateFormat('yyyy-MM-dd').format(normalizedStartDate),
+        'end_date': DateFormat('yyyy-MM-dd').format(normalizedEndDate),
+        'days': normalizedEndDate.difference(normalizedStartDate).inDays + 1,
+        'c_code': effectiveCompanyCode,
+      };
+
+      final response = await _apiService.post(
+        '/leave-requests/company-batches',
+        payload,
+      );
+
+      if (response is Map<String, dynamic> && response['success'] == true) {
+        _lastActionMessage =
+            response['message']?.toString() ??
+            'Company leave batch created successfully.';
+        await fetchLeaveData();
+        return true;
+      }
+
+      _error = response is Map<String, dynamic>
+          ? response['message']?.toString() ??
+                'Failed to create company leave batch'
+          : 'Failed to create company leave batch';
+      return false;
+    } catch (error) {
+      _error = 'Error: ${OfflineSupport.normalizeMessage(error)}';
+      return false;
+    } finally {
+      _isSubmittingCompanyLeaveBatch = false;
       notifyListeners();
     }
   }
@@ -509,6 +640,22 @@ class LeaveProvider with ChangeNotifier {
     }
 
     return int.tryParse(value?.toString() ?? '');
+  }
+
+  String _normalizeRole(String value) {
+    return value.trim().toLowerCase().replaceAll('_', '-').replaceAll(' ', '-');
+  }
+
+  String get _effectiveCompanyCode =>
+      _selectedCCode ?? _authProvider.getCompanyCode();
+
+  String get _companyQuerySuffix {
+    final companyCode = _effectiveCompanyCode.trim();
+    if (companyCode.isEmpty) {
+      return '';
+    }
+
+    return '?c_code=${Uri.encodeComponent(companyCode)}';
   }
 
   String get _currentEmployeeUuid {

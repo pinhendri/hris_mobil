@@ -19,7 +19,7 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
   static const LatLng _fallbackLatLng = LatLng(-6.2088, 106.8456);
   static const LatLng _defaultEmulatorLatLng = LatLng(37.4219983, -122.084);
   static const String _tileUrlTemplate =
-      '${ApiConstants.baseUrl}${ApiConstants.mapTilesEndpoint}';
+      ApiConstants.openStreetMapTilesEndpoint;
   static const String _tileFallbackUrlTemplate =
       '${ApiConstants.baseUrl}${ApiConstants.mapTilesProxyEndpoint}';
 
@@ -195,9 +195,7 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.showSnackBar(
       const SnackBar(
-        content: Text(
-          'Map gagal dimuat dari proxy backend. Coba lagi sebentar.',
-        ),
+        content: Text('Map gagal dimuat. Periksa koneksi lalu coba lagi.'),
       ),
     );
   }
@@ -294,6 +292,11 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
                       ),
                     ],
                   ),
+                RichAttributionWidget(
+                  attributions: const [
+                    TextSourceAttribution('OpenStreetMap contributors'),
+                  ],
+                ),
               ],
             ),
           ),

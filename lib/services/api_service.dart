@@ -8,6 +8,7 @@ class ApiService {
 
   Future<Map<String, String>> _getHeaders() async {
     final token = await SessionStorage.getToken();
+    final companyCode = (await SessionStorage.getCompanyCode())?.trim() ?? '';
 
     final headers = <String, String>{
       'Content-Type': 'application/json',
@@ -16,6 +17,10 @@ class ApiService {
 
     if (token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
+    }
+
+    if (companyCode.isNotEmpty) {
+      headers['X-Company-Code'] = companyCode;
     }
 
     return headers;
