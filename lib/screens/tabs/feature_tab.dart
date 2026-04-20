@@ -39,6 +39,8 @@ class FeatureTab extends StatefulWidget {
 
 class _FeatureTabState extends State<FeatureTab>
     with SingleTickerProviderStateMixin {
+  static const double _maxContentWidth = 520;
+
   late AnimationController _animationController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -75,12 +77,12 @@ class _FeatureTabState extends State<FeatureTab>
       availableFeatures,
       selectedCategory,
     );
+    final hasActiveFilters =
+        _searchQuery.isNotEmpty || selectedCategory != 'feature_category_all';
 
     if (availableFeatures.isEmpty) {
       return Scaffold(
-        backgroundColor: isDark
-            ? const Color(0xFF0A0A0A)
-            : const Color(0xFFF8F9FA),
+        backgroundColor: _pageBackground(isDark),
         body: AccessDeniedState(
           title: context.tr('feature_no_active_title'),
           message: context.tr('feature_no_active_message'),
@@ -89,345 +91,656 @@ class _FeatureTabState extends State<FeatureTab>
     }
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0A0A0A)
-          : const Color(0xFFF8F9FA),
+      backgroundColor: _pageBackground(isDark),
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
         slivers: [
-          // MARK: - Enhanced Header with Animation
           SliverAppBar(
-            expandedHeight: 200,
+            expandedHeight: 208,
             pinned: true,
             floating: true,
             snap: true,
-            backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.blue,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            backgroundColor: isDark
+                ? const Color(0xFF0F1A2C)
+                : const Color(0xFF2563EB),
             flexibleSpace: FlexibleSpaceBar(
-              background: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
+              background: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: isDark
-                        ? const [
-                            Color(0xFF1A237E),
-                            Color(0xFF4A148C),
-                            Color(0xFF7B1FA2),
-                          ]
-                        : [
-                            Colors.blue.shade400,
-                            Colors.purple.shade400,
-                            Colors.pink.shade400,
-                          ],
+                        ? const [Color(0xFF0F172A), Color(0xFF1D4ED8)]
+                        : const [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
                   ),
                 ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TweenAnimationBuilder<double>(
-                          duration: const Duration(milliseconds: 500),
-                          tween: Tween(begin: 0, end: 1),
-                          builder: (context, value, child) {
-                            return Opacity(
-                              opacity: value,
-                              child: Transform.translate(
-                                offset: Offset(0, 20 * (1 - value)),
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: Text(
-                            context.tr('feature_header_title'),
-                            style: GoogleFonts.poppins(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Positioned(
+                      top: -96,
+                      right: -36,
+                      child: Container(
+                        width: 220,
+                        height: 220,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.08),
                         ),
-                        const SizedBox(height: 8),
-                        TweenAnimationBuilder<double>(
-                          duration: const Duration(milliseconds: 700),
-                          tween: Tween(begin: 0, end: 1),
-                          builder: (context, value, child) {
-                            return Opacity(
-                              opacity: value,
-                              child: Transform.translate(
-                                offset: Offset(0, 20 * (1 - value)),
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: Text(
-                            context.tr('feature_header_subtitle'),
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: Colors.white.withOpacity(0.9),
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                    Positioned(
+                      left: -64,
+                      bottom: -84,
+                      child: Container(
+                        width: 180,
+                        height: 180,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.06),
+                        ),
+                      ),
+                    ),
+                    SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                        child: _buildConstrainedContent(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 50,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.16,
+                                      ),
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.widgets_rounded,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        TweenAnimationBuilder<double>(
+                                          duration: const Duration(
+                                            milliseconds: 500,
+                                          ),
+                                          tween: Tween(begin: 0, end: 1),
+                                          builder: (context, value, child) {
+                                            return Opacity(
+                                              opacity: value,
+                                              child: Transform.translate(
+                                                offset: Offset(
+                                                  0,
+                                                  16 * (1 - value),
+                                                ),
+                                                child: child,
+                                              ),
+                                            );
+                                          },
+                                          child: Text(
+                                            context.tr('feature_header_title'),
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 26,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.white,
+                                              letterSpacing: -0.5,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        TweenAnimationBuilder<double>(
+                                          duration: const Duration(
+                                            milliseconds: 650,
+                                          ),
+                                          tween: Tween(begin: 0, end: 1),
+                                          builder: (context, value, child) {
+                                            return Opacity(
+                                              opacity: value,
+                                              child: Transform.translate(
+                                                offset: Offset(
+                                                  0,
+                                                  16 * (1 - value),
+                                                ),
+                                                child: child,
+                                              ),
+                                            );
+                                          },
+                                          child: Text(
+                                            context.tr(
+                                              'feature_header_subtitle',
+                                            ),
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 13,
+                                              height: 1.45,
+                                              color: Colors.white.withValues(
+                                                alpha: 0.88,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _buildHeaderPill(
+                                    icon: Icons.grid_view_rounded,
+                                    label:
+                                        '${filteredFeatures.length} / ${availableFeatures.length}',
+                                  ),
+                                  _buildHeaderPill(
+                                    icon: Icons.sell_outlined,
+                                    label: _featureCategoryLabel(
+                                      context,
+                                      selectedCategory,
+                                    ),
+                                  ),
+                                  if (_searchQuery.isNotEmpty)
+                                    _buildHeaderPill(
+                                      icon: Icons.search_rounded,
+                                      label: _searchQuery,
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
 
-          // MARK: - Enhanced Search Bar
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-            sliver: SliverToBoxAdapter(
-              child: Hero(
-                tag: 'searchBar',
-                child: Material(
-                  elevation: 0,
-                  color: Colors.transparent,
-                  child: Container(
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.1)
-                            : Colors.grey.withOpacity(0.2),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 20,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (value) {
-                        setState(() => _searchQuery = value.toLowerCase());
-                      },
-                      style: GoogleFonts.poppins(
-                        color: isDark ? Colors.white : Colors.black87,
-                        fontSize: 14,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: context.tr('feature_search_hint'),
-                        hintStyle: GoogleFonts.poppins(
-                          color: isDark ? Colors.white38 : Colors.grey.shade400,
-                          fontSize: 14,
-                        ),
-                        prefixIcon: Icon(
-                          Icons.search_rounded,
-                          color: isDark ? Colors.white38 : Colors.grey.shade400,
-                        ),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: Icon(
-                                  Icons.clear,
-                                  color: isDark
-                                      ? Colors.white38
-                                      : Colors.grey.shade400,
-                                  size: 20,
-                                ),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
-                              )
-                            : null,
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // MARK: - Categories Filter
           SliverToBoxAdapter(
-            child: Container(
-              height: 50,
-              margin: const EdgeInsets.only(left: 20),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: categories.length,
-                itemBuilder: (context, index) {
-                  final category = categories[index];
-                  final isSelected = selectedCategory == category;
-
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: FilterChip(
-                      selected: isSelected,
-                      label: Text(_featureCategoryLabel(context, category)),
-                      onSelected: (selected) {
-                        setState(() => _selectedCategory = category);
-                      },
-                      backgroundColor: isDark
-                          ? const Color(0xFF1E1E1E)
-                          : Colors.white,
-                      selectedColor: isDark
-                          ? Colors.blue.shade800
-                          : Colors.blue,
-                      labelStyle: GoogleFonts.poppins(
-                        fontSize: 13,
-                        color: isSelected
-                            ? Colors.white
-                            : isDark
-                            ? Colors.white70
-                            : Colors.grey.shade700,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
-                  );
-                },
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: _buildConstrainedContent(
+                _buildSearchAndFilterSection(
+                  isDark: isDark,
+                  categories: categories,
+                  selectedCategory: selectedCategory,
+                  availableCount: availableFeatures.length,
+                  filteredCount: filteredFeatures.length,
+                  hasActiveFilters: hasActiveFilters,
+                ),
               ),
             ),
           ),
 
-          // MARK: - Features Grid with Categories
           if (filteredFeatures.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: _buildEmptyFeatureState(isDark, selectedCategory),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: _buildConstrainedContent(
+                  _buildEmptyFeatureState(isDark, selectedCategory),
+                ),
               ),
             )
           else
-            SliverPadding(
-              padding: const EdgeInsets.all(16),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 0.9,
-                ),
-                delegate: SliverChildListDelegate(
-                  filteredFeatures
-                      .map(
-                        (feature) => _buildFeatureCard(
-                          context,
-                          feature: feature,
-                          isDark: isDark,
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: _buildConstrainedContent(
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final layoutConfig = _resolveFeatureGridLayout(
+                        constraints.maxWidth,
+                      );
+
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: filteredFeatures.length,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: layoutConfig.crossAxisCount,
+                          mainAxisSpacing: layoutConfig.mainAxisSpacing,
+                          crossAxisSpacing: layoutConfig.crossAxisSpacing,
+                          mainAxisExtent: layoutConfig.mainAxisExtent,
                         ),
-                      )
-                      .toList(),
+                        itemBuilder: (context, index) {
+                          final feature = filteredFeatures[index];
+                          return _buildFeatureCard(
+                            context,
+                            feature: feature,
+                            isDark: isDark,
+                            layoutConfig: layoutConfig,
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
 
-          // MARK: - Enhanced Footer
           SliverToBoxAdapter(
-            child: Container(
-              margin: const EdgeInsets.all(20),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [const Color(0xFF2C3E50), const Color(0xFF3498DB)]
-                      : [Colors.blue.shade50, Colors.purple.shade50],
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                96 + MediaQuery.of(context).padding.bottom,
+              ),
+              child: _buildConstrainedContent(
+                _buildFooterCard(
+                  isDark: isDark,
+                  availableCount: availableFeatures.length,
+                  filteredCount: filteredFeatures.length,
+                  hasActiveFilters: hasActiveFilters,
                 ),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConstrainedContent(Widget child) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+        child: child,
+      ),
+    );
+  }
+
+  Color _pageBackground(bool isDark) {
+    return isDark ? const Color(0xFF081120) : const Color(0xFFF3F6FB);
+  }
+
+  Color _surfaceColor(bool isDark) {
+    return isDark ? const Color(0xFF101A2B) : Colors.white;
+  }
+
+  Color _surfaceBorderColor(bool isDark) {
+    return isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : const Color(0xFFDCE5F0);
+  }
+
+  Color _subtleSurfaceColor(bool isDark) {
+    return isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : const Color(0xFFF6F8FC);
+  }
+
+  List<BoxShadow> _surfaceShadows(bool isDark) {
+    return [
+      BoxShadow(
+        color: isDark
+            ? Colors.black.withValues(alpha: 0.28)
+            : const Color(0xFF0F172A).withValues(alpha: 0.08),
+        blurRadius: isDark ? 28 : 22,
+        offset: const Offset(0, 12),
+      ),
+    ];
+  }
+
+  Widget _buildSectionCard({
+    required bool isDark,
+    required Widget child,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
+  }) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: _surfaceColor(isDark),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _surfaceBorderColor(isDark)),
+        boxShadow: _surfaceShadows(isDark),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildHeaderPill({required IconData icon, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: Colors.white.withValues(alpha: 0.92)),
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.92),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoPill({
+    required bool isDark,
+    required IconData icon,
+    required String label,
+    Color? color,
+  }) {
+    final accent = color ?? (isDark ? Colors.blue.shade200 : Colors.blue);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: accent.withValues(alpha: isDark ? 0.28 : 0.16),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: accent),
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white70 : Colors.grey.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchAndFilterSection({
+    required bool isDark,
+    required List<String> categories,
+    required String selectedCategory,
+    required int availableCount,
+    required int filteredCount,
+    required bool hasActiveFilters,
+  }) {
+    return _buildSectionCard(
+      isDark: isDark,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Hero(
+            tag: 'searchBar',
+            child: Material(
+              elevation: 0,
+              color: Colors.transparent,
+              child: Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  color: _subtleSurfaceColor(isDark),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _surfaceBorderColor(isDark)),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (value) {
+                    setState(() => _searchQuery = value.toLowerCase());
+                  },
+                  style: GoogleFonts.poppins(
+                    color: isDark ? Colors.white : Colors.black87,
+                    fontSize: 14,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: context.tr('feature_search_hint'),
+                    hintStyle: GoogleFonts.poppins(
+                      color: isDark ? Colors.white38 : Colors.grey.shade400,
+                      fontSize: 14,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      color: isDark ? Colors.white38 : Colors.grey.shade400,
+                    ),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(
+                              Icons.clear_rounded,
+                              color: isDark
+                                  ? Colors.white38
+                                  : Colors.grey.shade400,
+                              size: 20,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildInfoPill(
+                isDark: isDark,
+                icon: Icons.dashboard_customize_outlined,
+                label: '$filteredCount / $availableCount',
+              ),
+              if (hasActiveFilters)
+                _buildInfoPill(
+                  isDark: isDark,
+                  icon: Icons.tune_rounded,
+                  label: _featureCategoryLabel(context, selectedCategory),
+                  color: isDark ? Colors.cyan.shade200 : Colors.indigo.shade600,
+                ),
+              if (_searchQuery.isNotEmpty)
+                _buildInfoPill(
+                  isDark: isDark,
+                  icon: Icons.search_rounded,
+                  label: _searchQuery,
                   color: isDark
-                      ? Colors.white.withOpacity(0.1)
-                      : Colors.blue.withOpacity(0.2),
+                      ? Colors.orange.shade200
+                      : Colors.orange.shade700,
                 ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 42,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              itemBuilder: (context, index) {
+                final category = categories[index];
+                final isSelected = selectedCategory == category;
+
+                return Padding(
+                  padding: EdgeInsets.only(
+                    right: index == categories.length - 1 ? 0 : 10,
+                  ),
+                  child: FilterChip(
+                    selected: isSelected,
+                    label: Text(_featureCategoryLabel(context, category)),
+                    onSelected: (selected) {
+                      setState(() => _selectedCategory = category);
+                    },
+                    backgroundColor: isDark
+                        ? const Color(0xFF162238)
+                        : const Color(0xFFF6F8FC),
+                    selectedColor: isDark
+                        ? Colors.blue.shade800
+                        : Colors.blue.shade700,
+                    side: BorderSide(
+                      color: isSelected
+                          ? Colors.transparent
+                          : _surfaceBorderColor(isDark),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
+                    labelStyle: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: isSelected
+                          ? Colors.white
+                          : isDark
+                          ? Colors.white70
+                          : Colors.grey.shade700,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    showCheckmark: false,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooterCard({
+    required bool isDark,
+    required int availableCount,
+    required int filteredCount,
+    required bool hasActiveFilters,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? const [Color(0xFF122033), Color(0xFF1D4ED8)]
+              : const [Color(0xFFEAF2FF), Color(0xFFF7FAFF)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : const Color(0xFFDCE7F5),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: isDark ? 0.12 : 0.82),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(
+              Icons.lightbulb_outline_rounded,
+              color: isDark ? Colors.blue.shade200 : Colors.blue.shade700,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context
+                      .tr('feature_footer_count')
+                      .replaceAll('{count}', availableCount.toString()),
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  hasActiveFilters
+                      ? '$filteredCount ${context.tr('feature_header_title').toLowerCase()}'
+                      : context.tr('feature_footer_subtitle'),
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: isDark ? Colors.white70 : Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: isDark ? Colors.blue.shade200 : Colors.blue.shade700,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: (isDark ? Colors.blue.shade200 : Colors.blue.shade700)
+                      .withValues(alpha: 0.28),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: IconButton(
+              icon: Icon(
+                Icons.arrow_forward_rounded,
+                color: isDark ? Colors.black87 : Colors.white,
+                size: 16,
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.1)
-                          : Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      Icons.lightbulb_outline_rounded,
-                      color: isDark ? Colors.blue.shade300 : Colors.blue,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context
-                              .tr('feature_footer_count')
-                              .replaceAll(
-                                '{count}',
-                                availableFeatures.length.toString(),
-                              ),
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: isDark
-                                ? Colors.white
-                                : AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          context.tr('feature_footer_subtitle'),
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            color: isDark
-                                ? Colors.white60
-                                : Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.blue.shade300 : Colors.blue,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: (isDark ? Colors.blue.shade300 : Colors.blue)
-                              .withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.arrow_forward_rounded,
-                        color: isDark ? Colors.black87 : Colors.white,
-                        size: 18,
-                      ),
-                      onPressed: () {},
-                      padding: EdgeInsets.zero,
-                    ),
-                  ),
-                ],
-              ),
+              onPressed: () {},
+              padding: EdgeInsets.zero,
             ),
           ),
         ],
@@ -657,26 +970,18 @@ class _FeatureTabState extends State<FeatureTab>
               .tr('feature_empty_category')
               .replaceAll('{category}', categoryLabel);
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+    return _buildSectionCard(
+      isDark: isDark,
+      padding: const EdgeInsets.all(20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            width: 58,
+            height: 58,
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.12),
+              color: Colors.orange.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -688,6 +993,7 @@ class _FeatureTabState extends State<FeatureTab>
           const SizedBox(height: 16),
           Text(
             context.tr('feature_empty_title'),
+            textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w700,
@@ -697,8 +1003,10 @@ class _FeatureTabState extends State<FeatureTab>
           const SizedBox(height: 8),
           Text(
             subtitle,
+            textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 13,
+              height: 1.5,
               color: isDark ? Colors.white60 : Colors.grey.shade600,
             ),
           ),
@@ -711,7 +1019,21 @@ class _FeatureTabState extends State<FeatureTab>
     BuildContext context, {
     required FeatureItem feature,
     required bool isDark,
+    required _FeatureGridLayoutConfig layoutConfig,
   }) {
+    final compact = layoutConfig.compact;
+    final ultraCompact = layoutConfig.ultraCompact;
+    final cardRadius = compact ? 18.0 : 22.0;
+    final cardPadding = ultraCompact ? 8.0 : (compact ? 10.0 : 12.0);
+    final iconSize = ultraCompact ? 18.0 : (compact ? 20.0 : 22.0);
+    final iconBoxSize = ultraCompact ? 34.0 : (compact ? 38.0 : 42.0);
+    final badgeSize = ultraCompact ? 22.0 : (compact ? 24.0 : 26.0);
+    final titleFontSize = ultraCompact ? 10.5 : (compact ? 11.25 : 12.0);
+    final chipFontSize = ultraCompact ? 7.0 : (compact ? 7.6 : 9.0);
+    final chipHorizontalPadding = ultraCompact ? 6.0 : (compact ? 7.0 : 8.0);
+    final chipVerticalPadding = ultraCompact ? 4.0 : 5.0;
+    final bubbleSize = ultraCompact ? 60.0 : (compact ? 72.0 : 88.0);
+
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 300 + (feature.labelKey.hashCode % 300)),
       tween: Tween(begin: 0, end: 1),
@@ -733,10 +1055,10 @@ class _FeatureTabState extends State<FeatureTab>
               );
             });
           },
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(cardRadius),
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(cardRadius),
               gradient: LinearGradient(
                 colors: feature.gradient,
                 begin: Alignment.topLeft,
@@ -744,75 +1066,105 @@ class _FeatureTabState extends State<FeatureTab>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
             child: Stack(
               children: [
-                // Background pattern
                 Positioned(
-                  right: -10,
-                  bottom: -10,
-                  child: Icon(
-                    feature.icon,
-                    size: 60,
-                    color: Colors.white.withOpacity(0.15),
+                  right: ultraCompact ? -14 : -18,
+                  bottom: ultraCompact ? -14 : -18,
+                  child: Container(
+                    width: bubbleSize,
+                    height: bubbleSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.12),
+                    ),
                   ),
                 ),
 
                 // Popular badge
                 if (feature.isPopular)
                   Positioned(
-                    top: 8,
-                    right: 8,
+                    top: ultraCompact ? 8 : 10,
+                    right: ultraCompact ? 8 : 10,
                     child: Container(
-                      padding: const EdgeInsets.all(4),
+                      width: badgeSize,
+                      height: badgeSize,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.3),
-                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.18),
+                        ),
                       ),
-                      child: const Text('🔥', style: TextStyle(fontSize: 10)),
+                      child: const Icon(
+                        Icons.local_fire_department_rounded,
+                        color: Colors.white,
+                        size: 13,
+                      ),
                     ),
                   ),
 
-                // Content
                 Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(cardPadding),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Icon container dengan efek glass morphism
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        width: iconBoxSize,
+                        height: iconBoxSize,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(
+                            compact ? 14 : 16,
+                          ),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.3),
-                            width: 2,
+                            color: Colors.white.withValues(alpha: 0.24),
                           ),
                         ),
                         child: Icon(
                           feature.icon,
                           color: Colors.white,
-                          size: 28,
+                          size: iconSize,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      // Label
+                      const Spacer(),
                       Text(
                         context.tr(feature.labelKey),
                         style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                          fontSize: titleFontSize,
+                          height: 1.3,
+                          fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
-                        textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                      SizedBox(height: compact ? 5 : 6),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: chipHorizontalPadding,
+                          vertical: chipVerticalPadding,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          _featureCategoryLabel(context, feature.categoryKey),
+                          style: GoogleFonts.poppins(
+                            fontSize: chipFontSize,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.92),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
@@ -822,6 +1174,39 @@ class _FeatureTabState extends State<FeatureTab>
           ),
         ),
       ),
+    );
+  }
+
+  _FeatureGridLayoutConfig _resolveFeatureGridLayout(double availableWidth) {
+    if (availableWidth >= 460) {
+      return const _FeatureGridLayoutConfig(
+        crossAxisCount: 4,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        mainAxisExtent: 162,
+        compact: true,
+        ultraCompact: false,
+      );
+    }
+
+    if (availableWidth >= 340) {
+      return const _FeatureGridLayoutConfig(
+        crossAxisCount: 3,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        mainAxisExtent: 156,
+        compact: true,
+        ultraCompact: false,
+      );
+    }
+
+    return const _FeatureGridLayoutConfig(
+      crossAxisCount: 3,
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      mainAxisExtent: 148,
+      compact: true,
+      ultraCompact: true,
     );
   }
 }
@@ -843,4 +1228,22 @@ class FeatureItem {
     required this.categoryKey,
     this.isPopular = false,
   });
+}
+
+class _FeatureGridLayoutConfig {
+  const _FeatureGridLayoutConfig({
+    required this.crossAxisCount,
+    required this.mainAxisSpacing,
+    required this.crossAxisSpacing,
+    required this.mainAxisExtent,
+    required this.compact,
+    required this.ultraCompact,
+  });
+
+  final int crossAxisCount;
+  final double mainAxisSpacing;
+  final double crossAxisSpacing;
+  final double mainAxisExtent;
+  final bool compact;
+  final bool ultraCompact;
 }

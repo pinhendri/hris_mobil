@@ -127,6 +127,7 @@ class _ClockInScreenState extends State<ClockInScreen> {
   String _locationError = '';
   StreamSubscription<Position>? _positionStream;
   bool _isPhotoTaken = false;
+  bool _isOpeningCamera = false;
   bool _isMapReady = false;
   bool _isLoadingAttendanceArea = true;
   String _employeeUuid = '';
@@ -330,45 +331,35 @@ class _ClockInScreenState extends State<ClockInScreen> {
   }
 
   Future<void> _takePhoto() async {
+    if (_isOpeningCamera) {
+      return;
+    }
+
     final ImagePicker picker = ImagePicker();
 
-    final source = await showDialog<ImageSource>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Pilih Sumber Foto'),
-        content: const Text('Ambil foto dari kamera atau galeri?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, ImageSource.camera),
-            child: const Text('Kamera'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, ImageSource.gallery),
-            child: const Text('Galeri'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, null),
-            child: const Text('Batal'),
-          ),
-        ],
-      ),
-    );
-
-    if (source == null) return;
-
     try {
+      _isOpeningCamera = true;
+
       final XFile? image = await picker.pickImage(
-        source: source,
+        source: ImageSource.camera,
         preferredCameraDevice: CameraDevice.front,
         imageQuality: 50,
         maxWidth: 800,
         maxHeight: 800,
       );
 
+      if (!mounted) {
+        return;
+      }
+
       if (image != null) {
         final file = File(image.path);
         final bytes = await file.readAsBytes();
         final base64Image = base64Encode(bytes);
+
+        if (!mounted) {
+          return;
+        }
 
         setState(() {
           _photo = file;
@@ -377,12 +368,18 @@ class _ClockInScreenState extends State<ClockInScreen> {
         });
       }
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Gagal mengambil foto: $e'),
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      _isOpeningCamera = false;
     }
   }
 
@@ -651,6 +648,14 @@ class _ClockInScreenState extends State<ClockInScreen> {
     setState(() {
       _captureStep = _AttendanceCaptureStep.photo;
     });
+
+    if (!_isPhotoTaken) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _isPhotoStep && !_isPhotoTaken) {
+          unawaited(_takePhoto());
+        }
+      });
+    }
   }
 
   Future<void> _submitAttendance() async {

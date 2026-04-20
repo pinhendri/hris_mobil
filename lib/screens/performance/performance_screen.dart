@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../providers/performance_provider.dart';
-import '../../models/performance_model.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/performance_model.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/performance_provider.dart';
 
 class PerformanceScreen extends StatelessWidget {
   const PerformanceScreen({super.key});
@@ -10,7 +12,7 @@ class PerformanceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => PerformanceProvider(),
+      create: (context) => PerformanceProvider(context.read<AuthProvider>()),
       child: const _PerformanceScreenContent(),
     );
   }
@@ -21,7 +23,7 @@ class _PerformanceScreenContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<PerformanceProvider>(context);
+    final provider = context.watch<PerformanceProvider>();
     final summary = provider.summary;
 
     return Scaffold(
@@ -32,18 +34,56 @@ class _PerformanceScreenContent extends StatelessWidget {
         foregroundColor: Colors.black,
       ),
       backgroundColor: Colors.grey[50],
-      body: provider.isLoading
+      body: provider.isLoading && !provider.hasData
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: () => provider.setPeriod(provider.selectedPeriod),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildPeriodSelector(context, provider),
+              onRefresh: provider.refresh,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _buildPeriodSelector(provider),
+                  if (provider.isUsingCachedData) ...[
+                    const SizedBox(height: 16),
+                    _buildInfoBanner(
+                      icon: Icons.wifi_off_rounded,
+                      title: 'Showing cached performance data',
+                      message:
+                          'Latest server data could not be reached, so the app is showing the last saved result.',
+                      color: Colors.amber,
+                    ),
+                  ],
+                  if (provider.error != null && provider.hasData) ...[
+                    const SizedBox(height: 16),
+                    _buildInfoBanner(
+                      icon: Icons.info_outline,
+                      title: 'Some performance data may be incomplete',
+                      message: provider.error!,
+                      color: Colors.redAccent,
+                    ),
+                  ],
+                  if (!provider.hasData && provider.error != null) ...[
                     const SizedBox(height: 20),
-                    _buildSummaryCard(summary),
+                    _buildStateCard(
+                      icon: Icons.cloud_off_outlined,
+                      title: 'Unable to load performance data',
+                      message: provider.error!,
+                      actionLabel: 'Try Again',
+                      onPressed: provider.refresh,
+                    ),
+                  ] else if (!provider.hasData) ...[
+                    const SizedBox(height: 20),
+                    _buildStateCard(
+                      icon: Icons.assignment_outlined,
+                      title: 'No KPI assigned yet',
+                      message:
+                          'Your personal KPI assignments will appear here once they are available.',
+                      actionLabel: 'Refresh',
+                      onPressed: provider.refresh,
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 20),
+                    _buildSummaryCard(summary, provider.currentPeriodHistory),
                     const SizedBox(height: 24),
                     const Text(
                       'KPI Details',
@@ -56,16 +96,13 @@ class _PerformanceScreenContent extends StatelessWidget {
                     const SizedBox(height: 12),
                     ...provider.kpis.map((kpi) => _buildKpiCard(kpi, provider)),
                   ],
-                ),
+                ],
               ),
             ),
     );
   }
 
-  Widget _buildPeriodSelector(
-    BuildContext context,
-    PerformanceProvider provider,
-  ) {
+  Widget _buildPeriodSelector(PerformanceProvider provider) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -89,19 +126,12 @@ class _PerformanceScreenContent extends StatelessWidget {
           DropdownButton<String>(
             value: provider.selectedPeriod,
             underline: const SizedBox(),
-            items:
-                [
-                  // Generate last 6 months
-                  for (int i = 0; i < 6; i++)
-                    DateFormat(
-                      'yyyy-MM',
-                    ).format(DateTime.now().subtract(Duration(days: 30 * i))),
-                ].map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
+            items: provider.availablePeriods.map((value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(_formatPeriodLabel(value)),
+              );
+            }).toList(),
             onChanged: (newValue) {
               if (newValue != null) {
                 provider.setPeriod(newValue);
@@ -113,7 +143,10 @@ class _PerformanceScreenContent extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryCard(PerformanceSummary summary) {
+  Widget _buildSummaryCard(
+    PerformanceSummary summary,
+    PerformanceHistoryModel? history,
+  ) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -140,26 +173,56 @@ class _PerformanceScreenContent extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            summary.overallScore.toStringAsFixed(1),
+            _formatNumber(summary.overallScore),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 48,
               fontWeight: FontWeight.bold,
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'Grade ${summary.grade}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  summary.grade == '-'
+                      ? 'No Evaluation Yet'
+                      : 'Grade ${summary.grade}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
+              if (history != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    history.isLocked ? 'Locked' : 'Draft',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 20),
           Row(
@@ -175,6 +238,94 @@ class _PerformanceScreenContent extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoBanner({
+    required IconData icon,
+    required String title,
+    required String message,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: const TextStyle(color: Colors.black54, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStateCard({
+    required IconData icon,
+    required String title,
+    required String message,
+    required String actionLabel,
+    required VoidCallback onPressed,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 40, color: Colors.blueGrey),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            style: const TextStyle(color: Colors.black54, height: 1.4),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          FilledButton(onPressed: onPressed, child: Text(actionLabel)),
         ],
       ),
     );
@@ -200,8 +351,8 @@ class _PerformanceScreenContent extends StatelessWidget {
   }
 
   Widget _buildKpiCard(KpiModel kpi, PerformanceProvider provider) {
-    final hasEvaluation = provider.hasEvaluation(kpi.id);
-    final actual = provider.getEvaluationValue(kpi.id);
+    final hasEvaluation = provider.hasEvaluation(kpi);
+    final actual = provider.getEvaluationValue(kpi);
     final progress = kpi.target > 0 ? (actual / kpi.target) : 0.0;
     final cappedProgress = progress > 1.0 ? 1.0 : progress;
 
@@ -260,14 +411,14 @@ class _PerformanceScreenContent extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Actual: ${actual.toStringAsFixed(1)}',
+                'Actual: ${hasEvaluation ? _formatNumber(actual) : '-'}',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: hasEvaluation ? Colors.black87 : Colors.grey,
                 ),
               ),
               Text(
-                'Target: ${kpi.target.toStringAsFixed(1)} ${kpi.unit}',
+                'Target: ${_formatTarget(kpi)}',
                 style: const TextStyle(color: Colors.grey),
               ),
             ],
@@ -289,7 +440,7 @@ class _PerformanceScreenContent extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Weight: ${kpi.weight}%',
+                'Weight: ${_formatNumber(kpi.weight)}%',
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
               Text(
@@ -312,5 +463,27 @@ class _PerformanceScreenContent extends StatelessWidget {
     if (progress >= 0.7) return Colors.blue;
     if (progress >= 0.4) return Colors.orange;
     return Colors.red;
+  }
+
+  String _formatTarget(KpiModel kpi) {
+    final unitSuffix = kpi.unit.isEmpty ? '' : ' ${kpi.unit}';
+    return '${_formatNumber(kpi.target)}$unitSuffix';
+  }
+
+  String _formatNumber(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+
+    return value.toStringAsFixed(1);
+  }
+
+  String _formatPeriodLabel(String value) {
+    final parsed = DateTime.tryParse('$value-01');
+    if (parsed == null) {
+      return value;
+    }
+
+    return DateFormat('MMM yyyy').format(parsed);
   }
 }

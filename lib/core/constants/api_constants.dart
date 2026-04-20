@@ -97,6 +97,22 @@ class ApiConstants {
 
   static const String payrollEndpoint = '/api/payroll';
   static const String payslipEndpoint = '/api/payroll';
+  static const String performanceKpiAssignmentsEndpoint =
+      '/api/kpi/evaluation/employee'; // + /{employeeId}/kpi
+  static const String performanceEmployeeAssignmentsEndpoint =
+      '/api/kpi/employee-kpi'; // + /{employeeId}
+  static const String performanceEvaluationCheckEndpoint =
+      '/api/kpi/evaluation/check-existing';
+  static const String legacyPerformanceEvaluationCheckEndpoint =
+      '/api/kpi/kpi/evaluation/check-existing';
+  static const String performanceEvaluationDetailEndpoint =
+      '/api/kpi/evaluation/get-detail';
+  static const String legacyPerformanceEvaluationDetailEndpoint =
+      '/api/kpi/kpi/evaluation/get-detail';
+  static const String performanceEvaluationHistoryEndpoint =
+      '/api/kpi/evaluation/employee'; // + /{employeeId}/history
+  static const String legacyPerformanceEvaluationHistoryEndpoint =
+      '/api/kpi/evaluation/history'; // + /{employeeId}
 
   // ===============================
   // 📄 DOCUMENTS

@@ -835,13 +835,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   bool get canAccessPerformanceModule {
-    return hasAnyPermission([
-      'view-performance',
-      'create-performance',
-      'edit-performance',
-      'view-kpi',
-      'edit-kpi',
-    ]);
+    return _isAuthenticated || _user != null;
   }
 
   bool get canAccessRecruitmentModule {
