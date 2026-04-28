@@ -50,6 +50,12 @@ class FavoriteProvider with ChangeNotifier {
       color: Colors.purple,
     ),
     FeatureItem(
+      id: 'overtime',
+      label: 'Overtime',
+      icon: Icons.schedule_send_outlined,
+      color: Colors.amber,
+    ),
+    FeatureItem(
       id: 'performance',
       label: 'Performance',
       icon: Icons.trending_up,

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../core/constants/api_constants.dart';
 import '../../services/session_storage.dart';
@@ -73,13 +74,13 @@ class ApiService {
   // ===============================
   // 📦 RESPONSE HANDLER
   // ===============================
-  dynamic _handleResponse(http.Response response) {
+  Future<dynamic> _handleResponse(http.Response response) async {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) {
         return <String, dynamic>{};
       }
 
-      return jsonDecode(response.body);
+      return compute(_decodeJsonBody, utf8.decode(response.bodyBytes));
     } else {
       try {
         final body = jsonDecode(response.body);
@@ -91,4 +92,8 @@ class ApiService {
       }
     }
   }
+}
+
+dynamic _decodeJsonBody(String body) {
+  return jsonDecode(body);
 }

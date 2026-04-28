@@ -38,14 +38,23 @@ void main() async {
 
   final languageProvider = LanguageProvider(loadOnInit: false);
   await languageProvider.loadSavedLanguage();
+  final themeProvider = ThemeProvider(loadOnInit: false);
+  await themeProvider.loadSavedTheme();
 
-  runApp(MyApp(languageProvider: languageProvider));
+  runApp(
+    MyApp(languageProvider: languageProvider, themeProvider: themeProvider),
+  );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, required this.languageProvider});
+  const MyApp({
+    super.key,
+    required this.languageProvider,
+    required this.themeProvider,
+  });
 
   final LanguageProvider languageProvider;
+  final ThemeProvider themeProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +63,7 @@ class MyApp extends StatelessWidget {
         // AuthProvider harus didaftarkan PERTAMA
         ChangeNotifierProvider(create: (_) => AuthProvider()),
 
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
         ChangeNotifierProvider<LanguageProvider>.value(value: languageProvider),
         ChangeNotifierProvider(create: (_) => DashboardProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),

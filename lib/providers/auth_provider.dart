@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/api_constants.dart';
@@ -355,7 +356,10 @@ class AuthProvider with ChangeNotifier {
         },
       );
 
-      final Map<String, dynamic> data = jsonDecode(response.body);
+      final Map<String, dynamic> data = Map<String, dynamic>.from(
+        await compute(_decodeJsonMapBody, utf8.decode(response.bodyBytes))
+            as Map,
+      );
 
       if (response.statusCode == 200 && data['success'] == true) {
         final userMap = data['data']['user'] as Map<String, dynamic>? ?? {};
@@ -898,6 +902,16 @@ class AuthProvider with ChangeNotifier {
     return hasAnyPermission(['view-reports', 'view-payroll']);
   }
 
+  bool get canAccessBroadcastModule {
+    return hasAnyPermission([
+      'view-broadcast',
+      'create-broadcast',
+      'edit-broadcast',
+      'delete-broadcast',
+      'send-broadcast',
+    ]);
+  }
+
   bool get canAccessCorrectionsModule {
     return canAccessAttendanceModule;
   }
@@ -1092,3 +1106,5 @@ class AuthProvider with ChangeNotifier {
     return value.trim().toLowerCase();
   }
 }
+
+dynamic _decodeJsonMapBody(String body) => jsonDecode(body);

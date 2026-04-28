@@ -1,26 +1,24 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
 import '../../core/localization/app_strings.dart';
-import '../../models/calendar_event_model.dart';
-import '../../models/saas_models.dart';
-import '../../providers/claim_provider.dart';
-import '../../providers/event_provider.dart';
-import '../../providers/dashboard_provider.dart';
+import '../../data/models/attendance_model.dart';
+import '../../providers/attendance_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/theme_provider.dart';
+import '../../providers/leave_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/payroll_provider.dart';
 import '../../providers/saas_provider.dart';
-import '../../data/models/notification_model.dart';
-import '../admin/claim_reports_screen.dart';
-import '../admin/event_management_screen.dart';
 import '../attendance/clock_in_screen.dart';
-import '../employee/add_employee_screen.dart';
 import '../leave/leave_screen.dart';
 import '../notifications/notification_screen.dart';
+import '../payroll/payslip_screen.dart';
 import '../saas/saas_workspace_screen.dart';
+import 'feature_tab.dart';
 
-// ================= DASHBOARD TAB =================
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
 
@@ -28,265 +26,265 @@ class DashboardTab extends StatefulWidget {
   State<DashboardTab> createState() => _DashboardTabState();
 }
 
-class _DashboardTabState extends State<DashboardTab>
-    with TickerProviderStateMixin {
+class _DashboardTabState extends State<DashboardTab> {
   static const double _maxContentWidth = 520;
+  static const Color _accentColor = Color(0xFFFF9628);
+  static const Color _lightBackground = Color(0xFFF6F4F1);
+  static const Color _darkBackground = Color(0xFF121212);
 
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
-  late AnimationController _notificationAnimationController;
-  late Animation<double> _notificationSlideAnimation;
-  bool _showNotifications = false;
+  bool _showAttendanceDetails = true;
+  Future<void>? _homeRefreshInFlight;
+  Future<void>? _secondaryLoadInFlight;
 
   @override
   void initState() {
     super.initState();
-
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
-    );
-
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
-
-    _notificationAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-
-    _notificationSlideAnimation = Tween<double>(begin: -100, end: 0).animate(
-      CurvedAnimation(
-        parent: _notificationAnimationController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
-
-    _animationController.forward();
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = context.read<AuthProvider>();
-      final companyCode = authProvider.getCompanyCode();
-
-      context.read<DashboardProvider>().fetchDashboardData(
-        companyCode: companyCode,
-      );
-      context.read<SaasProvider>().loadWorkspace(
-        includeAdminOverview: authProvider.canAccessPlatformAdmin,
-      );
-      context.read<NotificationProvider>().fetchNotifications();
-      context.read<EventProvider>().fetchUpcomingEvents();
+      unawaited(_refreshHome(backgroundSecondary: true));
     });
   }
 
-  @override
-  void dispose() {
-    _animationController.dispose();
-    _notificationAnimationController.dispose();
-    super.dispose();
+  Future<void> _refreshHome({
+    bool forceWorkspace = false,
+    bool backgroundSecondary = false,
+  }) async {
+    final currentRefresh = _homeRefreshInFlight;
+    if (currentRefresh != null) {
+      return currentRefresh;
+    }
+
+    final refreshFuture = _performHomeRefresh(
+      forceWorkspace: forceWorkspace,
+      backgroundSecondary: backgroundSecondary,
+    );
+    _homeRefreshInFlight = refreshFuture;
+
+    try {
+      await refreshFuture;
+    } finally {
+      if (identical(_homeRefreshInFlight, refreshFuture)) {
+        _homeRefreshInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _performHomeRefresh({
+    required bool forceWorkspace,
+    required bool backgroundSecondary,
+  }) async {
+    final auth = context.read<AuthProvider>();
+    final attendance = context.read<AttendanceProvider>();
+    final leave = context.read<LeaveProvider>();
+    final notifications = context.read<NotificationProvider>();
+    final saas = context.read<SaasProvider>();
+    final companyCode = auth.getCompanyCode().trim();
+
+    await Future.wait([
+      _runSafely(() async {
+        if (auth.canAccessAttendanceModule) {
+          await attendance.fetchTodayAttendance();
+          await attendance.getAttendanceSummary();
+        }
+      }),
+      _runSafely(() async {
+        await notifications.fetchNotifications();
+      }),
+    ]);
+
+    if (backgroundSecondary) {
+      unawaited(
+        _loadSecondaryHomeData(
+          auth: auth,
+          leave: leave,
+          saas: saas,
+          companyCode: companyCode,
+          forceWorkspace: forceWorkspace,
+          delay: const Duration(milliseconds: 250),
+        ),
+      );
+      return;
+    }
+
+    await _loadSecondaryHomeData(
+      auth: auth,
+      leave: leave,
+      saas: saas,
+      companyCode: companyCode,
+      forceWorkspace: forceWorkspace,
+    );
+  }
+
+  Future<void> _loadSecondaryHomeData({
+    required AuthProvider auth,
+    required LeaveProvider leave,
+    required SaasProvider saas,
+    required String companyCode,
+    required bool forceWorkspace,
+    Duration delay = Duration.zero,
+  }) async {
+    final currentLoad = _secondaryLoadInFlight;
+    if (currentLoad != null && !forceWorkspace) {
+      return currentLoad;
+    }
+
+    final loadFuture = _performSecondaryHomeDataLoad(
+      auth: auth,
+      leave: leave,
+      saas: saas,
+      companyCode: companyCode,
+      forceWorkspace: forceWorkspace,
+      delay: delay,
+    );
+    _secondaryLoadInFlight = loadFuture;
+
+    try {
+      await loadFuture;
+    } finally {
+      if (identical(_secondaryLoadInFlight, loadFuture)) {
+        _secondaryLoadInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _performSecondaryHomeDataLoad({
+    required AuthProvider auth,
+    required LeaveProvider leave,
+    required SaasProvider saas,
+    required String companyCode,
+    required bool forceWorkspace,
+    required Duration delay,
+  }) async {
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    await Future.wait([
+      _runSafely(() async {
+        if (auth.canAccessLeaveModule && companyCode.isNotEmpty) {
+          leave.setCompanyCode(companyCode);
+          await leave.fetchLeaveData();
+        }
+      }),
+      _runSafely(() async {
+        if (forceWorkspace || !saas.hasLoadedData) {
+          await saas.loadWorkspace(
+            includeAdminOverview: auth.canAccessPlatformAdmin,
+            force: forceWorkspace,
+          );
+        }
+      }),
+    ]);
+  }
+
+  Future<void> _runSafely(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (_) {
+      // Each provider already exposes its own fallback/error state.
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final dashboard = context.watch<DashboardProvider>();
-    final themeProvider = context.watch<ThemeProvider>();
-    final notificationProvider = context.watch<NotificationProvider>();
-    final eventProvider = context.watch<EventProvider>();
-    final saasProvider = context.watch<SaasProvider>();
-    final isDark = themeProvider.isDarkMode;
+    final attendance = context.watch<AttendanceProvider>();
+    final leave = context.watch<LeaveProvider>();
+    final notifications = context.watch<NotificationProvider>();
+    final saas = context.watch<SaasProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final firstName = (auth.user?.name ?? context.tr('profile_user_fallback'))
-        .split(' ')
-        .first;
+    final currentCompany = saas.currentCompany ?? auth.selectedCompany;
+    final companyName = currentCompany?.companyName.trim().isNotEmpty == true
+        ? currentCompany!.companyName.trim()
+        : 'Company Name';
+    final userName = auth.user?.name.trim().isNotEmpty == true
+        ? auth.user!.name.trim()
+        : '-';
+    final position = auth.user?.position.trim().isNotEmpty == true
+        ? auth.user!.position.trim()
+        : auth.user?.email.trim().isNotEmpty == true
+        ? auth.user!.email.trim()
+        : '-';
+    final favoriteActions = _buildFavoriteActions(auth, attendance);
 
     return Scaffold(
-      backgroundColor: _pageBackground(isDark),
-      body: dashboard.isLoading
-          ? _buildLoadingState(isDark)
-          : dashboard.error != null
-          ? _buildErrorState(dashboard.error!, isDark)
-          : RefreshIndicator(
-              color: isDark ? Colors.blue.shade200 : Colors.blue.shade700,
-              backgroundColor: _surfaceColor(isDark),
-              onRefresh: () async {
-                final authProvider = context.read<AuthProvider>();
-                final newCompanyCode = authProvider.getCompanyCode();
-                await Future.wait([
-                  context.read<DashboardProvider>().fetchDashboardData(
-                    companyCode: newCompanyCode,
-                  ),
-                  context.read<SaasProvider>().loadWorkspace(
-                    includeAdminOverview: authProvider.canAccessPlatformAdmin,
-                    force: true,
-                  ),
-                  context.read<NotificationProvider>().fetchNotifications(),
-                  context.read<EventProvider>().fetchUpcomingEvents(),
-                ]);
-              },
-              child: CustomScrollView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
-                slivers: [
-                  _buildHeader(firstName, isDark, notificationProvider),
-                  if (_showNotifications)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                        child: _buildConstrainedContent(
-                          AnimatedBuilder(
-                            animation: _notificationAnimationController,
-                            builder: (context, child) {
-                              return Transform.translate(
-                                offset: Offset(
-                                  0,
-                                  _notificationSlideAnimation.value,
-                                ),
-                                child: Container(
-                                  constraints: BoxConstraints(
-                                    maxHeight:
-                                        MediaQuery.of(context).size.height *
-                                        0.52,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _surfaceColor(isDark),
-                                    borderRadius: BorderRadius.circular(28),
-                                    border: Border.all(
-                                      color: _surfaceBorderColor(isDark),
-                                    ),
-                                    boxShadow: _surfaceShadows(isDark),
-                                  ),
-                                  child: _buildNotificationPanel(
-                                    isDark,
-                                    notificationProvider,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        20,
-                        20,
-                        20,
-                        104 + MediaQuery.of(context).padding.bottom,
-                      ),
-                      child: _buildConstrainedContent(
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildAnimatedSection(
-                              _buildWelcomeSection(
-                                firstName,
-                                isDark,
-                                dashboard,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            _buildAnimatedSection(
-                              _buildSaasSummarySection(
-                                isDark,
-                                auth,
-                                saasProvider,
-                              ),
-                            ),
-                            if (dashboard.isUsingCachedData) ...[
-                              const SizedBox(height: 14),
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? const Color(0xFF3D2A16)
-                                      : const Color(0xFFFFF4DE),
-                                  borderRadius: BorderRadius.circular(22),
-                                  border: Border.all(
-                                    color: Colors.orange.withOpacity(0.28),
-                                  ),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      width: 38,
-                                      height: 38,
-                                      decoration: BoxDecoration(
-                                        color: Colors.orange.withOpacity(0.16),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: const Icon(
-                                        Icons.cloud_off_outlined,
-                                        color: Colors.orange,
-                                        size: 20,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        context.tr('dashboard_cached_banner'),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          height: 1.45,
-                                          color: isDark
-                                              ? Colors.orange.shade100
-                                              : Colors.orange.shade900,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 20),
-                            _buildAnimatedSection(
-                              _buildStatsSection(dashboard, isDark),
-                            ),
-                            const SizedBox(height: 24),
-                            _buildAnimatedSection(
-                              _buildQuickActionsSection(isDark, auth),
-                            ),
-                            const SizedBox(height: 24),
-                            _buildAnimatedSection(
-                              _buildRecentActivitiesSection(dashboard, isDark),
-                            ),
-                            const SizedBox(height: 24),
-                            _buildAnimatedSection(
-                              _buildUpcomingSection(isDark, eventProvider),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+      backgroundColor: isDark ? _darkBackground : _lightBackground,
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: _accentColor,
+          onRefresh: () => _refreshHome(forceWorkspace: true),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
             ),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              14,
+              18,
+              28 + MediaQuery.of(context).padding.bottom,
+            ),
+            children: [
+              _buildConstrained(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTopBar(
+                      companyName: companyName,
+                      unreadCount: notifications.unreadCount,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 18),
+                    _buildProfileCard(
+                      userName: userName,
+                      position: position,
+                      unreadCount: notifications.unreadCount,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildAttendanceCard(
+                      attendance: attendance.todayAttendance,
+                      attendanceProvider: attendance,
+                      companyCode: auth.getCompanyCode().trim(),
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 24),
+                    _buildSectionTitle(
+                      context.tr('dashboard_favorite_menu'),
+                      isDark,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildFavoriteMenu(
+                      actions: favoriteActions,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 28),
+                    _buildSectionTitle(
+                      context.tr('dashboard_company_information'),
+                      isDark,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildCompanyInformation(
+                      auth: auth,
+                      leave: leave,
+                      saas: saas,
+                      companyName: companyName,
+                      isDark: isDark,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildAnimatedSection(Widget child) {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: SlideTransition(position: _slideAnimation, child: child),
-    );
-  }
-
-  Widget _buildConstrainedContent(Widget child) {
+  Widget _buildConstrained(Widget child) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: _maxContentWidth),
@@ -295,683 +293,692 @@ class _DashboardTabState extends State<DashboardTab>
     );
   }
 
-  Color _pageBackground(bool isDark) {
-    return isDark ? const Color(0xFF081120) : const Color(0xFFF3F6FB);
-  }
-
-  Color _surfaceColor(bool isDark) {
-    return isDark ? const Color(0xFF101A2B) : Colors.white;
-  }
-
-  Color _subtleSurfaceColor(bool isDark) {
-    return isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF6F8FC);
-  }
-
-  Color _surfaceBorderColor(bool isDark) {
-    return isDark ? Colors.white.withOpacity(0.07) : const Color(0xFFDCE5F0);
-  }
-
-  List<BoxShadow> _surfaceShadows(bool isDark) {
-    return [
-      BoxShadow(
-        color: isDark
-            ? Colors.black.withOpacity(0.28)
-            : const Color(0xFF0F172A).withOpacity(0.08),
-        blurRadius: isDark ? 28 : 22,
-        offset: const Offset(0, 12),
-      ),
-    ];
-  }
-
-  // MARK: - Stats Section
-  Widget _buildStatsSection(DashboardProvider dashboard, bool isDark) {
-    final stats = [
-      _StatItem(
-        title: context.tr('dashboard_stat_total_employees'),
-        value: dashboard.totalEmployees.toString(),
-        icon: Icons.people_alt,
-        color: Colors.blue,
-        gradient: const [Color(0xFF4158D0), Color(0xFFC850C0)],
-        trend:
-            '${context.tr('dashboard_stat_active')}: ${dashboard.activeEmployees}',
-        trendUp: true,
-      ),
-      _StatItem(
-        title: context.tr('dashboard_stat_attendance_today'),
-        value: dashboard.attendanceToday.toString(),
-        icon: Icons.check_circle,
-        color: Colors.green,
-        gradient: const [Color(0xFF0093E9), Color(0xFF80D0C7)],
-        trend: context.tr('dashboard_stat_present_today'),
-        trendUp: dashboard.attendanceToday > 0,
-      ),
-      _StatItem(
-        title: context.tr('dashboard_stat_on_leave_today'),
-        value: dashboard.onLeave.toString(),
-        icon: Icons.event_note,
-        color: Colors.orange,
-        gradient: const [Color(0xFF8EC5FC), Color(0xFFE0C3FC)],
-        trend: context.tr('dashboard_stat_leave_today'),
-        trendUp: false,
-      ),
-      _StatItem(
-        title: context.tr('dashboard_stat_new_hires'),
-        value: dashboard.newHires.toString(),
-        icon: Icons.person_add,
-        color: Colors.purple,
-        gradient: const [Color(0xFF00B4DB), Color(0xFF0083B0)],
-        trend: context.tr('dashboard_stat_this_month'),
-        trendUp: dashboard.newHires > 0,
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wideLayout = constraints.maxWidth >= 500;
-
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: wideLayout ? 4 : 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            mainAxisExtent: wideLayout ? 172 : 154,
+  Widget _buildTopBar({
+    required String companyName,
+    required int unreadCount,
+    required bool isDark,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            companyName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: isDark ? Colors.white : const Color(0xFF1E1E1E),
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+            ),
           ),
-          itemCount: stats.length,
-          itemBuilder: (context, index) {
-            return TweenAnimationBuilder<double>(
-              duration: Duration(milliseconds: 300 + (index * 100)),
-              tween: Tween(begin: 0, end: 1),
-              builder: (context, value, child) {
-                return Opacity(
-                  opacity: value,
-                  child: Transform.scale(
-                    scale: 0.92 + (0.08 * value),
-                    child: child,
-                  ),
-                );
-              },
-              child: _buildStatCard(stats[index], isDark),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // MARK: - Header Section
-  Widget _buildHeader(
-    String firstName,
-    bool isDark,
-    NotificationProvider notificationProvider,
-  ) {
-    return SliverAppBar(
-      expandedHeight: 202,
-      floating: false,
-      pinned: true,
-      elevation: 0,
-      surfaceTintColor: Colors.transparent,
-      backgroundColor: isDark
-          ? const Color(0xFF0F1A2C)
-          : const Color(0xFF2563EB),
-      flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.pin,
-        background: LayoutBuilder(
-          builder: (context, constraints) {
-            final isCompactHeader = constraints.maxHeight < 150;
-
-            return Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: isDark
-                      ? const [Color(0xFF0F172A), Color(0xFF1D4ED8)]
-                      : const [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-                ),
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Positioned(
-                    top: -90,
-                    right: -40,
-                    child: Container(
-                      width: 220,
-                      height: 220,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.09),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: -60,
-                    bottom: -80,
-                    child: Container(
-                      width: 180,
-                      height: 180,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.06),
-                      ),
-                    ),
-                  ),
-                  SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        18,
-                        isCompactHeader ? 12 : 16,
-                        18,
-                        isCompactHeader ? 12 : 20,
-                      ),
-                      child: _buildConstrainedContent(
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: isCompactHeader ? 44 : 50,
-                                  height: isCompactHeader ? 44 : 50,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.16),
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: Colors.white.withOpacity(0.12),
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    Icons.dashboard_customize_rounded,
-                                    color: Colors.white,
-                                    size: isCompactHeader ? 22 : 25,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        context.tr('dashboard_welcome_back'),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: isCompactHeader ? 11 : 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white.withOpacity(0.82),
-                                          letterSpacing: 0.3,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        firstName,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: isCompactHeader ? 20 : 26,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.white,
-                                          letterSpacing: -0.6,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(18),
-                                        onTap: () {
-                                          setState(() {
-                                            _showNotifications =
-                                                !_showNotifications;
-                                            if (_showNotifications) {
-                                              _notificationAnimationController
-                                                  .forward();
-                                            } else {
-                                              _notificationAnimationController
-                                                  .reverse();
-                                            }
-                                          });
-                                        },
-                                        child: Ink(
-                                          width: isCompactHeader ? 44 : 48,
-                                          height: isCompactHeader ? 44 : 48,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(
-                                              0.14,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              18,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withOpacity(
-                                                0.12,
-                                              ),
-                                            ),
-                                          ),
-                                          child: Icon(
-                                            _showNotifications
-                                                ? Icons.notifications_active
-                                                : Icons.notifications_outlined,
-                                            color: Colors.white,
-                                            size: isCompactHeader ? 22 : 24,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    if (notificationProvider.unreadCount > 0)
-                                      Positioned(
-                                        right: -2,
-                                        top: -2,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 5,
-                                            vertical: 3,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFEF4444),
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white,
-                                              width: 1.5,
-                                            ),
-                                          ),
-                                          constraints: const BoxConstraints(
-                                            minWidth: 22,
-                                            minHeight: 22,
-                                          ),
-                                          child: Center(
-                                            child: Text(
-                                              notificationProvider.unreadCount >
-                                                      99
-                                                  ? '99+'
-                                                  : notificationProvider
-                                                        .unreadCount
-                                                        .toString(),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            if (!isCompactHeader) ...[
-                              const SizedBox(height: 14),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  _buildHeaderPill(
-                                    icon: Icons.wb_sunny_outlined,
-                                    label:
-                                        '${context.tr('dashboard_good')} ${_getTimeGreeting()}',
-                                  ),
-                                  _buildDateChip(isDark),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
         ),
-      ),
+        const SizedBox(width: 12),
+        _buildIconShell(
+          icon: Icons.search_rounded,
+          isDark: isDark,
+          onTap: () => _pushScreen(const FeatureTab()),
+        ),
+      ],
     );
   }
 
-  Widget _buildDateChip(bool isDark) {
+  Widget _buildProfileCard({
+    required String userName,
+    required String position,
+    required int unreadCount,
+    required bool isDark,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
-      ),
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 2),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.calendar_today_rounded,
-            size: 15,
-            color: Colors.white.withOpacity(0.9),
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: isDark
+                ? Colors.white.withValues(alpha: 0.12)
+                : const Color(0xFFE8E8E8),
+            child: Text(
+              _initialsFromName(userName),
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.grey.shade600,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF1F2937),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  position,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isDark ? Colors.white60 : const Color(0xFF6B7280),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 8),
-          Text(
-            _getFormattedDate(),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.white.withOpacity(0.92),
-            ),
+          _buildIconShell(
+            icon: Icons.notifications_none_rounded,
+            isDark: isDark,
+            badgeCount: unreadCount > 0 ? unreadCount : null,
+            onTap: () => _pushScreen(const NotificationScreen()),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHeaderPill({required IconData icon, required String label}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: Colors.white.withOpacity(0.92)),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Colors.white.withOpacity(0.92),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetaChip({
-    required IconData icon,
-    required String label,
+  Widget _buildAttendanceCard({
+    required Attendance? attendance,
+    required AttendanceProvider attendanceProvider,
+    required String companyCode,
     required bool isDark,
-    Color? color,
-    double maxWidth = 260,
   }) {
-    final iconColor = color ?? (isDark ? Colors.white70 : Colors.blueGrey);
-
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxWidth),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: color != null
-                ? color.withOpacity(isDark ? 0.28 : 0.16)
-                : _surfaceBorderColor(isDark),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: iconColor),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white70 : Colors.grey.shade700,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    final hasClockIn = attendance?.hasClockIn ?? false;
+    final hasClockOut = attendance?.hasClockOut ?? false;
+    final shouldClockOut = hasClockIn && !hasClockOut;
+    final startTime = _displayTime(attendance?.clockInTimeFormatted);
+    final endTime = _displayTime(attendance?.clockOutTimeFormatted);
+    final badgeLabel = _attendanceBadgeLabel(
+      hasClockIn: hasClockIn,
+      hasClockOut: hasClockOut,
+      isPendingSync:
+          attendance?.isPendingSync == true ||
+          attendanceProvider.pendingSyncCount > 0,
     );
-  }
+    final localeCode = _localeCode(context);
+    final formattedDate = DateFormat(
+      'EEE, d MMM yyyy',
+      localeCode,
+    ).format(DateTime.now());
+    final summary = attendanceProvider.summary ?? const <String, dynamic>{};
 
-  // MARK: - Welcome Section
-  Widget _buildWelcomeSection(
-    String firstName,
-    bool isDark,
-    DashboardProvider dashboard,
-  ) {
     return Container(
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? const [Color(0xFF122033), Color(0xFF1D4ED8)]
-              : const [Color(0xFFEAF2FF), Color(0xFFFFFFFF)],
-        ),
-        borderRadius: BorderRadius.circular(24),
+        color: isDark ? const Color(0xFF1C1C1C) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isDark
-              ? Colors.white.withOpacity(0.07)
-              : Colors.white.withOpacity(0.72),
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFEAE7E2),
         ),
-        boxShadow: _surfaceShadows(isDark),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.24)
+                : const Color(0x22151B26),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${context.tr('dashboard_today_label')} ($formattedDate)',
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF303030),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${context.tr('dashboard_shift_label')}: [-]',
+                  style: TextStyle(
+                    color: isDark ? Colors.white60 : const Color(0xFF7C7C7C),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(
+            height: 1,
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : const Color(0xFFF0EEEA),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 18, 14, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildAttendanceTimeBlock(
+                    label: context.tr('dashboard_start_time'),
+                    time: startTime,
+                    initials: _initialsFromName(
+                      context.read<AuthProvider>().user?.name ?? '',
+                    ),
+                    isActive: hasClockIn,
+                    accent: const Color(0xFF4CB87B),
+                    isDark: isDark,
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 68,
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : const Color(0xFFEEEAE5),
+                ),
+                Expanded(
+                  child: _buildAttendanceTimeBlock(
+                    label: context.tr('dashboard_end_time'),
+                    time: endTime,
+                    initials: _initialsFromName(
+                      context.read<AuthProvider>().user?.name ?? '',
+                    ),
+                    isActive: hasClockOut,
+                    accent: const Color(0xFFE58E7C),
+                    isDark: isDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  onTap: () {
+                    _pushScreen(ClockInScreen(isClockOut: shouldClockOut));
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Center(
+                        child: Text(
+                          context.tr('dashboard_record_time'),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          InkWell(
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(18),
+            ),
+            onTap: () {
+              setState(() {
+                _showAttendanceDetails = !_showAttendanceDetails;
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
+              child: Column(
+                children: [
+                  Text(
+                    _showAttendanceDetails
+                        ? context.tr('dashboard_hide_detail')
+                        : context.tr('dashboard_view_more'),
+                    style: TextStyle(
+                      color: isDark ? Colors.white70 : const Color(0xFF666666),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  AnimatedCrossFade(
+                    duration: const Duration(milliseconds: 220),
+                    crossFadeState: _showAttendanceDetails
+                        ? CrossFadeState.showFirst
+                        : CrossFadeState.showSecond,
+                    firstChild: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Column(
+                        children: [
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _buildInfoChip(
+                                label: badgeLabel,
+                                isDark: isDark,
+                                color: _statusColor(
+                                  hasClockIn: hasClockIn,
+                                  hasClockOut: hasClockOut,
+                                  isPendingSync:
+                                      attendance?.isPendingSync == true ||
+                                      attendanceProvider.pendingSyncCount > 0,
+                                ),
+                              ),
+                              if (companyCode.isNotEmpty)
+                                _buildInfoChip(
+                                  label:
+                                      '${context.tr('saas_company_code')}: $companyCode',
+                                  isDark: isDark,
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildMiniStat(
+                                  label: context.tr('dashboard_start_time'),
+                                  value: startTime,
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _buildMiniStat(
+                                  label: context.tr('dashboard_end_time'),
+                                  value: endTime,
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _buildMiniStat(
+                                  label: 'Sync',
+                                  value: (summary['pending_sync'] ?? 0)
+                                      .toString(),
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    secondChild: const SizedBox.shrink(),
+                  ),
+                  if (_showAttendanceDetails) ...[
+                    const SizedBox(height: 10),
+                    Icon(
+                      Icons.keyboard_arrow_up_rounded,
+                      color: isDark ? Colors.white54 : const Color(0xFF8A8A8A),
+                    ),
+                  ] else ...[
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: isDark ? Colors.white54 : const Color(0xFF8A8A8A),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttendanceTimeBlock({
+    required String label,
+    required String time,
+    required String initials,
+    required bool isActive,
+    required Color accent,
+    required bool isDark,
+  }) {
+    final inactiveColor = isDark ? Colors.white38 : const Color(0xFFC0C0C0);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: isDark ? Colors.white54 : const Color(0xFFB0B0B0),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : const Color(0xFFF0F0F0),
+                child: Text(
+                  initials,
+                  style: TextStyle(
+                    color: isDark ? Colors.white54 : const Color(0xFFA8A8A8),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      time,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isActive ? accent : inactiveColor,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 14,
+                          color: isActive ? accent : inactiveColor,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            isActive ? badgeDotText(time) : '--',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isActive ? accent : inactiveColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFavoriteMenu({
+    required List<_HomeShortcut> actions,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1C) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFEAE7E2),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: actions
+            .map(
+              (action) => Expanded(child: _buildFavoriteItem(action, isDark)),
+            )
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  Widget _buildFavoriteItem(_HomeShortcut action, bool isDark) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: action.onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+          child: Column(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: action.backgroundColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(action.icon, color: action.iconColor, size: 26),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                action.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : const Color(0xFF3A3A3A),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  height: 1.25,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompanyInformation({
+    required AuthProvider auth,
+    required LeaveProvider leave,
+    required SaasProvider saas,
+    required String companyName,
+    required bool isDark,
+  }) {
+    final currentCompany = saas.currentCompany ?? auth.selectedCompany;
+    final companyCode = currentCompany?.cCode.trim().isNotEmpty == true
+        ? currentCompany!.cCode.trim()
+        : auth.getCompanyCode().trim();
+    final accessibleCompanies = saas.companies.isNotEmpty
+        ? saas.companies.length
+        : auth.companyAssignments.length;
+    final leaveBalance = leave.leaveBalance;
+    final remainingLeave = leaveBalance == null
+        ? 0
+        : (leaveBalance.annualTotal - leaveBalance.annualUsed).clamp(0, 999);
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1C1C1C) : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : const Color(0xFFEAE7E2),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.orange.withValues(alpha: 0.14)
+                      : const Color(0xFFFFF1E3),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.business_center_outlined,
+                  color: _accentColor,
+                ),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${context.tr('dashboard_good')} ${_getTimeGreeting()},',
+                      companyName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? Colors.white.withOpacity(0.76)
-                            : Colors.blueGrey.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      firstName,
-                      style: TextStyle(
-                        fontSize: 25,
-                        fontWeight: FontWeight.w800,
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      context.tr('dashboard_summary_today'),
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.45,
-                        color: isDark
-                            ? Colors.white.withOpacity(0.68)
-                            : Colors.blueGrey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.12) : Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: (isDark ? Colors.black : Colors.blue).withOpacity(
-                        0.12,
-                      ),
-                      blurRadius: 14,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  Icons.emoji_emotions_outlined,
-                  size: 34,
-                  color: isDark ? Colors.amber.shade300 : Colors.blue.shade500,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildMetaChip(
-                icon: Icons.people_outline_rounded,
-                label:
-                    '${dashboard.totalEmployees} ${context.tr('dashboard_total_employees_short')}',
-                isDark: isDark,
-                color: isDark ? Colors.blue.shade200 : Colors.blue.shade700,
-                maxWidth: 280,
-              ),
-              _buildMetaChip(
-                icon: Icons.insights_outlined,
-                label: context.tr('dashboard_summary_today'),
-                isDark: isDark,
-                color: isDark ? Colors.cyan.shade200 : Colors.indigo.shade600,
-                maxWidth: 230,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard(_StatItem stat, bool isDark) {
-    final trendColor = stat.trendUp
-        ? (isDark ? Colors.green.shade300 : Colors.green.shade700)
-        : (isDark ? Colors.orange.shade200 : Colors.orange.shade700);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: _surfaceColor(isDark),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: stat.color.withOpacity(isDark ? 0.26 : 0.12)),
-        boxShadow: _surfaceShadows(isDark),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: -24,
-            right: -12,
-            child: IgnorePointer(
-              child: Container(
-                width: 84,
-                height: 84,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: stat.gradient
-                        .map((color) => color.withOpacity(isDark ? 0.28 : 0.2))
-                        .toList(),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(22),
-              onTap: () {},
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: stat.color.withOpacity(isDark ? 0.2 : 0.12),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(stat.icon, color: stat.color, size: 20),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: trendColor.withOpacity(isDark ? 0.18 : 0.1),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Icon(
-                            stat.trendUp
-                                ? Icons.trending_up_rounded
-                                : Icons.trending_flat_rounded,
-                            color: trendColor,
-                            size: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    Text(
-                      stat.value,
-                      style: TextStyle(
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF1E293B),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      stat.title,
-                      maxLines: 2,
+                      companyCode.isNotEmpty
+                          ? '${context.tr('saas_company_code')}: $companyCode'
+                          : context.tr('saas_company_not_selected'),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: isDark
-                            ? Colors.white.withOpacity(0.78)
-                            : Colors.grey.shade800,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        height: 1.3,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      stat.trend,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: trendColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
+                            ? Colors.white60
+                            : const Color(0xFF667085),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: _openWorkspace,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _accentColor,
+                  side: const BorderSide(color: Color(0xFFFFC78C)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                ),
+                child: Text(context.tr('saas_open_workspace')),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildSummaryCard(
+                label: context.tr('saas_accessible_companies'),
+                value: accessibleCompanies.toString(),
+                icon: Icons.apartment_rounded,
+                isDark: isDark,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildSummaryCard(
+                label: context.tr('profile_leave'),
+                value: '$remainingLeave',
+                icon: Icons.event_available_outlined,
+                isDark: isDark,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryCard({
+    required String label,
+    required String value,
+    required IconData icon,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1C) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFEAE7E2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.orange.withValues(alpha: 0.14)
+                  : const Color(0xFFFFF1E3),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: _accentColor, size: 20),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            value,
+            style: TextStyle(
+              color: isDark ? Colors.white : const Color(0xFF1F2937),
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: isDark ? Colors.white60 : const Color(0xFF667085),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -979,1023 +986,134 @@ class _DashboardTabState extends State<DashboardTab>
     );
   }
 
-  Widget _buildSaasSummarySection(
-    bool isDark,
-    AuthProvider auth,
-    SaasProvider saasProvider,
-  ) {
-    final currentCompany = saasProvider.currentCompany ?? auth.selectedCompany;
-    final trialStatus = saasProvider.trialStatus;
-    final trialColor = _trialTone(trialStatus);
-
-    return _buildSectionCard(
-      title: context.tr('saas_workspace_title'),
-      isDark: isDark,
-      actionText: context.tr('saas_open_workspace'),
-      onActionTap: _openSaasWorkspace,
-      child: InkWell(
-        onTap: _openSaasWorkspace,
-        borderRadius: BorderRadius.circular(24),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isDark
-                  ? const [Color(0xFF0F172A), Color(0xFF1D4ED8)]
-                  : const [Color(0xFFEAF2FF), Color(0xFFF7FAFF)],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withOpacity(0.06)
-                  : const Color(0xFFDCE7F5),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(isDark ? 0.12 : 0.86),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      Icons.shield_outlined,
-                      color: isDark ? Colors.white : Colors.indigo.shade700,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          currentCompany?.companyName.isNotEmpty == true
-                              ? currentCompany!.companyName
-                              : context.tr('saas_company_not_selected'),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? Colors.white : Colors.grey.shade900,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          currentCompany?.cCode.isNotEmpty == true
-                              ? '${context.tr('saas_company_code')}: ${currentCompany!.cCode}'
-                              : context.tr('saas_workspace_subtitle'),
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: 1.4,
-                            color: isDark
-                                ? Colors.white70
-                                : Colors.grey.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: trialColor.withOpacity(0.14),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      _trialLabel(trialStatus),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: trialColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _buildSaasMetricChip(
-                    icon: Icons.timelapse_outlined,
-                    label: context.tr('saas_days_remaining'),
-                    value: trialStatus?.daysRemaining?.toString() ?? '-',
-                    isDark: isDark,
-                  ),
-                  _buildSaasMetricChip(
-                    icon: Icons.business_outlined,
-                    label: context.tr('saas_accessible_companies'),
-                    value:
-                        '${saasProvider.companies.isNotEmpty ? saasProvider.companies.length : auth.companyAssignments.length}',
-                    isDark: isDark,
-                  ),
-                  _buildSaasMetricChip(
-                    icon: Icons.mark_email_unread_outlined,
-                    label: context.tr('saas_pending_invitations'),
-                    value: '${saasProvider.pendingInvitationsCount}',
-                    isDark: isDark,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+  Widget _buildSectionTitle(String title, bool isDark) {
+    return Text(
+      title,
+      style: TextStyle(
+        color: isDark ? Colors.white : const Color(0xFF2A2A2A),
+        fontSize: 17,
+        fontWeight: FontWeight.w700,
       ),
     );
   }
 
-  // MARK: - Quick Actions Section
-  Widget _buildQuickActionsSection(bool isDark, AuthProvider auth) {
-    final actions = <_QuickAction>[
-      _QuickAction(
-        id: 'scan',
-        icon: Icons.qr_code_scanner,
-        label: context.tr('dashboard_action_scan'),
-        color: Colors.purple,
-        purpose: context.tr('dashboard_action_scan_purpose'),
-        onTap: () => _pushScreen(const ClockInScreen()),
-      ),
-      _QuickAction(
-        id: 'leave',
-        icon: Icons.event,
-        label: context.tr('dashboard_action_leave'),
-        color: Colors.orange,
-        purpose: context.tr('dashboard_action_leave_purpose'),
-        onTap: () => _pushScreen(const LeaveScreen()),
-      ),
-      _QuickAction(
-        id: 'reports',
-        icon: Icons.assessment,
-        label: context.tr('dashboard_action_reports'),
-        color: Colors.green,
-        purpose: context.tr('dashboard_action_reports_purpose'),
-        onTap: () => _pushScreen(
-          ChangeNotifierProvider(
-            create: (_) => ClaimProvider(),
-            child: const ClaimReportsScreen(),
-          ),
-        ),
-      ),
-    ];
-
-    if (auth.hasPermission('create-employee')) {
-      actions.insert(
-        1,
-        _QuickAction(
-          id: 'add_employee',
-          icon: Icons.person_add,
-          label: context.tr('dashboard_action_add_employee'),
-          color: Colors.blue,
-          purpose: context.tr('dashboard_action_add_employee_purpose'),
-          onTap: () => _pushScreen(const AddEmployeeScreen()),
-        ),
-      );
-    }
-
-    if (!auth.hasAnyPermission(['view-reports', 'view-payroll'])) {
-      actions.removeWhere((action) => action.id == 'reports');
-    }
-
-    return _buildSectionCard(
-      title: context.tr('dashboard_quick_actions'),
-      isDark: isDark,
-      actionText: context.tr('dashboard_guide'),
-      onActionTap: () => _showQuickActionGuide(actions, isDark),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compactLayout = constraints.maxWidth < 500;
-
-          return GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: compactLayout ? 2 : 4,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              mainAxisExtent: compactLayout ? 132 : 112,
-            ),
-            itemCount: actions.length,
-            itemBuilder: (context, index) {
-              return TweenAnimationBuilder<double>(
-                duration: Duration(milliseconds: 400 + (index * 50)),
-                tween: Tween(begin: 0, end: 1),
-                builder: (context, value, child) {
-                  return Opacity(
-                    opacity: value,
-                    child: Transform.translate(
-                      offset: Offset(0, 20 * (1 - value)),
-                      child: child,
-                    ),
-                  );
-                },
-                child: _buildQuickActionItem(
-                  actions[index],
-                  isDark,
-                  showPurpose: compactLayout,
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildQuickActionItem(
-    _QuickAction action,
-    bool isDark, {
-    required bool showPurpose,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: action.onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: _subtleSurfaceColor(isDark),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: action.color.withOpacity(isDark ? 0.22 : 0.14),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: action.color.withOpacity(isDark ? 0.2 : 0.12),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(action.icon, color: action.color, size: 22),
-              ),
-              const Spacer(),
-              Text(
-                action.label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : Colors.grey.shade900,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (showPurpose) ...[
-                const SizedBox(height: 6),
-                Text(
-                  action.purpose,
-                  style: TextStyle(
-                    fontSize: 10,
-                    height: 1.35,
-                    color: isDark ? Colors.white60 : Colors.grey.shade600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pushScreen(Widget screen) async {
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
-  }
-
-  void _openSaasWorkspace() {
-    _pushScreen(const SaasWorkspaceScreen());
-  }
-
-  Widget _buildSaasMetricChip({
-    required IconData icon,
+  Widget _buildMiniStat({
     required String label,
     required String value,
     required bool isDark,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(isDark ? 0.1 : 0.82),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.06)
-              : const Color(0xFFD9E4F5),
-        ),
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.04)
+            : const Color(0xFFF8F6F2),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
         children: [
-          Icon(
-            icon,
-            size: 15,
-            color: isDark ? Colors.white70 : Colors.indigo.shade700,
+          Text(
+            value,
+            style: TextStyle(
+              color: isDark ? Colors.white : const Color(0xFF263238),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? Colors.white60 : Colors.grey.shade600,
-                ),
-              ),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : Colors.grey.shade900,
-                ),
-              ),
-            ],
+          const SizedBox(height: 4),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: isDark ? Colors.white54 : const Color(0xFF7B7B7B),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Color _trialTone(TrialStatus? trialStatus) {
-    if (trialStatus == null) {
-      return Colors.blueGrey;
-    }
-
-    if (trialStatus.isExpired) {
-      return Colors.red;
-    }
-
-    if (trialStatus.isInGracePeriod ||
-        (trialStatus.daysRemaining != null &&
-            trialStatus.daysRemaining! <= 3)) {
-      return Colors.orange;
-    }
-
-    if (trialStatus.isTrial) {
-      return Colors.blue;
-    }
-
-    return Colors.green;
-  }
-
-  String _trialLabel(TrialStatus? trialStatus) {
-    if (trialStatus == null) {
-      return context.tr('saas_trial_unavailable');
-    }
-
-    if (trialStatus.isExpired) {
-      return context.tr('saas_trial_expired');
-    }
-
-    if (trialStatus.isInGracePeriod) {
-      return context.tr('saas_grace_period');
-    }
-
-    if (trialStatus.isTrial) {
-      if (trialStatus.daysRemaining != null) {
-        return context
-            .tr('saas_trial_days')
-            .replaceAll('{count}', trialStatus.daysRemaining.toString());
-      }
-
-      return context.tr('saas_trial_active');
-    }
-
-    return context.tr('saas_active_plan');
-  }
-
-  void _showQuickActionGuide(List<_QuickAction> actions, bool isDark) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: _surfaceColor(isDark),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white24 : Colors.black12,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  context.tr('dashboard_quick_action_guide_title'),
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  context.tr('dashboard_quick_action_guide_message'),
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.5,
-                    color: isDark ? Colors.white70 : Colors.grey.shade700,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ...actions.map(
-                  (action) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: action.color.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(
-                            action.icon,
-                            color: action.color,
-                            size: 18,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                action.label,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                action.purpose,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  height: 1.45,
-                                  color: isDark
-                                      ? Colors.white60
-                                      : Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // MARK: - Recent Activities Section
-  Widget _buildRecentActivitiesSection(
-    DashboardProvider dashboard,
-    bool isDark,
-  ) {
-    final activities = dashboard.recentActivities;
-
-    if (activities.isEmpty) {
-      return _buildSectionCard(
-        title: context.tr('dashboard_recent_activities'),
-        isDark: isDark,
-        actionText: context.tr('dashboard_view_all'),
-        onActionTap: () {},
-        child: _buildSectionPlaceholder(
-          icon: Icons.history_rounded,
-          title: context.tr('dashboard_no_recent_activities'),
-          isDark: isDark,
-        ),
-      );
-    }
-
-    return _buildSectionCard(
-      title: context.tr('dashboard_recent_activities'),
-      isDark: isDark,
-      actionText: context.tr('dashboard_view_all'),
-      onActionTap: () {},
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: activities.length > 4 ? 4 : activities.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, index) {
-          final activity = activities[index];
-          return TweenAnimationBuilder<double>(
-            duration: Duration(milliseconds: 300 + (index * 100)),
-            tween: Tween(begin: 0, end: 1),
-            builder: (context, value, child) {
-              return Opacity(
-                opacity: value,
-                child: Transform.translate(
-                  offset: Offset(20 * (1 - value), 0),
-                  child: child,
-                ),
-              );
-            },
-            child: _buildActivityItem(activity, isDark),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildActivityItem(RecentActivity item, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _subtleSurfaceColor(isDark),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _surfaceBorderColor(isDark)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(isDark ? 0.22 : 0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.person_add_alt_1, color: Colors.blue),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : Colors.black87,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _buildMetaChip(
-                      icon: Icons.badge_outlined,
-                      label: item.positionName,
-                      isDark: isDark,
-                      maxWidth: 210,
-                    ),
-                    Text(
-                      ' • ',
-                      style: TextStyle(
-                        color: isDark ? Colors.white38 : Colors.grey.shade400,
-                      ),
-                    ),
-                    _buildMetaChip(
-                      icon: Icons.schedule_outlined,
-                      label: _formatDate(item.createdAt),
-                      isDark: isDark,
-                      maxWidth: 170,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.more_horiz,
-            color: isDark ? Colors.white38 : Colors.grey.shade400,
-            size: 20,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionPlaceholder({
-    required IconData icon,
-    required String title,
+  Widget _buildInfoChip({
+    required String label,
     required bool isDark,
-    String? message,
-    Widget? action,
+    Color? color,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 56,
-              height: 56,
+    final resolvedColor =
+        color ?? (isDark ? Colors.white70 : const Color(0xFF5E6470));
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: resolvedColor.withValues(alpha: isDark ? 0.18 : 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: resolvedColor,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIconShell({
+    required IconData icon,
+    required bool isDark,
+    required VoidCallback onTap,
+    int? badgeCount,
+  }) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Ink(
+              width: 42,
+              height: 42,
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.white.withOpacity(0.06)
-                    : Colors.blue.withOpacity(0.08),
-                shape: BoxShape.circle,
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.07)
+                      : const Color(0xFFE5E5E5),
+                ),
               ),
               child: Icon(
                 icon,
-                color: isDark ? Colors.blue.shade200 : Colors.blue.shade700,
+                color: isDark ? Colors.white70 : const Color(0xFF444444),
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-            if (message != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.5,
-                  color: isDark ? Colors.white60 : Colors.grey.shade600,
-                ),
-              ),
-            ],
-            if (action != null) ...[const SizedBox(height: 14), action],
-          ],
+          ),
         ),
-      ),
-    );
-  }
-
-  // MARK: - Upcoming Section
-  Widget _buildUpcomingSection(bool isDark, EventProvider eventProvider) {
-    return _buildDynamicUpcomingSection(isDark, eventProvider);
-  }
-
-  Widget _buildDynamicUpcomingSection(
-    bool isDark,
-    EventProvider eventProvider,
-  ) {
-    final events = eventProvider.upcomingEvents.take(3).toList(growable: false);
-
-    return _buildSectionCard(
-      title: context.tr('dashboard_upcoming_events'),
-      isDark: isDark,
-      actionText: context.tr('dashboard_manage'),
-      onActionTap: _openEventManagement,
-      child: eventProvider.isLoading && events.isEmpty
-          ? Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
+        if ((badgeCount ?? 0) > 0)
+          Positioned(
+            top: -4,
+            right: -4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: _accentColor,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
               child: Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    isDark ? Colors.blue.shade200 : Colors.blue.shade700,
-                  ),
-                ),
-              ),
-            )
-          : eventProvider.error != null && events.isEmpty
-          ? _buildSectionPlaceholder(
-              icon: Icons.event_busy_outlined,
-              title: context.tr('dashboard_event_load_failed'),
-              message: eventProvider.error!,
-              isDark: isDark,
-              action: OutlinedButton(
-                onPressed: eventProvider.fetchUpcomingEvents,
-                child: Text(context.tr('dashboard_retry')),
-              ),
-            )
-          : events.isEmpty
-          ? _buildSectionPlaceholder(
-              icon: Icons.event_available_outlined,
-              title: context.tr('dashboard_no_upcoming_events'),
-              message: context.tr('dashboard_event_empty_hint'),
-              isDark: isDark,
-              action: ElevatedButton.icon(
-                onPressed: _openEventManagement,
-                icon: const Icon(Icons.add),
-                label: Text(context.tr('dashboard_create_event')),
-              ),
-            )
-          : Column(
-              children: [
-                for (var index = 0; index < events.length; index++) ...[
-                  _buildUpcomingEventItem(events[index], isDark),
-                  if (index != events.length - 1) const SizedBox(height: 12),
-                ],
-              ],
-            ),
-    );
-  }
-
-  Widget _buildUpcomingEventItem(CalendarEvent event, bool isDark) {
-    final isCompanyWide = event.isCompanyWide;
-    final accentColor = isCompanyWide ? Colors.green : Colors.blue;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _subtleSurfaceColor(isDark),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: accentColor.withOpacity(isDark ? 0.24 : 0.14),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: accentColor.withOpacity(isDark ? 0.2 : 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              isCompanyWide ? Icons.groups_2_outlined : Icons.mail_outline,
-              color: accentColor,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  event.title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : Colors.black87,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatEventSchedule(event),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.white60 : Colors.grey.shade600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  event.location.isNotEmpty
-                      ? '${_buildAudienceLabel(event)} • ${event.location}'
-                      : _buildAudienceLabel(event),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.white60 : Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Text(
-              isCompanyWide
-                  ? context.tr('feature_category_all')
-                  : '${event.inviteCount}',
-              style: TextStyle(
-                color: accentColor,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openEventManagement() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const EventManagementScreen()),
-    );
-  }
-
-  String _formatEventSchedule(CalendarEvent event) {
-    final localeCode = _currentLocaleCode();
-    final startLabel = DateFormat(
-      'EEE, dd MMM • HH:mm',
-      localeCode,
-    ).format(event.startsAt);
-
-    if (event.endsAt == null) {
-      return startLabel;
-    }
-
-    final sameDay =
-        event.startsAt.year == event.endsAt!.year &&
-        event.startsAt.month == event.endsAt!.month &&
-        event.startsAt.day == event.endsAt!.day;
-
-    if (sameDay) {
-      return '$startLabel - ${DateFormat('HH:mm', localeCode).format(event.endsAt!)}';
-    }
-
-    return '$startLabel - ${DateFormat('dd MMM • HH:mm', localeCode).format(event.endsAt!)}';
-  }
-
-  String _buildAudienceLabel(CalendarEvent event) {
-    if (event.isCompanyWide) {
-      return context.tr('dashboard_all_employees');
-    }
-
-    if (event.isUserInvited) {
-      return context.tr('dashboard_you_are_invited');
-    }
-
-    return _inviteeLabel(event.inviteCount);
-  }
-
-  // MARK: - Notification Panel
-  Widget _buildNotificationPanel(
-    bool isDark,
-    NotificationProvider notificationProvider,
-  ) {
-    if (notificationProvider.isLoading) {
-      return const Padding(
-        padding: EdgeInsets.all(20),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (notificationProvider.notifications.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(20),
-        child: _buildSectionPlaceholder(
-          icon: Icons.notifications_none_outlined,
-          title: context.tr('dashboard_no_notifications'),
-          isDark: isDark,
-        ),
-      );
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: isDark ? Colors.white10 : Colors.grey.shade200,
-              ),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.notifications_active,
-                    size: 20,
-                    color: isDark ? Colors.blue.shade300 : Colors.blue,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    context.tr('dashboard_notifications'),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  if (notificationProvider.unreadCount > 0)
-                    Container(
-                      margin: const EdgeInsets.only(left: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        notificationProvider.unreadCount.toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              if (notificationProvider.unreadCount > 0)
-                TextButton(
-                  onPressed: () => notificationProvider.markAllAsRead(),
-                  style: TextButton.styleFrom(
-                    foregroundColor: isDark
-                        ? Colors.blue.shade300
-                        : Colors.blue,
-                    backgroundColor: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : const Color(0xFFEFF4FF),
-                    minimumSize: Size.zero,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  child: Text(
-                    context.tr('dashboard_mark_all_read'),
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        Flexible(
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const AlwaysScrollableScrollPhysics(),
-            itemCount: notificationProvider.notifications.length > 5
-                ? 5
-                : notificationProvider.notifications.length,
-            separatorBuilder: (_, __) => Divider(
-              height: 1,
-              color: isDark ? Colors.white10 : Colors.grey.shade200,
-            ),
-            itemBuilder: (context, index) {
-              final notification = notificationProvider.notifications[index];
-              return _buildNotificationItem(notification, isDark);
-            },
-          ),
-        ),
-        if (notificationProvider.notifications.length > 5)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                  color: isDark ? Colors.white10 : Colors.grey.shade200,
-                ),
-              ),
-            ),
-            child: Center(
-              child: TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const NotificationScreen(),
-                    ),
-                  );
-                },
                 child: Text(
-                  context
-                      .tr('dashboard_view_all_notifications')
-                      .replaceAll(
-                        '{count}',
-                        notificationProvider.notifications.length.toString(),
-                      ),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.blue.shade300 : Colors.blue,
+                  badgeCount! > 9 ? '9+' : '$badgeCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -2005,384 +1123,186 @@ class _DashboardTabState extends State<DashboardTab>
     );
   }
 
-  Widget _buildNotificationItem(NotificationItem notification, bool isDark) {
-    return InkWell(
-      onTap: () {
-        if (!notification.isRead) {
-          context.read<NotificationProvider>().markAsRead(notification.id);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: !notification.isRead
-              ? (isDark
-                    ? notification.color.withOpacity(0.15)
-                    : notification.color.withOpacity(0.05))
-              : _subtleSurfaceColor(isDark),
+  List<_HomeShortcut> _buildFavoriteActions(
+    AuthProvider auth,
+    AttendanceProvider attendance,
+  ) {
+    final actions = <_HomeShortcut>[];
+
+    if (auth.canAccessAttendanceModule) {
+      final shouldClockOut =
+          attendance.todayAttendance?.hasClockIn == true &&
+          attendance.todayAttendance?.hasClockOut != true;
+
+      actions.add(
+        _HomeShortcut(
+          label: context.tr('feature_label_attendance'),
+          icon: shouldClockOut
+              ? Icons.logout_rounded
+              : Icons.access_time_rounded,
+          iconColor: const Color(0xFF3698F5),
+          backgroundColor: const Color(0xFFEAF6FF),
+          onTap: () {
+            _pushScreen(ClockInScreen(isClockOut: shouldClockOut));
+          },
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: notification.color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                notification.icon,
-                color: notification.color,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
+      );
+    }
 
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    notification.displayTitle,
-                    style: TextStyle(
-                      fontWeight: !notification.isRead
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                      color: isDark ? Colors.white : Colors.black87,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    notification.message,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white70 : Colors.grey.shade600,
-                    ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  if (notification.type == 'leave_request' &&
-                      notification.days != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '${context.tr('dashboard_duration_label')}: ${notification.days} ${notification.days == 1 ? context.tr('dashboard_duration_day') : context.tr('dashboard_duration_days')}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: notification.color,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatNotificationTime(notification.createdAt),
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isDark ? Colors.white38 : Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (!notification.isRead)
-              Container(
-                width: 8,
-                height: 8,
-                margin: const EdgeInsets.only(left: 4),
-                decoration: BoxDecoration(
-                  color: notification.color,
-                  shape: BoxShape.circle,
-                ),
-              ),
-          ],
+    if (auth.canAccessLeaveModule) {
+      actions.add(
+        _HomeShortcut(
+          label: context.tr('feature_label_leave'),
+          icon: Icons.assignment_turned_in_outlined,
+          iconColor: const Color(0xFF4AA8B0),
+          backgroundColor: const Color(0xFFE7F8F8),
+          onTap: () => _pushScreen(const LeaveScreen()),
         ),
-      ),
-    );
-  }
-
-  String _formatNotificationTime(DateTime time) {
-    final now = DateTime.now();
-    final difference = now.difference(time);
-
-    if (difference.inMinutes < 1) return context.tr('dashboard_just_now');
-    if (difference.inMinutes < 60)
-      return context
-          .tr('dashboard_minutes_ago')
-          .replaceAll('{count}', difference.inMinutes.toString());
-    if (difference.inHours < 24) {
-      return context
-          .tr('dashboard_hours_ago')
-          .replaceAll('{count}', difference.inHours.toString());
+      );
     }
-    if (difference.inDays < 7) {
-      return context
-          .tr('dashboard_days_ago')
-          .replaceAll('{count}', difference.inDays.toString());
-    }
-    return DateFormat('dd MMM yyyy', _currentLocaleCode()).format(time);
-  }
 
-  // MARK: - Helper Widgets
-  Widget _buildSectionCard({
-    required String title,
-    required bool isDark,
-    required Widget child,
-    String? actionText,
-    VoidCallback? onActionTap,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: _surfaceColor(isDark),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _surfaceBorderColor(isDark)),
-        boxShadow: _surfaceShadows(isDark),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : Colors.grey.shade800,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ),
-              if (actionText != null)
-                TextButton(
-                  onPressed: onActionTap,
-                  style: TextButton.styleFrom(
-                    foregroundColor: isDark
-                        ? Colors.blue.shade200
-                        : Colors.blue.shade700,
-                    backgroundColor: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : const Color(0xFFEFF4FF),
-                    minimumSize: Size.zero,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  child: Text(
-                    actionText,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoadingState(bool isDark) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: _buildConstrainedContent(
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: _surfaceColor(isDark),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: _surfaceBorderColor(isDark)),
-                boxShadow: _surfaceShadows(isDark),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      isDark ? Colors.blue.shade200 : Colors.blue.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    context.tr('dashboard_loading'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: isDark ? Colors.white70 : Colors.grey.shade700,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
+    if (auth.canAccessPayrollModule) {
+      actions.add(
+        _HomeShortcut(
+          label: context.tr('feature_label_payslip'),
+          icon: Icons.receipt_long_outlined,
+          iconColor: const Color(0xFFE69448),
+          backgroundColor: const Color(0xFFFFF1E5),
+          onTap: () => _pushScreen(
+            ChangeNotifierProvider(
+              create: (_) => PayrollProvider(),
+              child: const PayslipScreen(),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildErrorState(String error, bool isDark) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: _buildConstrainedContent(
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: _surfaceColor(isDark),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: _surfaceBorderColor(isDark)),
-                boxShadow: _surfaceShadows(isDark),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.error_outline_rounded,
-                    size: 64,
-                    color: Colors.red.shade300,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    context.tr('dashboard_error_title'),
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.grey.shade800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    error,
-                    style: TextStyle(color: Colors.red.shade400, fontSize: 14),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () {
-                      final authProvider = context.read<AuthProvider>();
-                      final companyCode = authProvider.getCompanyCode();
-                      context.read<DashboardProvider>().fetchDashboardData(
-                        companyCode: companyCode,
-                      );
-                      context.read<NotificationProvider>().fetchNotifications();
-                      context.read<EventProvider>().fetchUpcomingEvents();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade700,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: Text(context.tr('dashboard_try_again')),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // MARK: - Utility Methods
-  String _getFormattedDate() {
-    final now = DateTime.now();
-    return DateFormat('dd MMM yyyy', _currentLocaleCode()).format(now);
-  }
-
-  String _getTimeGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return context.tr('dashboard_morning');
-    if (hour < 17) return context.tr('dashboard_afternoon');
-    return context.tr('dashboard_evening');
-  }
-
-  String _formatDate(String dateStr) {
-    try {
-      final date = DateTime.parse(dateStr);
-      return DateFormat('dd MMM yyyy', _currentLocaleCode()).format(date);
-    } catch (e) {
-      return dateStr;
+      );
     }
+
+    if (actions.isEmpty) {
+      actions.addAll([
+        _HomeShortcut(
+          label: context.tr('dashboard_record_time'),
+          icon: Icons.access_time_rounded,
+          iconColor: const Color(0xFF3698F5),
+          backgroundColor: const Color(0xFFEAF6FF),
+          onTap: () => _pushScreen(const ClockInScreen()),
+        ),
+        _HomeShortcut(
+          label: context.tr('dashboard_company_information'),
+          icon: Icons.business_center_outlined,
+          iconColor: const Color(0xFFE69448),
+          backgroundColor: const Color(0xFFFFF1E5),
+          onTap: _openWorkspace,
+        ),
+      ]);
+    }
+
+    while (actions.length < 3) {
+      actions.add(
+        _HomeShortcut(
+          label: context.tr('saas_workspace_title'),
+          icon: Icons.apartment_rounded,
+          iconColor: const Color(0xFF6F63E9),
+          backgroundColor: const Color(0xFFF0EEFF),
+          onTap: _openWorkspace,
+        ),
+      );
+    }
+
+    return actions.take(3).toList(growable: false);
   }
 
-  String _currentLocaleCode() {
+  Future<void> _pushScreen(Widget screen) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+  }
+
+  void _openWorkspace() {
+    _pushScreen(const SaasWorkspaceScreen());
+  }
+
+  String _initialsFromName(String rawName) {
+    final parts = rawName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+
+    if (parts.isEmpty) {
+      return 'HR';
+    }
+
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+
+    return '${parts.first.substring(0, 1)}${parts[1].substring(0, 1)}'
+        .toUpperCase();
+  }
+
+  String _localeCode(BuildContext context) {
     final locale = Localizations.localeOf(context);
-    final countryCode = locale.countryCode;
-
-    if (countryCode == null || countryCode.isEmpty) {
-      return locale.languageCode;
-    }
-
-    return '${locale.languageCode}_$countryCode';
+    return locale.languageCode == 'id' ? 'id_ID' : 'en_US';
   }
 
-  String _inviteeLabel(int count) {
-    if (_currentLocaleCode().startsWith('id')) {
-      return '$count undangan';
+  String _displayTime(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty || normalized == '-') {
+      return '--:--';
     }
+    return normalized;
+  }
 
-    return '$count invitee${count == 1 ? '' : 's'}';
+  String badgeDotText(String time) {
+    return time == '--:--' ? '--' : 'Recorded';
+  }
+
+  String _attendanceBadgeLabel({
+    required bool hasClockIn,
+    required bool hasClockOut,
+    required bool isPendingSync,
+  }) {
+    if (isPendingSync) {
+      return context.tr('dashboard_attendance_pending_sync');
+    }
+    if (hasClockIn && hasClockOut) {
+      return context.tr('dashboard_attendance_complete');
+    }
+    if (hasClockIn) {
+      return context.tr('dashboard_attendance_active');
+    }
+    return context.tr('dashboard_attendance_ready');
+  }
+
+  Color _statusColor({
+    required bool hasClockIn,
+    required bool hasClockOut,
+    required bool isPendingSync,
+  }) {
+    if (isPendingSync) {
+      return const Color(0xFFE69B2E);
+    }
+    if (hasClockIn && hasClockOut) {
+      return const Color(0xFF2E9F5F);
+    }
+    if (hasClockIn) {
+      return const Color(0xFF3478F6);
+    }
+    return const Color(0xFF7A7A7A);
   }
 }
 
-// MARK: - Models
-class _StatItem {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final List<Color> gradient;
-  final String trend;
-  final bool trendUp;
-
-  _StatItem({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.gradient,
-    required this.trend,
-    required this.trendUp,
-  });
-}
-
-class _QuickAction {
-  final String id;
-  final IconData icon;
-  final String label;
-  final Color color;
-  final String purpose;
-  final VoidCallback onTap;
-
-  _QuickAction({
-    required this.id,
-    required this.icon,
+class _HomeShortcut {
+  const _HomeShortcut({
     required this.label,
-    required this.color,
-    required this.purpose,
+    required this.icon,
+    required this.iconColor,
+    required this.backgroundColor,
     required this.onTap,
   });
+
+  final String label;
+  final IconData icon;
+  final Color iconColor;
+  final Color backgroundColor;
+  final VoidCallback onTap;
 }

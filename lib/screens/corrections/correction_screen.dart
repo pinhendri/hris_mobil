@@ -28,6 +28,75 @@ class _CorrectionScreenState extends State<CorrectionScreen>
   final TextEditingController _checkOutController = TextEditingController();
   String _selectedStatus = 'Present';
 
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _screenBackgroundColor =>
+      _isDarkMode ? const Color(0xFF020817) : AppColors.background;
+
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+
+  Color get _surfaceMutedColor =>
+      _isDarkMode ? const Color(0xFF0F172A) : Colors.grey.shade50;
+
+  Color get _surfaceBorderColor =>
+      _isDarkMode ? const Color(0xFF253041) : AppColors.border;
+
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF8FAFC) : AppColors.textPrimary;
+
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFCBD5E1) : AppColors.textSecondary;
+
+  Color get _hintTextColor =>
+      _isDarkMode ? const Color(0xFF94A3B8) : AppColors.textMuted;
+
+  BoxDecoration _cardDecoration() => BoxDecoration(
+    color: _surfaceColor,
+    borderRadius: BorderRadius.circular(16),
+    border: Border.all(color: _surfaceBorderColor),
+    boxShadow: _isDarkMode
+        ? const []
+        : [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+  );
+
+  InputDecoration _inputDecoration({
+    required String label,
+    String? hint,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      labelStyle: GoogleFonts.poppins(color: _secondaryTextColor),
+      hintStyle: GoogleFonts.poppins(color: _hintTextColor),
+      filled: true,
+      fillColor: _surfaceMutedColor,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: _surfaceBorderColor),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: _surfaceBorderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.primary),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -268,20 +337,21 @@ class _CorrectionScreenState extends State<CorrectionScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: _screenBackgroundColor,
       appBar: AppBar(
         title: Text(
           'Koreksi Absensi',
           style: GoogleFonts.poppins(
-            color: AppColors.textPrimary,
+            color: _primaryTextColor,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _surfaceColor,
+        surfaceTintColor: _surfaceColor,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
           onPressed: () => Navigator.pop(context),
         ),
         bottom: TabBar(
@@ -291,7 +361,7 @@ class _CorrectionScreenState extends State<CorrectionScreen>
             Tab(text: 'Riwayat'),
           ],
           labelColor: AppColors.primary,
-          unselectedLabelColor: Colors.grey,
+          unselectedLabelColor: _secondaryTextColor,
           indicatorColor: AppColors.primary,
         ),
       ),
@@ -319,11 +389,8 @@ class _CorrectionScreenState extends State<CorrectionScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Info Card
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+              Container(
+                decoration: _cardDecoration(),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -334,6 +401,7 @@ class _CorrectionScreenState extends State<CorrectionScreen>
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: _primaryTextColor,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -341,7 +409,7 @@ class _CorrectionScreenState extends State<CorrectionScreen>
                         'Pilih karyawan dan tanggal untuk melihat atau memperbaiki absensi',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: _secondaryTextColor,
                         ),
                       ),
                     ],
@@ -351,35 +419,31 @@ class _CorrectionScreenState extends State<CorrectionScreen>
               const SizedBox(height: 16),
 
               // Selection Form
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+              Container(
+                decoration: _cardDecoration(),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
                       // Employee Dropdown
                       DropdownButtonFormField<String>(
-                        value: _selectedEmployeeUuid,
-                        hint: const Text('Pilih karyawan'),
-                        decoration: InputDecoration(
-                          labelText: 'Karyawan',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
+                        initialValue: _selectedEmployeeUuid,
+                        hint: Text(
+                          'Pilih karyawan',
+                          style: GoogleFonts.poppins(color: _hintTextColor),
                         ),
+                        dropdownColor: _surfaceColor,
+                        style: GoogleFonts.poppins(color: _primaryTextColor),
+                        decoration: _inputDecoration(label: 'Karyawan'),
                         items: employeeProvider.employees.map((employee) {
                           return DropdownMenuItem(
                             value: employee.uuid,
                             child: Text(
                               employee.name,
                               overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                color: _primaryTextColor,
+                              ),
                             ),
                           );
                         }).toList(),
@@ -412,12 +476,12 @@ class _CorrectionScreenState extends State<CorrectionScreen>
                                 }
                               },
                         child: InputDecorator(
-                          decoration: InputDecoration(
-                            labelText: 'Tanggal',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                          decoration: _inputDecoration(
+                            label: 'Tanggal',
+                            suffixIcon: Icon(
+                              Icons.calendar_today,
+                              color: _secondaryTextColor,
                             ),
-                            suffixIcon: const Icon(Icons.calendar_today),
                           ),
                           child: Text(
                             _selectedDate != null
@@ -425,6 +489,11 @@ class _CorrectionScreenState extends State<CorrectionScreen>
                                     'dd MMMM yyyy',
                                   ).format(_selectedDate!)
                                 : 'Pilih tanggal',
+                            style: GoogleFonts.poppins(
+                              color: _selectedDate != null
+                                  ? _primaryTextColor
+                                  : _hintTextColor,
+                            ),
                           ),
                         ),
                       ),
@@ -472,6 +541,8 @@ class _CorrectionScreenState extends State<CorrectionScreen>
                           OutlinedButton(
                             onPressed: _isSubmitting ? null : _resetForm,
                             style: OutlinedButton.styleFrom(
+                              foregroundColor: _primaryTextColor,
+                              side: BorderSide(color: _surfaceBorderColor),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -499,9 +570,8 @@ class _CorrectionScreenState extends State<CorrectionScreen>
   }
 
   Widget _buildAttendanceDetail() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return Container(
+      decoration: _cardDecoration(),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -527,6 +597,7 @@ class _CorrectionScreenState extends State<CorrectionScreen>
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
+                    color: _primaryTextColor,
                   ),
                 ),
                 const Spacer(),
@@ -558,7 +629,7 @@ class _CorrectionScreenState extends State<CorrectionScreen>
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue[50],
+                color: Colors.blue.withValues(alpha: _isDarkMode ? 0.16 : 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -568,7 +639,9 @@ class _CorrectionScreenState extends State<CorrectionScreen>
                     'Status Saat Ini:',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
-                      color: Colors.blue[700],
+                      color: _isDarkMode
+                          ? const Color(0xFFBFDBFE)
+                          : Colors.blue[700],
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -581,7 +654,7 @@ class _CorrectionScreenState extends State<CorrectionScreen>
                     decoration: BoxDecoration(
                       color: _getStatusColor(
                         _attendanceData!.status,
-                      ).withOpacity(0.1),
+                      ).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -602,7 +675,7 @@ class _CorrectionScreenState extends State<CorrectionScreen>
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey[50],
+                color: _surfaceMutedColor,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -612,7 +685,7 @@ class _CorrectionScreenState extends State<CorrectionScreen>
                     'Data dari Database:',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
-                      color: Colors.grey[700],
+                      color: _secondaryTextColor,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -632,7 +705,7 @@ class _CorrectionScreenState extends State<CorrectionScreen>
                               'Clock In: ',
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
-                                color: Colors.grey[600],
+                                color: _secondaryTextColor,
                               ),
                             ),
                           ],
@@ -673,7 +746,7 @@ class _CorrectionScreenState extends State<CorrectionScreen>
                               'Clock Out: ',
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
-                                color: Colors.grey[600],
+                                color: _secondaryTextColor,
                               ),
                             ),
                           ],
@@ -709,6 +782,7 @@ class _CorrectionScreenState extends State<CorrectionScreen>
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
+                color: _primaryTextColor,
               ),
             ),
             const SizedBox(height: 12),
@@ -717,13 +791,11 @@ class _CorrectionScreenState extends State<CorrectionScreen>
             TextField(
               controller: _checkInController,
               enabled: !_isSubmitting,
-              decoration: InputDecoration(
-                labelText: 'Jam Masuk',
-                hintText: 'HH:MM',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.login),
+              style: GoogleFonts.poppins(color: _primaryTextColor),
+              decoration: _inputDecoration(
+                label: 'Jam Masuk',
+                hint: 'HH:MM',
+                prefixIcon: Icon(Icons.login, color: _secondaryTextColor),
               ),
             ),
             const SizedBox(height: 12),
@@ -732,33 +804,45 @@ class _CorrectionScreenState extends State<CorrectionScreen>
             TextField(
               controller: _checkOutController,
               enabled: !_isSubmitting,
-              decoration: InputDecoration(
-                labelText: 'Jam Keluar',
-                hintText: 'HH:MM',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.logout),
+              style: GoogleFonts.poppins(color: _primaryTextColor),
+              decoration: _inputDecoration(
+                label: 'Jam Keluar',
+                hint: 'HH:MM',
+                prefixIcon: Icon(Icons.logout, color: _secondaryTextColor),
               ),
             ),
             const SizedBox(height: 12),
 
             // Status Dropdown
             DropdownButtonFormField<String>(
-              value: _selectedStatus,
-              decoration: InputDecoration(
-                labelText: 'Status',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.info),
+              initialValue: _selectedStatus,
+              dropdownColor: _surfaceColor,
+              style: GoogleFonts.poppins(color: _primaryTextColor),
+              decoration: _inputDecoration(
+                label: 'Status',
+                prefixIcon: Icon(Icons.info, color: _secondaryTextColor),
               ),
-              items: const [
-                DropdownMenuItem(value: 'Present', child: Text('Hadir')),
-                DropdownMenuItem(value: 'Late', child: Text('Terlambat')),
-                DropdownMenuItem(value: 'Absent', child: Text('Tidak Hadir')),
-                DropdownMenuItem(value: 'Leave', child: Text('Cuti')),
-                DropdownMenuItem(value: 'Sick', child: Text('Sakit')),
+              items: [
+                DropdownMenuItem(
+                  value: 'Present',
+                  child: Text('Hadir', style: GoogleFonts.poppins()),
+                ),
+                DropdownMenuItem(
+                  value: 'Late',
+                  child: Text('Terlambat', style: GoogleFonts.poppins()),
+                ),
+                DropdownMenuItem(
+                  value: 'Absent',
+                  child: Text('Tidak Hadir', style: GoogleFonts.poppins()),
+                ),
+                DropdownMenuItem(
+                  value: 'Leave',
+                  child: Text('Cuti', style: GoogleFonts.poppins()),
+                ),
+                DropdownMenuItem(
+                  value: 'Sick',
+                  child: Text('Sakit', style: GoogleFonts.poppins()),
+                ),
               ],
               onChanged: _isSubmitting
                   ? null
@@ -807,15 +891,19 @@ class _CorrectionScreenState extends State<CorrectionScreen>
   }
 
   Widget _buildHistoryTab() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.history, size: 64, color: Colors.grey),
-          SizedBox(height: 16),
+          Icon(
+            Icons.history,
+            size: 64,
+            color: _secondaryTextColor.withValues(alpha: 0.7),
+          ),
+          const SizedBox(height: 16),
           Text(
             'Fitur riwayat absensi akan segera tersedia',
-            style: TextStyle(color: Colors.grey, fontSize: 16),
+            style: TextStyle(color: _secondaryTextColor, fontSize: 16),
             textAlign: TextAlign.center,
           ),
         ],

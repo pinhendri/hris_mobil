@@ -4,8 +4,8 @@ class ApiConstants {
   // ===============================
 
   /// Android Emulator
-  static const String baseUrl = 'http://113.11.129.46';
-  // static const String baseUrl = 'http://10.0.2.2:8000' ;
+    static const String baseUrl = 'http://113.11.129.46';
+//    static const String baseUrl = 'http://10.0.2.2:8000' ;
 
   /// Kalau pakai HP asli:
   /// ganti dengan IP laptop kamu

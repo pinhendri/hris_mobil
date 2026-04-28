@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+
+import '../../core/constants/app_colors.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -20,6 +22,7 @@ class AttendanceScreen extends StatefulWidget {
 
 class _AttendanceScreenState extends State<AttendanceScreen>
     with SingleTickerProviderStateMixin {
+  static const int _historyWindowDays = 30;
   late TabController _tabController;
   String? _employeeUuid;
   String _currentCompanyCode = '';
@@ -67,10 +70,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
         _scrollController.position.maxScrollExtent - 200) {
       if (provider.currentPage < provider.lastPage) {
         unawaited(
-          _loadHistoryData(
-            attendanceProvider: provider,
-            loadNextPage: true,
-          ),
+          _loadHistoryData(attendanceProvider: provider, loadNextPage: true),
         );
       }
     }
@@ -369,7 +369,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -586,7 +586,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
           style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green,
+          backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -662,7 +662,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
           style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.orange,
+          backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -787,6 +787,8 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     bool isDark,
     AttendanceProvider provider,
   ) {
+    final historyItems = _buildHistoryWindow(provider.attendances);
+
     if (_isHistoryTabLoading && provider.attendances.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -837,7 +839,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
       );
     }
 
-    if (provider.attendances.isEmpty && !_isHistoryTabLoading) {
+    if (historyItems.isEmpty && !_isHistoryTabLoading) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -872,11 +874,10 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount:
-          provider.attendances.length + (_isHistoryLoadingMore ? 1 : 0),
+      itemCount: historyItems.length + (_isHistoryLoadingMore ? 1 : 0),
       cacheExtent: 500,
       itemBuilder: (context, index) {
-        if (index == provider.attendances.length) {
+        if (index == historyItems.length) {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(16),
@@ -884,10 +885,70 @@ class _AttendanceScreenState extends State<AttendanceScreen>
             ),
           );
         }
-        final attendance = provider.attendances[index];
+        final attendance = historyItems[index];
         return _buildHistoryItem(attendance, isDark);
       },
     );
+  }
+
+  List<Attendance> _buildHistoryWindow(List<Attendance> sourceAttendances) {
+    if ((_employeeUuid?.isNotEmpty ?? false) != true &&
+        sourceAttendances.isEmpty) {
+      return const <Attendance>[];
+    }
+
+    final attendancesByDate = <String, Attendance>{};
+    for (final attendance in sourceAttendances) {
+      final existing = attendancesByDate[attendance.date];
+      attendancesByDate[attendance.date] = _preferHistoryAttendance(
+        existing,
+        attendance,
+      );
+    }
+
+    final today = DateTime.now();
+    final items = <Attendance>[];
+
+    for (var offset = 0; offset < _historyWindowDays; offset++) {
+      final date = today.subtract(Duration(days: offset));
+      final normalizedDate = DateFormat('yyyy-MM-dd').format(date);
+      final existingAttendance = attendancesByDate[normalizedDate];
+
+      if (existingAttendance != null) {
+        items.add(existingAttendance);
+        continue;
+      }
+
+      items.add(
+        Attendance(
+          employeeUuid: _employeeUuid,
+          date: normalizedDate,
+          cCode: _currentCompanyCode,
+        ),
+      );
+    }
+
+    return items;
+  }
+
+  Attendance _preferHistoryAttendance(
+    Attendance? current,
+    Attendance candidate,
+  ) {
+    if (current == null) {
+      return candidate;
+    }
+
+    final currentScore =
+        (current.hasClockIn ? 2 : 0) +
+        (current.hasClockOut ? 3 : 0) +
+        ((current.isPendingSync) ? 1 : 0);
+    final candidateScore =
+        (candidate.hasClockIn ? 2 : 0) +
+        (candidate.hasClockOut ? 3 : 0) +
+        ((candidate.isPendingSync) ? 1 : 0);
+
+    return candidateScore >= currentScore ? candidate : current;
   }
 
   Widget _buildHistoryItem(Attendance attendance, bool isDark) {

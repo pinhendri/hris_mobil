@@ -21,6 +21,36 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _screenBackgroundColor =>
+      _isDarkMode ? const Color(0xFF020817) : AppColors.background;
+
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+
+  Color get _surfaceMutedColor =>
+      _isDarkMode ? const Color(0xFF0F172A) : AppColors.surface;
+
+  Color get _surfaceBorderColor =>
+      _isDarkMode ? const Color(0xFF253041) : AppColors.border;
+
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF8FAFC) : AppColors.textPrimary;
+
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFCBD5E1) : AppColors.textSecondary;
+
+  List<BoxShadow> get _cardShadow => _isDarkMode
+      ? const []
+      : [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ];
+
   @override
   void initState() {
     super.initState();
@@ -43,36 +73,38 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
 
     if (!canViewEmployee) {
       return Scaffold(
-        backgroundColor: Colors.grey[50],
+        backgroundColor: _screenBackgroundColor,
         appBar: AppBar(
           title: Text(
             'Employees',
             style: GoogleFonts.poppins(
-              color: AppColors.textPrimary,
+              color: _primaryTextColor,
               fontWeight: FontWeight.bold,
             ),
           ),
-          backgroundColor: Colors.white,
+          backgroundColor: _surfaceColor,
+          surfaceTintColor: _surfaceColor,
           elevation: 0,
-          iconTheme: const IconThemeData(color: AppColors.textPrimary),
+          iconTheme: IconThemeData(color: _primaryTextColor),
         ),
         body: const AccessDeniedState(permissionLabel: 'view/manage employee'),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: _screenBackgroundColor,
       appBar: AppBar(
         title: Text(
           'Employees',
           style: GoogleFonts.poppins(
-            color: AppColors.textPrimary,
+            color: _primaryTextColor,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _surfaceColor,
+        surfaceTintColor: _surfaceColor,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        iconTheme: IconThemeData(color: _primaryTextColor),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,7 +163,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   Widget _buildSearchBar() {
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.white,
+      color: _surfaceColor,
       child: TextField(
         controller: _searchController,
         onChanged: (value) {
@@ -141,15 +173,17 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         },
         decoration: InputDecoration(
           hintText: 'Search employees...',
-          prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+          hintStyle: GoogleFonts.poppins(color: _secondaryTextColor),
+          prefixIcon: Icon(Icons.search, color: _secondaryTextColor),
           filled: true,
-          fillColor: AppColors.surface,
+          fillColor: _surfaceMutedColor,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
             borderSide: BorderSide.none,
           ),
           contentPadding: const EdgeInsets.symmetric(vertical: 0),
         ),
+        style: GoogleFonts.poppins(color: _primaryTextColor),
       ),
     );
   }
@@ -158,17 +192,10 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(
-              0.05,
-            ), // PERBAIKAN: withValues -> withOpacity
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: _surfaceBorderColor),
+        boxShadow: _cardShadow,
       ),
       child: Material(
         color: Colors.transparent,
@@ -189,9 +216,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
               children: [
                 CircleAvatar(
                   radius: 28,
-                  backgroundColor: AppColors.primary.withOpacity(
-                    0.1,
-                  ), // PERBAIKAN: withValues -> withOpacity
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                   backgroundImage:
                       employee.avatarUrl != null &&
                           employee.avatarUrl!.isNotEmpty
@@ -220,7 +245,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
+                          color: _primaryTextColor,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -228,7 +253,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                         employee.position,
                         style: GoogleFonts.poppins(
                           fontSize: 13,
-                          color: AppColors.textSecondary,
+                          color: _secondaryTextColor,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -238,14 +263,14 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: _surfaceMutedColor,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           employee.department,
                           style: GoogleFonts.poppins(
                             fontSize: 11,
-                            color: AppColors.textSecondary,
+                            color: _secondaryTextColor,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -262,9 +287,9 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(employee.status).withOpacity(
-                          0.1,
-                        ), // PERBAIKAN: withValues -> withOpacity
+                        color: _getStatusColor(
+                          employee.status,
+                        ).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -300,18 +325,14 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
           Icon(
             Icons.people_outline,
             size: 64,
-            color: AppColors.textSecondary.withOpacity(
-              0.3,
-            ), // PERBAIKAN: withValues -> withOpacity
+            color: _secondaryTextColor.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 16),
           Text(
             'No employees found',
             style: GoogleFonts.poppins(
               fontSize: 16,
-              color: AppColors.textSecondary.withOpacity(
-                0.5,
-              ), // PERBAIKAN: withValues -> withOpacity
+              color: _secondaryTextColor.withValues(alpha: 0.5),
               fontWeight: FontWeight.w500,
             ),
           ),

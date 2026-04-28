@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/constants/api_constants.dart';
@@ -47,7 +47,7 @@ class NotificationProvider with ChangeNotifier {
       final rawBody = utf8.decode(response.bodyBytes);
 
       try {
-        return json.decode(rawBody);
+        return await compute(_decodeNotificationJson, rawBody);
       } on FormatException catch (e) {
         lastError = e;
         print('Invalid notifications JSON on attempt $attempt: $e');
@@ -177,4 +177,8 @@ class NotificationProvider with ChangeNotifier {
   Future<void> refreshNotifications() async {
     await fetchNotifications();
   }
+}
+
+dynamic _decodeNotificationJson(String rawBody) {
+  return json.decode(rawBody);
 }

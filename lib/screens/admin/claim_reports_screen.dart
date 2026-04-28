@@ -23,6 +23,33 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
 
   String _range = '30';
 
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _screenBackgroundColor =>
+      _isDarkMode ? const Color(0xFF020817) : AppColors.background;
+
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+
+  Color get _surfaceBorderColor =>
+      _isDarkMode ? const Color(0xFF253041) : AppColors.border;
+
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF8FAFC) : AppColors.textPrimary;
+
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFCBD5E1) : AppColors.textSecondary;
+
+  List<BoxShadow> get _cardShadow => _isDarkMode
+      ? const []
+      : [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ];
+
   List<ClaimModel> _filterByRange(List<ClaimModel> claims) {
     if (_range == 'all') {
       return claims;
@@ -46,19 +73,20 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: _screenBackgroundColor,
       appBar: AppBar(
         title: Text(
           'Claim Reports',
           style: GoogleFonts.poppins(
-            color: AppColors.textPrimary,
+            color: _primaryTextColor,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _surfaceColor,
+        surfaceTintColor: _surfaceColor,
         elevation: 0,
         centerTitle: true,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        iconTheme: IconThemeData(color: _primaryTextColor),
       ),
       body: Consumer<ClaimProvider>(
         builder: (context, provider, child) {
@@ -82,13 +110,15 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
                     Text(
                       provider.error!,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
-                        color: AppColors.textSecondary,
-                      ),
+                      style: GoogleFonts.poppins(color: _secondaryTextColor),
                     ),
                     const SizedBox(height: 20),
                     OutlinedButton(
                       onPressed: provider.refresh,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _secondaryTextColor,
+                        side: BorderSide(color: _surfaceBorderColor),
+                      ),
                       child: const Text('Retry'),
                     ),
                   ],
@@ -103,7 +133,7 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
             return Center(
               child: Text(
                 'No claims in this period',
-                style: GoogleFonts.poppins(color: AppColors.textSecondary),
+                style: GoogleFonts.poppins(color: _secondaryTextColor),
               ),
             );
           }
@@ -153,12 +183,14 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: _primaryTextColor,
                         ),
                       ),
                       DropdownButton<String>(
                         value: _range,
                         underline: const SizedBox(),
+                        dropdownColor: _surfaceColor,
+                        style: GoogleFonts.poppins(color: _primaryTextColor),
                         items: const [
                           DropdownMenuItem(
                             value: '7',
@@ -237,7 +269,7 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: _primaryTextColor,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -252,15 +284,10 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: _surfaceColor,
                           borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.04),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                          border: Border.all(color: _surfaceBorderColor),
+                          boxShadow: _cardShadow,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,7 +300,7 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
                                   style: GoogleFonts.poppins(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: AppColors.textPrimary,
+                                    color: _primaryTextColor,
                                   ),
                                 ),
                                 Text(
@@ -293,7 +320,7 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
                                 value: percentage,
                                 minHeight: 6,
                                 backgroundColor: AppColors.inputBackground
-                                    .withValues(alpha: 0.7),
+                                    .withValues(alpha: _isDarkMode ? 0.3 : 0.7),
                                 valueColor: const AlwaysStoppedAnimation<Color>(
                                   AppColors.primary,
                                 ),
@@ -322,15 +349,10 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
       width: 160,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: _surfaceBorderColor),
+        boxShadow: _cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,7 +361,7 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
             title,
             style: GoogleFonts.poppins(
               fontSize: 12,
-              color: AppColors.textSecondary,
+              color: _secondaryTextColor,
             ),
           ),
           const SizedBox(height: 8),

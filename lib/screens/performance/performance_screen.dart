@@ -25,15 +25,23 @@ class _PerformanceScreenContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<PerformanceProvider>();
     final summary = provider.summary;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final surfaceColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final screenBackgroundColor = isDark
+        ? const Color(0xFF121212)
+        : Colors.grey[50];
+    final primaryTextColor = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Performance & KPI'),
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: surfaceColor,
+        foregroundColor: primaryTextColor,
+        surfaceTintColor: Colors.transparent,
       ),
-      backgroundColor: Colors.grey[50],
+      backgroundColor: screenBackgroundColor,
       body: provider.isLoading && !provider.hasData
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -42,10 +50,11 @@ class _PerformanceScreenContent extends StatelessWidget {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _buildPeriodSelector(provider),
+                  _buildPeriodSelector(context, provider),
                   if (provider.isUsingCachedData) ...[
                     const SizedBox(height: 16),
                     _buildInfoBanner(
+                      context: context,
                       icon: Icons.wifi_off_rounded,
                       title: 'Showing cached performance data',
                       message:
@@ -56,6 +65,7 @@ class _PerformanceScreenContent extends StatelessWidget {
                   if (provider.error != null && provider.hasData) ...[
                     const SizedBox(height: 16),
                     _buildInfoBanner(
+                      context: context,
                       icon: Icons.info_outline,
                       title: 'Some performance data may be incomplete',
                       message: provider.error!,
@@ -65,6 +75,7 @@ class _PerformanceScreenContent extends StatelessWidget {
                   if (!provider.hasData && provider.error != null) ...[
                     const SizedBox(height: 20),
                     _buildStateCard(
+                      context: context,
                       icon: Icons.cloud_off_outlined,
                       title: 'Unable to load performance data',
                       message: provider.error!,
@@ -74,6 +85,7 @@ class _PerformanceScreenContent extends StatelessWidget {
                   ] else if (!provider.hasData) ...[
                     const SizedBox(height: 20),
                     _buildStateCard(
+                      context: context,
                       icon: Icons.assignment_outlined,
                       title: 'No KPI assigned yet',
                       message:
@@ -83,18 +95,24 @@ class _PerformanceScreenContent extends StatelessWidget {
                     ),
                   ] else ...[
                     const SizedBox(height: 20),
-                    _buildSummaryCard(summary, provider.currentPeriodHistory),
+                    _buildSummaryCard(
+                      context,
+                      summary,
+                      provider.currentPeriodHistory,
+                    ),
                     const SizedBox(height: 24),
-                    const Text(
+                    Text(
                       'KPI Details',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: primaryTextColor,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    ...provider.kpis.map((kpi) => _buildKpiCard(kpi, provider)),
+                    ...provider.kpis.map(
+                      (kpi) => _buildKpiCard(context, kpi, provider),
+                    ),
                   ],
                 ],
               ),
@@ -102,15 +120,27 @@ class _PerformanceScreenContent extends StatelessWidget {
     );
   }
 
-  Widget _buildPeriodSelector(PerformanceProvider provider) {
+  Widget _buildPeriodSelector(
+    BuildContext context,
+    PerformanceProvider provider,
+  ) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final surfaceColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final primaryTextColor = isDark ? Colors.white : Colors.black87;
+    final secondaryTextColor = isDark ? Colors.white70 : Colors.black54;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? const Color(0xFF303030) : Colors.transparent,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -119,13 +149,19 @@ class _PerformanceScreenContent extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
+          Text(
             'Evaluation Period',
-            style: TextStyle(fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: primaryTextColor,
+            ),
           ),
           DropdownButton<String>(
             value: provider.selectedPeriod,
             underline: const SizedBox(),
+            dropdownColor: surfaceColor,
+            iconEnabledColor: secondaryTextColor,
+            style: TextStyle(color: primaryTextColor),
             items: provider.availablePeriods.map((value) {
               return DropdownMenuItem<String>(
                 value: value,
@@ -144,6 +180,7 @@ class _PerformanceScreenContent extends StatelessWidget {
   }
 
   Widget _buildSummaryCard(
+    BuildContext context,
     PerformanceSummary summary,
     PerformanceHistoryModel? history,
   ) {
@@ -244,17 +281,25 @@ class _PerformanceScreenContent extends StatelessWidget {
   }
 
   Widget _buildInfoBanner({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required String message,
     required Color color,
   }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final primaryTextColor = isDark ? Colors.white : Colors.black87;
+    final secondaryTextColor = isDark ? Colors.white70 : Colors.black54;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: color.withValues(alpha: isDark ? 0.16 : 0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
+        border: Border.all(
+          color: color.withValues(alpha: isDark ? 0.32 : 0.18),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,15 +312,15 @@ class _PerformanceScreenContent extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    color: primaryTextColor,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   message,
-                  style: const TextStyle(color: Colors.black54, height: 1.4),
+                  style: TextStyle(color: secondaryTextColor, height: 1.4),
                 ),
               ],
             ),
@@ -286,20 +331,30 @@ class _PerformanceScreenContent extends StatelessWidget {
   }
 
   Widget _buildStateCard({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required String message,
     required String actionLabel,
     required VoidCallback onPressed,
   }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final surfaceColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final primaryTextColor = isDark ? Colors.white : Colors.black87;
+    final secondaryTextColor = isDark ? Colors.white70 : Colors.black54;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xFF303030) : Colors.transparent,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -311,17 +366,17 @@ class _PerformanceScreenContent extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: primaryTextColor,
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
             message,
-            style: const TextStyle(color: Colors.black54, height: 1.4),
+            style: TextStyle(color: secondaryTextColor, height: 1.4),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
@@ -350,21 +405,33 @@ class _PerformanceScreenContent extends StatelessWidget {
     );
   }
 
-  Widget _buildKpiCard(KpiModel kpi, PerformanceProvider provider) {
+  Widget _buildKpiCard(
+    BuildContext context,
+    KpiModel kpi,
+    PerformanceProvider provider,
+  ) {
     final hasEvaluation = provider.hasEvaluation(kpi);
     final actual = provider.getEvaluationValue(kpi);
     final progress = kpi.target > 0 ? (actual / kpi.target) : 0.0;
     final cappedProgress = progress > 1.0 ? 1.0 : progress;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final surfaceColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final primaryTextColor = isDark ? Colors.white : Colors.black87;
+    final secondaryTextColor = isDark ? Colors.white70 : Colors.grey;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF303030) : Colors.transparent,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -379,7 +446,7 @@ class _PerformanceScreenContent extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
+                  color: Colors.blue.withValues(alpha: isDark ? 0.18 : 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -400,10 +467,10 @@ class _PerformanceScreenContent extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             kpi.title,
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 16,
-              color: Colors.black87,
+              color: primaryTextColor,
             ),
           ),
           const SizedBox(height: 16),
@@ -414,12 +481,12 @@ class _PerformanceScreenContent extends StatelessWidget {
                 'Actual: ${hasEvaluation ? _formatNumber(actual) : '-'}',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: hasEvaluation ? Colors.black87 : Colors.grey,
+                  color: hasEvaluation ? primaryTextColor : secondaryTextColor,
                 ),
               ),
               Text(
                 'Target: ${_formatTarget(kpi)}',
-                style: const TextStyle(color: Colors.grey),
+                style: TextStyle(color: secondaryTextColor),
               ),
             ],
           ),
@@ -428,7 +495,9 @@ class _PerformanceScreenContent extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: cappedProgress,
-              backgroundColor: Colors.grey[200],
+              backgroundColor: isDark
+                  ? const Color(0xFF2A2A2A)
+                  : Colors.grey[200],
               valueColor: AlwaysStoppedAnimation<Color>(
                 _getProgressColor(progress),
               ),
@@ -441,7 +510,7 @@ class _PerformanceScreenContent extends StatelessWidget {
             children: [
               Text(
                 'Weight: ${_formatNumber(kpi.weight)}%',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(fontSize: 12, color: secondaryTextColor),
               ),
               Text(
                 '${(progress * 100).toStringAsFixed(0)}%',

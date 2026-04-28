@@ -28,6 +28,53 @@ class _LoginScreenState extends State<LoginScreen>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _screenBackgroundColor =>
+      _isDarkMode ? const Color(0xFF020817) : const Color(0xFFF2F6FD);
+
+  List<Color> get _pageGradientColors => _isDarkMode
+      ? const [Color(0xFF020817), Color(0xFF0F172A)]
+      : const [Color(0xFFDBEAFE), Color(0xFFF6F9FF)];
+
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+
+  Color get _surfaceBorderColor =>
+      _isDarkMode ? const Color(0xFF253041) : const Color(0xFFE2E8F0);
+
+  Color get _surfaceMutedColor =>
+      _isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+
+  Color get _mutedTextColor =>
+      _isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF475569);
+
+  List<BoxShadow> get _surfaceShadows => _isDarkMode
+      ? const []
+      : [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
+        ];
+
+  List<BoxShadow> get _heroShadows => [
+    BoxShadow(
+      color: const Color(
+        0xFF1D4ED8,
+      ).withValues(alpha: _isDarkMode ? 0.18 : 0.24),
+      blurRadius: _isDarkMode ? 20 : 24,
+      offset: const Offset(0, 12),
+    ),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -177,7 +224,7 @@ class _LoginScreenState extends State<LoginScreen>
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F6FD),
+      backgroundColor: _screenBackgroundColor,
       body: Stack(
         children: [
           Positioned.fill(
@@ -186,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen>
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [const Color(0xFFDBEAFE), const Color(0xFFF6F9FF)],
+                  colors: _pageGradientColors,
                 ),
               ),
             ),
@@ -196,7 +243,9 @@ class _LoginScreenState extends State<LoginScreen>
             right: -40,
             child: _buildBackgroundOrb(
               size: 220,
-              color: const Color(0xFF2563EB).withValues(alpha: 0.10),
+              color: const Color(
+                0xFF2563EB,
+              ).withValues(alpha: _isDarkMode ? 0.18 : 0.10),
             ),
           ),
           Positioned(
@@ -204,7 +253,9 @@ class _LoginScreenState extends State<LoginScreen>
             left: -60,
             child: _buildBackgroundOrb(
               size: 160,
-              color: const Color(0xFF14B8A6).withValues(alpha: 0.08),
+              color: const Color(
+                0xFF14B8A6,
+              ).withValues(alpha: _isDarkMode ? 0.14 : 0.08),
             ),
           ),
           Positioned(
@@ -212,7 +263,9 @@ class _LoginScreenState extends State<LoginScreen>
             right: -50,
             child: _buildBackgroundOrb(
               size: 220,
-              color: const Color(0xFF1D4ED8).withValues(alpha: 0.08),
+              color: const Color(
+                0xFF1D4ED8,
+              ).withValues(alpha: _isDarkMode ? 0.16 : 0.08),
             ),
           ),
           SafeArea(
@@ -240,9 +293,9 @@ class _LoginScreenState extends State<LoginScreen>
                               'Version 1.0.0',
                               style: GoogleFonts.poppins(
                                 fontSize: 11,
-                                color: const Color(
-                                  0xFF334155,
-                                ).withValues(alpha: 0.55),
+                                color: _mutedTextColor.withValues(
+                                  alpha: _isDarkMode ? 0.82 : 0.72,
+                                ),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -272,19 +325,15 @@ class _LoginScreenState extends State<LoginScreen>
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+          colors: _isDarkMode
+              ? const [Color(0xFF1D4ED8), Color(0xFF172554)]
+              : const [Color(0xFF2563EB), Color(0xFF1D4ED8)],
         ),
         borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1D4ED8).withValues(alpha: 0.24),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        boxShadow: _heroShadows,
       ),
       child: Stack(
         children: [
@@ -405,16 +454,10 @@ class _LoginScreenState extends State<LoginScreen>
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.08),
-            blurRadius: 28,
-            offset: const Offset(0, 14),
-          ),
-        ],
+        border: Border.all(color: _surfaceBorderColor),
+        boxShadow: _surfaceShadows,
       ),
       child: Form(
         key: _formKey,
@@ -433,7 +476,7 @@ class _LoginScreenState extends State<LoginScreen>
                         style: GoogleFonts.poppins(
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF0F172A),
+                          color: _primaryTextColor,
                           letterSpacing: -0.4,
                         ),
                       ),
@@ -443,7 +486,7 @@ class _LoginScreenState extends State<LoginScreen>
                         style: GoogleFonts.poppins(
                           fontSize: 13,
                           height: 1.45,
-                          color: const Color(0xFF64748B),
+                          color: _secondaryTextColor,
                         ),
                       ),
                     ],
@@ -456,7 +499,9 @@ class _LoginScreenState extends State<LoginScreen>
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
+                    color: const Color(
+                      0xFF2563EB,
+                    ).withValues(alpha: _isDarkMode ? 0.18 : 0.08),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
@@ -464,7 +509,9 @@ class _LoginScreenState extends State<LoginScreen>
                     style: GoogleFonts.poppins(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFF2563EB),
+                      color: _isDarkMode
+                          ? Colors.white
+                          : const Color(0xFF2563EB),
                     ),
                   ),
                 ),
@@ -477,6 +524,7 @@ class _LoginScreenState extends State<LoginScreen>
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
+                color: _primaryTextColor,
               ),
               validator: _validateEmail,
               enabled: !isLoading,
@@ -493,6 +541,7 @@ class _LoginScreenState extends State<LoginScreen>
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
+                color: _primaryTextColor,
               ),
               validator: _validatePassword,
               enabled: !isLoading,
@@ -505,7 +554,7 @@ class _LoginScreenState extends State<LoginScreen>
                     _obscurePassword
                         ? Icons.visibility_off_rounded
                         : Icons.visibility_rounded,
-                    color: const Color(0xFF94A3B8),
+                    color: _secondaryTextColor,
                     size: 20,
                   ),
                   onPressed: !isLoading
@@ -595,7 +644,7 @@ class _LoginScreenState extends State<LoginScreen>
           'Remember me',
           style: GoogleFonts.poppins(
             fontSize: 12,
-            color: const Color(0xFF475569),
+            color: _mutedTextColor,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -647,12 +696,12 @@ class _LoginScreenState extends State<LoginScreen>
       hintText: hint,
       labelStyle: GoogleFonts.poppins(
         fontSize: 13,
-        color: const Color(0xFF64748B),
+        color: _secondaryTextColor,
         fontWeight: FontWeight.w500,
       ),
       hintStyle: GoogleFonts.poppins(
         fontSize: 13,
-        color: const Color(0xFF94A3B8),
+        color: _secondaryTextColor.withValues(alpha: 0.75),
       ),
       prefixIcon: Icon(icon, color: const Color(0xFF2563EB), size: 20),
       suffixIcon: suffixIcon,
@@ -662,7 +711,7 @@ class _LoginScreenState extends State<LoginScreen>
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+        borderSide: BorderSide(color: _surfaceBorderColor, width: 1),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
@@ -677,7 +726,7 @@ class _LoginScreenState extends State<LoginScreen>
         borderSide: BorderSide(color: Colors.red.shade400, width: 1.6),
       ),
       filled: true,
-      fillColor: const Color(0xFFF8FAFC),
+      fillColor: _surfaceMutedColor,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
     );
   }
@@ -686,8 +735,11 @@ class _LoginScreenState extends State<LoginScreen>
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: _isDarkMode ? const Color(0xFF0B1120) : const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(26),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: _isDarkMode ? 0.10 : 0.06),
+        ),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF0F172A).withValues(alpha: 0.14),
@@ -818,6 +870,7 @@ class _LoginScreenState extends State<LoginScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: _surfaceColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         contentPadding: const EdgeInsets.fromLTRB(22, 22, 22, 14),
         titlePadding: EdgeInsets.zero,
@@ -843,7 +896,7 @@ class _LoginScreenState extends State<LoginScreen>
               style: GoogleFonts.poppins(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF0F172A),
+                color: _primaryTextColor,
               ),
             ),
             const SizedBox(height: 8),
@@ -853,7 +906,7 @@ class _LoginScreenState extends State<LoginScreen>
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 height: 1.5,
-                color: const Color(0xFF64748B),
+                color: _secondaryTextColor,
               ),
             ),
           ],

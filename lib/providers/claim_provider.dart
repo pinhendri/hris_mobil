@@ -10,12 +10,15 @@ import '../services/session_storage.dart';
 
 class ClaimProvider with ChangeNotifier {
   ClaimProvider() {
-    unawaited(_bootstrapOfflineSupport());
+    Future<void>.microtask(() {
+      unawaited(ensureInitialized());
+    });
   }
 
   final ApiService _apiService = ApiService();
 
   List<ClaimModel> _claims = [];
+  List<ClaimEmployeeOption> _employees = [];
   bool _isLoading = false;
   bool _isSubmitting = false;
   String? _error;
@@ -27,8 +30,11 @@ class ClaimProvider with ChangeNotifier {
   String? _lastActionMessage;
   bool _lastActionQueued = false;
   Timer? _offlineSyncTimer;
+  bool _isInitialized = false;
+  Future<void>? _initializationFuture;
 
   List<ClaimModel> get claims => _claims;
+  List<ClaimEmployeeOption> get employees => _employees;
   List<ClaimModel> get myClaims {
     if (_currentEmployeeId == null) {
       return const [];
@@ -48,14 +54,25 @@ class ClaimProvider with ChangeNotifier {
   String? get syncNotice => _syncNotice;
   String? get lastActionMessage => _lastActionMessage;
   bool get lastActionQueued => _lastActionQueued;
+  bool get isInitialized => _isInitialized;
+
+  Future<void> ensureInitialized() {
+    return _initializationFuture ??= _bootstrapOfflineSupport();
+  }
 
   Future<void> _bootstrapOfflineSupport() async {
-    await _loadCache();
+    final loadedFromCache = await _loadCache();
     await _refreshPendingSyncState(notify: false);
     _offlineSyncTimer ??= Timer.periodic(const Duration(seconds: 45), (_) {
       unawaited(syncOfflineActions(silent: true));
     });
-    await refresh();
+    _isInitialized = true;
+
+    if (loadedFromCache || _pendingSyncCount > 0) {
+      notifyListeners();
+    }
+
+    await refresh(showLoading: !loadedFromCache && _claims.isEmpty);
   }
 
   @override
@@ -64,11 +81,13 @@ class ClaimProvider with ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> refresh() async {
-    _isLoading = true;
+  Future<void> refresh({bool showLoading = true}) async {
+    _isLoading = showLoading;
     _error = null;
     _isUsingCachedData = false;
-    notifyListeners();
+    if (showLoading) {
+      notifyListeners();
+    }
 
     try {
       await _ensureCurrentEmployeeIdentity();
@@ -76,6 +95,7 @@ class ClaimProvider with ChangeNotifier {
 
       final response = await _apiService.get('/claims');
       _claims = _extractClaims(response);
+      _employees = _extractEmployees(response);
       _sortClaims();
       await _mergePendingOfflineClaims();
       await _saveCache();
@@ -241,6 +261,28 @@ class ClaimProvider with ChangeNotifier {
     return _performStatusAction(
       request: () => _apiService.post('/claims/$id/mark-paid', {}),
     );
+  }
+
+  Future<bool> deleteClaim(String id) async {
+    _isSubmitting = true;
+    _error = null;
+    _lastActionQueued = false;
+    _lastActionMessage = null;
+    notifyListeners();
+
+    try {
+      await _apiService.delete('/claims/$id');
+      _claims.removeWhere((claim) => claim.id == id);
+      await _saveCache();
+      _lastActionMessage = 'Claim deleted.';
+      return true;
+    } catch (error) {
+      _error = _normalizeError(error);
+      return false;
+    } finally {
+      _isSubmitting = false;
+      notifyListeners();
+    }
   }
 
   Future<bool> updateStatus(String id, String status, {String? notes}) async {
@@ -545,6 +587,7 @@ class ClaimProvider with ChangeNotifier {
           .where((claim) => !claim.isPendingSync)
           .map((claim) => claim.toJson())
           .toList(),
+      'employees': _employees.map((employee) => employee.toJson()).toList(),
       'currentEmployeeId': _currentEmployeeId,
       'currentEmployeeUuid': _currentEmployeeUuid,
     });
@@ -577,6 +620,18 @@ class ClaimProvider with ChangeNotifier {
           .map((json) => ClaimModel.fromJson(Map<String, dynamic>.from(json)))
           .toList(growable: true);
       _sortClaims();
+    }
+
+    final rawEmployees = cached['employees'];
+    if (rawEmployees is List) {
+      _employees = rawEmployees
+          .whereType<Map>()
+          .map(
+            (json) =>
+                ClaimEmployeeOption.fromJson(Map<String, dynamic>.from(json)),
+          )
+          .where((employee) => employee.id > 0)
+          .toList(growable: true);
     }
 
     _currentEmployeeId = _parseInt(cached['currentEmployeeId']);
@@ -648,6 +703,30 @@ class ClaimProvider with ChangeNotifier {
     return rawClaims
         .whereType<Map<String, dynamic>>()
         .map(ClaimModel.fromJson)
+        .toList(growable: true);
+  }
+
+  List<ClaimEmployeeOption> _extractEmployees(dynamic response) {
+    if (response is! Map<String, dynamic>) {
+      return const [];
+    }
+
+    final data = response['data'];
+    final rawEmployees = data is Map<String, dynamic>
+        ? data['employees']
+        : null;
+
+    if (rawEmployees is! List) {
+      return const [];
+    }
+
+    return rawEmployees
+        .whereType<Map>()
+        .map(
+          (json) =>
+              ClaimEmployeeOption.fromJson(Map<String, dynamic>.from(json)),
+        )
+        .where((employee) => employee.id > 0)
         .toList(growable: true);
   }
 

@@ -3,11 +3,28 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/constants/app_colors.dart';
 import '../../models/task_model.dart';
 import '../../providers/task_provider.dart';
 
 class TasksScreen extends StatelessWidget {
   const TasksScreen({super.key});
+
+  Future<bool> _confirmToggleStatus(
+    BuildContext context,
+    TaskModel task,
+  ) async {
+    final isCompleting = !task.isCompleted;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: !isCompleting,
+      builder: (dialogContext) =>
+          _TaskStatusConfirmDialog(task: task, isCompleting: isCompleting),
+    );
+
+    return confirmed == true;
+  }
 
   void _openTaskForm(BuildContext context, {TaskModel? task}) {
     final provider = context.read<TaskProvider>();
@@ -81,7 +98,7 @@ class TasksScreen extends StatelessWidget {
               color: Colors.white,
             ),
           ),
-          backgroundColor: const Color(0xFF1A237E),
+          backgroundColor: AppColors.primary,
           iconTheme: const IconThemeData(color: Colors.white),
           actions: [
             IconButton(
@@ -104,7 +121,7 @@ class TasksScreen extends StatelessWidget {
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _openTaskForm(context),
-          backgroundColor: const Color(0xFF1A237E),
+          backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           icon: const Icon(Icons.add),
           label: const Text('Add Task'),
@@ -274,6 +291,14 @@ class TasksScreen extends StatelessWidget {
                         onChanged: isBusy || !task.canToggle
                             ? null
                             : (value) async {
+                                final confirmed = await _confirmToggleStatus(
+                                  context,
+                                  task,
+                                );
+                                if (!confirmed || !context.mounted) {
+                                  return;
+                                }
+
                                 final success = await provider.toggleTaskStatus(
                                   task.id,
                                 );
@@ -442,6 +467,285 @@ class TasksScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TaskStatusConfirmDialog extends StatelessWidget {
+  const _TaskStatusConfirmDialog({
+    required this.task,
+    required this.isCompleting,
+  });
+
+  final TaskModel task;
+  final bool isCompleting;
+
+  bool get _isHighPriority => task.priority == 'high';
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? const Color(0xFF111827) : Colors.white;
+    final mutedSurfaceColor = isDark
+        ? const Color(0xFF0F172A)
+        : const Color(0xFFF8FAFC);
+    final borderColor = isDark
+        ? const Color(0xFF253041)
+        : const Color(0xFFE2E8F0);
+    final primaryTextColor = isDark
+        ? const Color(0xFFF8FAFC)
+        : const Color(0xFF0F172A);
+    final secondaryTextColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF64748B);
+    final accentColor = isCompleting
+        ? const Color(0xFF2563EB)
+        : const Color(0xFFF59E0B);
+    final buttonLabel = isCompleting ? 'Ya, tandai selesai' : 'Ya, ubah status';
+    final title = isCompleting
+        ? 'Selesaikan task ini?'
+        : 'Kembalikan ke pending?';
+    final subtitle = isCompleting
+        ? 'Task akan dipindahkan ke tab Completed. Anda tetap bisa mengubahnya lagi nanti.'
+        : 'Task akan dipindahkan kembali ke tab Pending agar bisa dilanjutkan.';
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Container(
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: surfaceColor,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: borderColor),
+          boxShadow: isDark
+              ? const []
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.10),
+                    blurRadius: 28,
+                    offset: const Offset(0, 14),
+                  ),
+                ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        accentColor,
+                        accentColor.withValues(alpha: 0.78),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(
+                    isCompleting
+                        ? Icons.task_alt_rounded
+                        : Icons.restart_alt_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: primaryTextColor,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          height: 1.5,
+                          color: secondaryTextColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: mutedSurfaceColor,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: borderColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    task.title,
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: primaryTextColor,
+                    ),
+                  ),
+                  if (task.description.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      task.description.trim(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        height: 1.45,
+                        color: secondaryTextColor,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _TaskDialogChip(
+                        icon: Icons.flag_rounded,
+                        label: task.priority.toUpperCase(),
+                        color: _priorityColor(task.priority),
+                        isDark: isDark,
+                      ),
+                      _TaskDialogChip(
+                        icon: Icons.category_rounded,
+                        label: task.type.toUpperCase(),
+                        color: const Color(0xFF8B5CF6),
+                        isDark: isDark,
+                      ),
+                      if (task.dueDate != null)
+                        _TaskDialogChip(
+                          icon: Icons.event_rounded,
+                          label: DateFormat(
+                            'dd MMM yyyy',
+                          ).format(task.dueDate!),
+                          color: _isHighPriority
+                              ? const Color(0xFFEF4444)
+                              : const Color(0xFF0EA5E9),
+                          isDark: isDark,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: secondaryTextColor,
+                      side: BorderSide(color: borderColor),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Text(
+                      isCompleting ? 'Belum dulu' : 'Batal',
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Text(
+                      buttonLabel,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _priorityColor(String priority) {
+    switch (priority) {
+      case 'high':
+        return const Color(0xFFEF4444);
+      case 'low':
+        return const Color(0xFF10B981);
+      default:
+        return const Color(0xFFF59E0B);
+    }
+  }
+}
+
+class _TaskDialogChip extends StatelessWidget {
+  const _TaskDialogChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.isDark,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.18 : 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: isDark ? Colors.white : color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white : color,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -755,7 +1059,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                     child: FilledButton(
                       onPressed: _isSubmitting ? null : _submit,
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A237E),
+                        backgroundColor: AppColors.primary,
                       ),
                       child: _isSubmitting
                           ? const SizedBox(

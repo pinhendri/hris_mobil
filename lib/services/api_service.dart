@@ -1,10 +1,15 @@
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
 import '../core/constants/api_constants.dart';
 import 'session_storage.dart';
 
 class ApiService {
   static const String baseUrl = ApiConstants.baseUrl;
+  static const Duration _requestTimeout = Duration(seconds: 12);
+  static const int _maxLoggedBodyLength = 240;
 
   Future<Map<String, String>> _getHeaders() async {
     final token = await SessionStorage.getToken();
@@ -26,105 +31,142 @@ class ApiService {
     return headers;
   }
 
-  // GET METHOD
   Future<dynamic> get(String endpoint) async {
     final headers = await _getHeaders();
     final url = '$baseUrl/api$endpoint';
 
-    print('📡 GET: $url');
+    _debugLog('GET: $url');
 
     try {
-      final response = await http.get(Uri.parse(url), headers: headers);
+      final response = await http
+          .get(Uri.parse(url), headers: headers)
+          .timeout(_requestTimeout);
 
-      print('📥 Response (${response.statusCode}): ${response.body}');
+      _debugLog(
+        'GET Response (${response.statusCode}): ${_previewBody(response.body)}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+        return _decodeResponse(response);
       }
-    } catch (e) {
-      print('❌ Network error: $e');
-      throw Exception('Network error: $e');
+
+      throw Exception(
+        'HTTP ${response.statusCode}: ${_previewBody(response.body)}',
+      );
+    } catch (error) {
+      _debugLog('GET error: $error');
+      throw Exception('Network error: $error');
     }
   }
 
-  // POST METHOD
   Future<dynamic> post(String endpoint, Map<String, dynamic> data) async {
     final headers = await _getHeaders();
     final url = '$baseUrl/api$endpoint';
 
-    print('📡 POST: $url');
-    print('📤 Data: $data');
+    _debugLog('POST: $url');
+    _debugLog('POST Payload: ${_previewBody(jsonEncode(data))}');
 
     try {
-      final response = await http.post(
-        Uri.parse(url),
-        headers: headers,
-        body: jsonEncode(data),
+      final response = await http
+          .post(Uri.parse(url), headers: headers, body: jsonEncode(data))
+          .timeout(_requestTimeout);
+
+      _debugLog(
+        'POST Response (${response.statusCode}): ${_previewBody(response.body)}',
       );
 
-      print('📥 Response (${response.statusCode}): ${response.body}');
-
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+        return _decodeResponse(response);
       }
-    } catch (e) {
-      print('❌ Network error: $e');
-      throw Exception('Network error: $e');
+
+      throw Exception(
+        'HTTP ${response.statusCode}: ${_previewBody(response.body)}',
+      );
+    } catch (error) {
+      _debugLog('POST error: $error');
+      throw Exception('Network error: $error');
     }
   }
 
-  // PUT METHOD
   Future<dynamic> put(String endpoint, Map<String, dynamic> data) async {
     final headers = await _getHeaders();
     final url = '$baseUrl/api$endpoint';
 
-    print('📡 PUT: $url');
-    print('📤 Data: $data');
+    _debugLog('PUT: $url');
+    _debugLog('PUT Payload: ${_previewBody(jsonEncode(data))}');
 
     try {
-      final response = await http.put(
-        Uri.parse(url),
-        headers: headers,
-        body: jsonEncode(data),
+      final response = await http
+          .put(Uri.parse(url), headers: headers, body: jsonEncode(data))
+          .timeout(_requestTimeout);
+
+      _debugLog(
+        'PUT Response (${response.statusCode}): ${_previewBody(response.body)}',
       );
 
-      print('📥 Response (${response.statusCode}): ${response.body}');
-
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+        return _decodeResponse(response);
       }
-    } catch (e) {
-      print('❌ Network error: $e');
-      throw Exception('Network error: $e');
+
+      throw Exception(
+        'HTTP ${response.statusCode}: ${_previewBody(response.body)}',
+      );
+    } catch (error) {
+      _debugLog('PUT error: $error');
+      throw Exception('Network error: $error');
     }
   }
 
-  // DELETE METHOD
   Future<dynamic> delete(String endpoint) async {
     final headers = await _getHeaders();
     final url = '$baseUrl/api$endpoint';
 
-    print('📡 DELETE: $url');
+    _debugLog('DELETE: $url');
 
     try {
-      final response = await http.delete(Uri.parse(url), headers: headers);
+      final response = await http
+          .delete(Uri.parse(url), headers: headers)
+          .timeout(_requestTimeout);
 
-      print('📥 Response (${response.statusCode}): ${response.body}');
+      _debugLog(
+        'DELETE Response (${response.statusCode}): ${_previewBody(response.body)}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+        return _decodeResponse(response);
       }
-    } catch (e) {
-      print('❌ Network error: $e');
-      throw Exception('Network error: $e');
+
+      throw Exception(
+        'HTTP ${response.statusCode}: ${_previewBody(response.body)}',
+      );
+    } catch (error) {
+      _debugLog('DELETE error: $error');
+      throw Exception('Network error: $error');
     }
   }
+
+  Future<dynamic> _decodeResponse(http.Response response) async {
+    if (response.bodyBytes.isEmpty) {
+      return <String, dynamic>{};
+    }
+
+    return compute(_decodeJsonBody, utf8.decode(response.bodyBytes));
+  }
+
+  void _debugLog(String message) {
+    if (kDebugMode) {
+      debugPrint(message);
+    }
+  }
+
+  String _previewBody(String body) {
+    final normalized = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length <= _maxLoggedBodyLength) {
+      return normalized;
+    }
+
+    return '${normalized.substring(0, _maxLoggedBodyLength)}...';
+  }
 }
+
+dynamic _decodeJsonBody(String body) => jsonDecode(body);

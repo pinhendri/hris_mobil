@@ -22,6 +22,41 @@ class _LeaveManagementEnhancedScreenState
   DateTime? _startDate;
   DateTime? _endDate;
 
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _screenBackgroundColor =>
+      _isDarkMode ? const Color(0xFF020817) : AppColors.background;
+
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+
+  Color get _surfaceMutedColor =>
+      _isDarkMode ? const Color(0xFF0F172A) : Colors.grey.shade100;
+
+  Color get _surfaceBorderColor =>
+      _isDarkMode ? const Color(0xFF253041) : AppColors.border;
+
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF8FAFC) : AppColors.textPrimary;
+
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFCBD5E1) : AppColors.textSecondary;
+
+  BoxDecoration _surfaceDecoration() => BoxDecoration(
+    color: _surfaceColor,
+    borderRadius: BorderRadius.circular(16),
+    border: Border.all(color: _surfaceBorderColor),
+    boxShadow: _isDarkMode
+        ? const []
+        : [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+  );
+
   @override
   void initState() {
     super.initState();
@@ -55,19 +90,20 @@ class _LeaveManagementEnhancedScreenState
     return DefaultTabController(
       length: canManageCompanyLeave ? 2 : 1,
       child: Scaffold(
-        backgroundColor: Colors.grey[50],
+        backgroundColor: _screenBackgroundColor,
         appBar: AppBar(
-          title: const Text(
+          title: Text(
             'Leave Management',
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: _primaryTextColor,
               fontWeight: FontWeight.bold,
             ),
           ),
-          backgroundColor: Colors.white,
+          backgroundColor: _surfaceColor,
+          surfaceTintColor: _surfaceColor,
           elevation: 0,
           centerTitle: true,
-          iconTheme: const IconThemeData(color: AppColors.textPrimary),
+          iconTheme: IconThemeData(color: _primaryTextColor),
           actions: [
             IconButton(
               onPressed: leaveProvider.isLoading
@@ -78,7 +114,7 @@ class _LeaveManagementEnhancedScreenState
           ],
           bottom: TabBar(
             labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondary,
+            unselectedLabelColor: _secondaryTextColor,
             indicatorColor: AppColors.primary,
             tabs: [
               const Tab(text: 'Requests'),
@@ -111,9 +147,13 @@ class _LeaveManagementEnhancedScreenState
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.08),
+                color: Colors.blue.withValues(alpha: _isDarkMode ? 0.16 : 0.08),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.blue.withValues(alpha: 0.15)),
+                border: Border.all(
+                  color: Colors.blue.withValues(
+                    alpha: _isDarkMode ? 0.24 : 0.15,
+                  ),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,19 +168,23 @@ class _LeaveManagementEnhancedScreenState
                   const SizedBox(height: 8),
                   Text(
                     'Requests: ${requests.length} | Company leave: ${requests.where((request) => request.isCompanyLeave).length}',
-                    style: const TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: _secondaryTextColor),
                   ),
                 ],
               ),
             ),
           if (requests.isEmpty) ...[
             const SizedBox(height: 140),
-            const Icon(Icons.inbox_outlined, size: 56, color: Colors.grey),
+            Icon(
+              Icons.inbox_outlined,
+              size: 56,
+              color: _secondaryTextColor.withValues(alpha: 0.7),
+            ),
             const SizedBox(height: 16),
-            const Center(
+            Center(
               child: Text(
                 'No leave requests found',
-                style: TextStyle(color: Colors.grey, fontSize: 16),
+                style: TextStyle(color: _secondaryTextColor, fontSize: 16),
               ),
             ),
           ] else ...[
@@ -166,22 +210,19 @@ class _LeaveManagementEnhancedScreenState
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            elevation: 1,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
+          Container(
+            decoration: _surfaceDecoration(),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Bulk Company Leave',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                      color: _primaryTextColor,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -189,23 +230,31 @@ class _LeaveManagementEnhancedScreenState
                     companyCode.isEmpty
                         ? 'Select a company first before creating company leave.'
                         : 'HR/Admin can create company leave in bulk for all active employees in this company.',
-                    style: const TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: _secondaryTextColor),
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _titleController,
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: _primaryTextColor),
+                    decoration: InputDecoration(
                       labelText: 'Title',
-                      border: OutlineInputBorder(),
+                      labelStyle: TextStyle(color: _secondaryTextColor),
+                      filled: true,
+                      fillColor: _surfaceMutedColor,
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _descriptionController,
                     maxLines: 3,
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: _primaryTextColor),
+                    decoration: InputDecoration(
                       labelText: 'Description',
-                      border: OutlineInputBorder(),
+                      labelStyle: TextStyle(color: _secondaryTextColor),
+                      filled: true,
+                      fillColor: _surfaceMutedColor,
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -233,15 +282,19 @@ class _LeaveManagementEnhancedScreenState
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.08),
+                      color: Colors.orange.withValues(
+                        alpha: _isDarkMode ? 0.16 : 0.08,
+                      ),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: Colors.orange.withValues(alpha: 0.15),
+                        color: Colors.orange.withValues(
+                          alpha: _isDarkMode ? 0.24 : 0.15,
+                        ),
                       ),
                     ),
                     child: Text(
                       _companyLeaveSummary(companyCode),
-                      style: const TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: _secondaryTextColor),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -284,30 +337,31 @@ class _LeaveManagementEnhancedScreenState
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Company Leave History',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 16,
-              color: AppColors.textPrimary,
+              color: _primaryTextColor,
             ),
           ),
           const SizedBox(height: 12),
           if (leaveProvider.companyLeaveBatches.isEmpty)
-            Card(
+            Container(
+              decoration: _surfaceDecoration(),
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
-                  children: const [
+                  children: [
                     Icon(
                       Icons.event_busy_outlined,
                       size: 40,
-                      color: Colors.grey,
+                      color: _secondaryTextColor,
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     Text(
                       'No company leave batches yet',
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: _secondaryTextColor),
                     ),
                   ],
                 ),
@@ -457,13 +511,30 @@ class _LeaveRequestManagementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDarkMode ? const Color(0xFF111827) : Colors.white;
+    final surfaceMutedColor = isDarkMode
+        ? const Color(0xFF0F172A)
+        : Colors.grey.shade100;
+    final surfaceBorderColor = isDarkMode
+        ? const Color(0xFF253041)
+        : AppColors.border;
+    final primaryTextColor = isDarkMode
+        ? const Color(0xFFF8FAFC)
+        : AppColors.textPrimary;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
     final leaveProvider = context.read<LeaveProvider>();
     final canApprove =
         request.status.toLowerCase() == 'pending' && !request.isCompanyLeave;
 
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return Container(
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: surfaceBorderColor),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -477,10 +548,10 @@ class _LeaveRequestManagementCard extends StatelessWidget {
                     children: [
                       Text(
                         request.employeeName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          color: AppColors.textPrimary,
+                          color: primaryTextColor,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -490,9 +561,7 @@ class _LeaveRequestManagementCard extends StatelessWidget {
                         children: [
                           Text(
                             request.type,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                            ),
+                            style: TextStyle(color: secondaryTextColor),
                           ),
                           if (request.isCompanyLeave)
                             Container(
@@ -549,7 +618,7 @@ class _LeaveRequestManagementCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: surfaceMutedColor,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -558,7 +627,7 @@ class _LeaveRequestManagementCard extends StatelessWidget {
                           ? 'Company leave assigned in bulk by HR/Admin.'
                           : '-')
                     : request.reason,
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: secondaryTextColor),
               ),
             ),
             if (canApprove) ...[
@@ -574,6 +643,7 @@ class _LeaveRequestManagementCard extends StatelessWidget {
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
+                        side: BorderSide(color: surfaceBorderColor),
                       ),
                       child: const Text('Reject'),
                     ),
@@ -671,9 +741,24 @@ class _CompanyLeaveBatchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDarkMode ? const Color(0xFF111827) : Colors.white;
+    final surfaceBorderColor = isDarkMode
+        ? const Color(0xFF253041)
+        : AppColors.border;
+    final primaryTextColor = isDarkMode
+        ? const Color(0xFFF8FAFC)
+        : AppColors.textPrimary;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: surfaceBorderColor),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -688,16 +773,16 @@ class _CompanyLeaveBatchCard extends StatelessWidget {
                     children: [
                       Text(
                         batch.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          color: AppColors.textPrimary,
+                          color: primaryTextColor,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '${_formatDate(batch.startDate)} - ${_formatDate(batch.endDate)} | ${batch.days} day(s)',
-                        style: const TextStyle(color: AppColors.textSecondary),
+                        style: TextStyle(color: secondaryTextColor),
                       ),
                     ],
                   ),
@@ -725,7 +810,7 @@ class _CompanyLeaveBatchCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 batch.description,
-                style: const TextStyle(color: AppColors.textSecondary),
+                style: TextStyle(color: secondaryTextColor),
               ),
             ],
             const SizedBox(height: 14),
@@ -798,14 +883,27 @@ class _DateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDarkMode ? const Color(0xFF0F172A) : Colors.white;
+    final surfaceBorderColor = isDarkMode
+        ? const Color(0xFF253041)
+        : Colors.grey.shade300;
+    final primaryTextColor = isDarkMode
+        ? const Color(0xFFF8FAFC)
+        : AppColors.textPrimary;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
+          color: surfaceColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: surfaceBorderColor),
         ),
         child: Row(
           children: [
@@ -815,22 +913,26 @@ class _DateTile extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
+                    style: TextStyle(fontSize: 12, color: secondaryTextColor),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     value == null
                         ? 'Select date'
                         : DateFormat('dd MMM yyyy').format(value!),
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: primaryTextColor,
+                    ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.calendar_today_outlined, size: 18),
+            Icon(
+              Icons.calendar_today_outlined,
+              size: 18,
+              color: secondaryTextColor,
+            ),
           ],
         ),
       ),
@@ -846,15 +948,26 @@ class _InfoBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final primaryTextColor = isDarkMode
+        ? const Color(0xFFF8FAFC)
+        : AppColors.textPrimary;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: secondaryTextColor)),
         const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: primaryTextColor,
+          ),
+        ),
       ],
     );
   }
@@ -873,10 +986,15 @@ class _MetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: color.withValues(alpha: isDarkMode ? 0.16 : 0.08),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -884,10 +1002,7 @@ class _MetricTile extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
+            style: TextStyle(fontSize: 12, color: secondaryTextColor),
           ),
           const SizedBox(height: 4),
           Text(
@@ -930,7 +1045,9 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(
+          alpha: Theme.of(context).brightness == Brightness.dark ? 0.18 : 0.1,
+        ),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(

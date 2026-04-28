@@ -12,27 +12,40 @@ class ClaimManagementScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final screenBackgroundColor = isDarkMode
+        ? const Color(0xFF020817)
+        : AppColors.background;
+    final surfaceColor = isDarkMode ? const Color(0xFF111827) : Colors.white;
+    final primaryTextColor = isDarkMode
+        ? const Color(0xFFF8FAFC)
+        : AppColors.textPrimary;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        backgroundColor: Colors.grey[50],
+        backgroundColor: screenBackgroundColor,
         appBar: AppBar(
           title: Text(
             'Claim Management',
             style: GoogleFonts.poppins(
-              color: AppColors.textPrimary,
+              color: primaryTextColor,
               fontWeight: FontWeight.bold,
             ),
           ),
-          backgroundColor: Colors.white,
+          backgroundColor: surfaceColor,
+          surfaceTintColor: surfaceColor,
           elevation: 0,
           centerTitle: true,
-          iconTheme: const IconThemeData(color: AppColors.textPrimary),
-          bottom: const TabBar(
+          iconTheme: IconThemeData(color: primaryTextColor),
+          bottom: TabBar(
             labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondary,
+            unselectedLabelColor: secondaryTextColor,
             indicatorColor: AppColors.primary,
-            tabs: [
+            tabs: const [
               Tab(text: 'Submitted'),
               Tab(text: 'Approved'),
               Tab(text: 'All'),
@@ -96,6 +109,11 @@ class _StateMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -111,10 +129,21 @@ class _StateMessage extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(color: AppColors.textSecondary),
+              style: GoogleFonts.poppins(color: secondaryTextColor),
             ),
             const SizedBox(height: 20),
-            OutlinedButton(onPressed: onAction, child: Text(actionLabel)),
+            OutlinedButton(
+              onPressed: onAction,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: secondaryTextColor,
+                side: BorderSide(
+                  color: isDarkMode
+                      ? const Color(0xFF253041)
+                      : AppColors.border,
+                ),
+              ),
+              child: Text(actionLabel),
+            ),
           ],
         ),
       ),
@@ -130,11 +159,16 @@ class _ClaimList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
     if (claims.isEmpty) {
       return Center(
         child: Text(
           'No claims in this stage',
-          style: GoogleFonts.poppins(color: AppColors.textSecondary),
+          style: GoogleFonts.poppins(color: secondaryTextColor),
         ),
       );
     }
@@ -160,6 +194,17 @@ class _ClaimManagementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDarkMode ? const Color(0xFF111827) : Colors.white;
+    final surfaceBorderColor = isDarkMode
+        ? const Color(0xFF253041)
+        : AppColors.border;
+    final primaryTextColor = isDarkMode
+        ? const Color(0xFFF8FAFC)
+        : AppColors.textPrimary;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
     final claimProvider = context.watch<ClaimProvider>();
     final statusColor = _statusColor(claim.status);
     final canApprove =
@@ -171,15 +216,18 @@ class _ClaimManagementCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: surfaceBorderColor),
+        boxShadow: isDarkMode
+            ? const []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,7 +244,7 @@ class _ClaimManagementCard extends StatelessWidget {
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: primaryTextColor,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -204,7 +252,7 @@ class _ClaimManagementCard extends StatelessWidget {
                       claim.employeeName ?? 'Unknown employee',
                       style: GoogleFonts.poppins(
                         fontSize: 13,
-                        color: AppColors.textSecondary,
+                        color: secondaryTextColor,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -212,7 +260,7 @@ class _ClaimManagementCard extends StatelessWidget {
                       DateFormat('dd MMM yyyy').format(claim.date),
                       style: GoogleFonts.poppins(
                         fontSize: 12,
-                        color: AppColors.textSecondary,
+                        color: secondaryTextColor,
                       ),
                     ),
                     if (claim.claimNumber != null &&
@@ -222,7 +270,7 @@ class _ClaimManagementCard extends StatelessWidget {
                         claim.claimNumber!,
                         style: GoogleFonts.poppins(
                           fontSize: 11,
-                          color: const Color(0xFF9CA3AF),
+                          color: secondaryTextColor.withValues(alpha: 0.8),
                         ),
                       ),
                     ],
@@ -242,10 +290,7 @@ class _ClaimManagementCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             claim.description,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-            ),
+            style: GoogleFonts.poppins(fontSize: 13, color: secondaryTextColor),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -280,7 +325,7 @@ class _ClaimManagementCard extends StatelessWidget {
               'Approver: ${claim.approverName!}',
               style: GoogleFonts.poppins(
                 fontSize: 12,
-                color: AppColors.textSecondary,
+                color: secondaryTextColor,
               ),
             ),
           ],
@@ -314,6 +359,7 @@ class _ClaimManagementCard extends StatelessWidget {
                           },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
+                      side: BorderSide(color: surfaceBorderColor),
                     ),
                     child: const Text('Reject'),
                   ),
@@ -390,17 +436,25 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final surfaceMutedColor = isDarkMode
+        ? const Color(0xFF0F172A)
+        : AppColors.inputBackground;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.inputBackground,
+        color: surfaceMutedColor,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         label,
         style: GoogleFonts.poppins(
           fontSize: 11,
-          color: AppColors.textSecondary,
+          color: secondaryTextColor,
           fontWeight: FontWeight.w500,
         ),
       ),

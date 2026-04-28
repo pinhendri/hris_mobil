@@ -10,7 +10,7 @@ class OfflineSupport {
 
   static final DatabaseHelper _db = DatabaseHelper();
 
-  static Future<void> saveJsonCache(String key, Object value) async {
+  static Future<void> saveJsonCache(String key, Object? value) async {
     await _db.saveCache(key, jsonEncode(value));
   }
 

@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/localization/app_strings.dart';
 import '../../core/widgets/access_denied_state.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/broadcast_provider.dart';
 import '../../providers/claim_provider.dart';
 import '../../providers/department_provider.dart';
-import '../../providers/theme_provider.dart';
+import '../admin/broadcast_screen.dart';
 import '../admin/claim_management_screen.dart';
 import '../admin/claim_reports_screen.dart';
 import '../admin/correction_management_screen.dart';
@@ -22,38 +21,17 @@ import '../employee/add_employee_screen.dart';
 import '../employee/employee_list_screen.dart';
 
 class AdminTab extends StatelessWidget {
-  static const double _maxContentWidth = 520;
+  static const double _maxContentWidth = 840;
+  static const Color _accentColor = Color(0xFFFF9628);
+  static const Color _lightBackground = Color(0xFFF6F4F1);
+  static const Color _darkBackground = Color(0xFF020817);
 
   const AdminTab({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
     final authProvider = context.watch<AuthProvider>();
-    final isDark = themeProvider.isDarkMode;
-
-    if (!authProvider.canAccessAdminPanel) {
-      return Scaffold(
-        backgroundColor: _pageBackground(isDark),
-        appBar: AppBar(
-          elevation: 0,
-          surfaceTintColor: Colors.transparent,
-          title: Text(
-            context.tr('admin_panel'),
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : AppColors.textPrimary,
-            ),
-          ),
-          backgroundColor: _surfaceColor(isDark),
-        ),
-        body: AccessDeniedState(
-          title: context.tr('admin_panel'),
-          message: context.tr('admin_no_access_message'),
-        ),
-      );
-    }
-
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final quickActions = _buildQuickActions(context, authProvider);
     final sections = _buildSections(
       context,
@@ -63,297 +41,75 @@ class AdminTab extends StatelessWidget {
       0,
       (sum, section) => sum + section.items.length,
     );
+    final currentCompany = authProvider.selectedCompany;
+    final companyName = currentCompany?.companyName.trim().isNotEmpty == true
+        ? currentCompany!.companyName.trim()
+        : 'Company Name';
 
     return Scaffold(
       backgroundColor: _pageBackground(isDark),
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
-        ),
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 216,
-            pinned: true,
-            floating: false,
-            elevation: 0,
-            surfaceTintColor: Colors.transparent,
-            backgroundColor: isDark
-                ? const Color(0xFF0F1A2C)
-                : const Color(0xFF1D4ED8),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
+      body: SafeArea(
+        child: ListView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            18,
+            14,
+            18,
+            28 + MediaQuery.of(context).padding.bottom,
+          ),
+          children: [
+            _buildConstrainedContent(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: isDark
-                          ? const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Color(0xFF0F172A), Color(0xFF1D4ED8)],
-                            )
-                          : const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
-                            ),
+                  _buildTopBar(companyName: companyName, isDark: isDark),
+                  const SizedBox(height: 18),
+                  if (!authProvider.canAccessAdminPanel) ...[
+                    _buildIntroCard(
+                      context: context,
+                      isDark: isDark,
+                      quickActionsCount: 0,
+                      availableModuleCount: 0,
+                      permissionCount: authProvider.permissions.length,
                     ),
-                  ),
-                  Positioned(
-                    top: -90,
-                    right: -28,
-                    child: Container(
-                      width: 220,
-                      height: 220,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.08),
+                    const SizedBox(height: 16),
+                    _buildSurfaceCard(
+                      isDark: isDark,
+                      child: AccessDeniedState(
+                        title: context.tr('admin_panel'),
+                        message: context.tr('admin_no_access_message'),
                       ),
                     ),
-                  ),
-                  Positioned(
-                    left: -56,
-                    bottom: -84,
-                    child: Container(
-                      width: 180,
-                      height: 180,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.06),
-                      ),
+                  ] else ...[
+                    _buildIntroCard(
+                      context: context,
+                      isDark: isDark,
+                      quickActionsCount: quickActions.length,
+                      availableModuleCount: availableModuleCount,
+                      permissionCount: authProvider.permissions.length,
                     ),
-                  ),
-                  SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-                      child: _buildConstrainedContent(
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 50,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.16),
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.12,
-                                      ),
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.admin_panel_settings_rounded,
-                                    color: Colors.white,
-                                    size: 26,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        context.tr('admin_panel'),
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 26,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.white,
-                                          letterSpacing: -0.4,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        context.tr('admin_header_subtitle'),
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 13,
-                                          height: 1.45,
-                                          color: Colors.white.withValues(
-                                            alpha: 0.88,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                _buildStatCard(
-                                  quickActions.length.toString(),
-                                  context.tr('admin_quick_actions'),
-                                  Icons.flash_on_rounded,
-                                ),
-                                _buildStatCard(
-                                  availableModuleCount.toString(),
-                                  context.tr('admin_modules'),
-                                  Icons.dashboard_customize_rounded,
-                                ),
-                                _buildStatCard(
-                                  authProvider.permissions.length.toString(),
-                                  context.tr('admin_permissions'),
-                                  Icons.verified_user_rounded,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                    if (quickActions.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _buildQuickActionsSection(
+                        context: context,
+                        actions: quickActions,
+                        isDark: isDark,
                       ),
+                    ],
+                    const SizedBox(height: 16),
+                    _buildSectionsGrid(
+                      context: context,
+                      sections: sections,
+                      isDark: isDark,
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
-          ),
-          if (quickActions.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: _buildConstrainedContent(
-                  _buildSurfaceCard(
-                    isDark: isDark,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              context.tr('admin_quick_actions'),
-                              style: GoogleFonts.poppins(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                                color: isDark
-                                    ? Colors.white
-                                    : AppColors.textPrimary,
-                              ),
-                            ),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.06)
-                                    : const Color(0xFFF3F7FC),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: _surfaceBorderColor(isDark),
-                                ),
-                              ),
-                              child: Text(
-                                context
-                                    .tr('admin_menu_count')
-                                    .replaceAll(
-                                      '{count}',
-                                      quickActions.length.toString(),
-                                    ),
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : Colors.grey.shade700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          context.tr('admin_header_subtitle'),
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            height: 1.45,
-                            color: isDark
-                                ? Colors.white60
-                                : Colors.grey.shade600,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: quickActions
-                              .map(
-                                (action) => _buildQuickAction(
-                                  action: action,
-                                  isDark: isDark,
-                                ),
-                              )
-                              .toList(growable: false),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          for (final section in sections)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                child: _buildConstrainedContent(
-                  _buildSurfaceCard(
-                    isDark: isDark,
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSectionHeader(
-                          context: context,
-                          title: section.title,
-                          icon: section.icon,
-                          color: section.color,
-                          count: section.items.length,
-                          isDark: isDark,
-                        ),
-                        const SizedBox(height: 16),
-                        for (
-                          var index = 0;
-                          index < section.items.length;
-                          index++
-                        )
-                          Padding(
-                            padding: EdgeInsets.only(
-                              bottom: index == section.items.length - 1
-                                  ? 0
-                                  : 12,
-                            ),
-                            child: _buildAdminMenuCard(
-                              context,
-                              title: section.items[index].title,
-                              subtitle: section.items[index].subtitle,
-                              icon: section.items[index].icon,
-                              gradient: section.items[index].gradient,
-                              badge: section.items[index].badge,
-                              onTap: section.items[index].onTap,
-                              isDark: isDark,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 104 + MediaQuery.of(context).padding.bottom,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -368,32 +124,247 @@ class AdminTab extends StatelessWidget {
     );
   }
 
+  Widget _buildTopBar({required String companyName, required bool isDark}) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            companyName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: _titleStyle(
+              isDark,
+              size: 18,
+              color: isDark ? Colors.white : const Color(0xFF1E1E1E),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        _buildIconShell(
+          icon: Icons.admin_panel_settings_outlined,
+          isDark: isDark,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildIntroCard({
+    required BuildContext context,
+    required bool isDark,
+    required int quickActionsCount,
+    required int availableModuleCount,
+    required int permissionCount,
+  }) {
+    return _buildSurfaceCard(
+      isDark: isDark,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? _accentColor.withValues(alpha: 0.18)
+                      : const Color(0xFFFFF1E3),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.admin_panel_settings_rounded,
+                  color: _accentColor,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr('admin_panel'),
+                      style: _titleStyle(isDark, size: 18),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      context.tr('admin_header_subtitle'),
+                      style: _bodyStyle(isDark),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildInfoChip(
+                label:
+                    '${context.tr('admin_quick_actions')}: $quickActionsCount',
+                isDark: isDark,
+              ),
+              _buildInfoChip(
+                label: '${context.tr('admin_modules')}: $availableModuleCount',
+                isDark: isDark,
+                color: const Color(0xFF3478F6),
+              ),
+              _buildInfoChip(
+                label: '${context.tr('admin_permissions')}: $permissionCount',
+                isDark: isDark,
+                color: const Color(0xFF2F9D78),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionsSection({
+    required BuildContext context,
+    required List<_AdminQuickAction> actions,
+    required bool isDark,
+  }) {
+    return _buildSurfaceCard(
+      isDark: isDark,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader(
+            context: context,
+            title: context.tr('admin_quick_actions'),
+            icon: Icons.flash_on_rounded,
+            color: _accentColor,
+            count: actions.length,
+            isDark: isDark,
+          ),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final columns = width >= 720
+                  ? 4
+                  : width >= 480
+                  ? 3
+                  : 2;
+              final itemWidth = (width - ((columns - 1) * 12)) / columns;
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: actions
+                    .map(
+                      (action) => SizedBox(
+                        width: itemWidth,
+                        child: _buildQuickAction(
+                          action: action,
+                          isDark: isDark,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionsGrid({
+    required BuildContext context,
+    required List<_AdminSection> sections,
+    required bool isDark,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final columns = width >= 720 ? 2 : 1;
+        final cardWidth = columns == 2 ? (width - 16) / 2 : width;
+
+        return Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: sections
+              .map(
+                (section) => SizedBox(
+                  width: cardWidth,
+                  child: _buildSectionCard(
+                    context: context,
+                    section: section,
+                    isDark: isDark,
+                  ),
+                ),
+              )
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionCard({
+    required BuildContext context,
+    required _AdminSection section,
+    required bool isDark,
+  }) {
+    return _buildSurfaceCard(
+      isDark: isDark,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader(
+            context: context,
+            title: section.title,
+            icon: section.icon,
+            color: section.color,
+            count: section.items.length,
+            isDark: isDark,
+          ),
+          const SizedBox(height: 14),
+          for (var index = 0; index < section.items.length; index++) ...[
+            _buildAdminMenuCard(
+              context,
+              item: section.items[index],
+              isDark: isDark,
+            ),
+            if (index != section.items.length - 1) ...[
+              const SizedBox(height: 10),
+              Divider(height: 1, color: _surfaceBorderColor(isDark)),
+              const SizedBox(height: 10),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
   Color _pageBackground(bool isDark) {
-    return isDark ? const Color(0xFF0B1120) : const Color(0xFFF4F7FB);
+    return isDark ? _darkBackground : _lightBackground;
   }
 
   Color _surfaceColor(bool isDark) {
-    return isDark ? const Color(0xFF121B2B) : Colors.white;
+    return isDark ? const Color(0xFF111827) : Colors.white;
   }
 
   Color _surfaceBorderColor(bool isDark) {
-    return isDark
-        ? Colors.white.withValues(alpha: 0.08)
-        : const Color(0xFFE1E9F3);
-  }
-
-  Color _subtleSurfaceColor(bool isDark) {
-    return isDark ? const Color(0xFF172235) : const Color(0xFFF7FAFD);
+    return isDark ? const Color(0xFF253041) : const Color(0xFFEAE7E2);
   }
 
   List<BoxShadow> _surfaceShadows(bool isDark) {
     return [
       BoxShadow(
         color: isDark
-            ? Colors.black.withValues(alpha: 0.24)
-            : const Color(0xFF8FA3BF).withValues(alpha: 0.12),
-        blurRadius: 26,
-        offset: const Offset(0, 12),
+            ? Colors.black.withValues(alpha: 0.18)
+            : const Color(0x140F172A),
+        blurRadius: isDark ? 18 : 14,
+        offset: const Offset(0, 8),
       ),
     ];
   }
@@ -407,7 +378,7 @@ class AdminTab extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: _surfaceColor(isDark),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _surfaceBorderColor(isDark)),
         boxShadow: _surfaceShadows(isDark),
       ),
@@ -415,50 +386,79 @@ class AdminTab extends StatelessWidget {
     );
   }
 
-  Widget _buildStatCard(String value, String label, IconData icon) {
+  TextStyle _titleStyle(
+    bool isDark, {
+    double size = 17,
+    FontWeight weight = FontWeight.w700,
+    Color? color,
+    double height = 1.2,
+  }) {
+    return TextStyle(
+      color: color ?? (isDark ? Colors.white : const Color(0xFF1F2937)),
+      fontSize: size,
+      fontWeight: weight,
+      height: height,
+    );
+  }
+
+  TextStyle _bodyStyle(
+    bool isDark, {
+    double size = 13,
+    FontWeight weight = FontWeight.w500,
+    Color? color,
+    double height = 1.4,
+  }) {
+    return TextStyle(
+      color: color ?? (isDark ? Colors.white60 : const Color(0xFF6B7280)),
+      fontSize: size,
+      fontWeight: weight,
+      height: height,
+    );
+  }
+
+  Widget _buildInfoChip({
+    required String label,
+    required bool isDark,
+    Color? color,
+  }) {
+    final resolvedColor =
+        color ?? (isDark ? Colors.white70 : const Color(0xFF5E6470));
+
     return Container(
-      constraints: const BoxConstraints(minWidth: 104),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+        color: resolvedColor.withValues(alpha: isDark ? 0.18 : 0.10),
+        borderRadius: BorderRadius.circular(999),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: Colors.white, size: 16),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                value,
-                style: GoogleFonts.poppins(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-              Text(
-                label,
-                style: GoogleFonts.poppins(
-                  fontSize: 9,
-                  color: Colors.white.withValues(alpha: 0.82),
-                ),
-              ),
-            ],
-          ),
-        ],
+      child: Text(
+        label,
+        style: _bodyStyle(
+          isDark,
+          size: 12,
+          weight: FontWeight.w700,
+          color: resolvedColor,
+          height: 1.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIconShell({required IconData icon, required bool isDark}) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.07)
+              : const Color(0xFFE5E5E5),
+        ),
+      ),
+      child: Icon(
+        icon,
+        color: isDark ? Colors.white70 : const Color(0xFF444444),
       ),
     );
   }
@@ -474,7 +474,7 @@ class AdminTab extends StatelessWidget {
         _AdminQuickAction(
           icon: Icons.person_add_alt_1,
           label: context.tr('admin_quick_add_employee'),
-          color: Colors.blue,
+          color: const Color(0xFF3478F6),
           onTap: () {
             Navigator.push(
               context,
@@ -492,7 +492,7 @@ class AdminTab extends StatelessWidget {
         _AdminQuickAction(
           icon: Icons.schedule,
           label: context.tr('admin_quick_shift'),
-          color: Colors.orange,
+          color: _accentColor,
           onTap: () {
             Navigator.push(
               context,
@@ -510,7 +510,7 @@ class AdminTab extends StatelessWidget {
         _AdminQuickAction(
           icon: Icons.beach_access,
           label: context.tr('admin_quick_leave'),
-          color: Colors.green,
+          color: const Color(0xFF2F9D78),
           onTap: () {
             Navigator.push(
               context,
@@ -528,7 +528,7 @@ class AdminTab extends StatelessWidget {
         _AdminQuickAction(
           icon: Icons.bar_chart,
           label: context.tr('admin_quick_reports'),
-          color: Colors.purple,
+          color: const Color(0xFF8B5CF6),
           onTap: () {
             Navigator.push(
               context,
@@ -558,7 +558,7 @@ class AdminTab extends StatelessWidget {
       _AdminSection(
         title: context.tr('admin_section_master_data'),
         icon: Icons.storage,
-        color: Colors.blue,
+        color: const Color(0xFF3478F6),
         items: [
           if (authProvider.canAccessDepartmentModule)
             _AdminMenuItem(
@@ -622,7 +622,7 @@ class AdminTab extends StatelessWidget {
       _AdminSection(
         title: context.tr('admin_section_configuration'),
         icon: Icons.settings_applications,
-        color: Colors.purple,
+        color: const Color(0xFF8B5CF6),
         items: [
           if (canAccessSettings)
             _AdminMenuItem(
@@ -665,7 +665,7 @@ class AdminTab extends StatelessWidget {
       _AdminSection(
         title: context.tr('admin_section_management'),
         icon: Icons.manage_accounts,
-        color: Colors.green,
+        color: const Color(0xFF2F9D78),
         items: [
           if (authProvider.canAccessLeaveModule)
             _AdminMenuItem(
@@ -745,6 +745,27 @@ class AdminTab extends StatelessWidget {
                 );
               },
             ),
+          if (authProvider.canAccessBroadcastModule)
+            _AdminMenuItem(
+              title: context.tr('admin_broadcast'),
+              subtitle: context.tr('admin_broadcast_subtitle'),
+              icon: Icons.campaign_rounded,
+              gradient: const LinearGradient(
+                colors: [Color(0xFFF97316), Color(0xFFFACC15)],
+              ),
+              badge: context.tr('admin_badge_broadcast'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChangeNotifierProvider(
+                      create: (_) => BroadcastProvider(),
+                      child: const BroadcastScreen(),
+                    ),
+                  ),
+                );
+              },
+            ),
           _AdminMenuItem(
             title: context.tr('admin_event_management'),
             subtitle: context.tr('admin_event_management_subtitle'),
@@ -771,43 +792,41 @@ class AdminTab extends StatelessWidget {
     required _AdminQuickAction action,
     required bool isDark,
   }) {
-    return InkWell(
-      onTap: action.onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        width: 88,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        decoration: BoxDecoration(
-          color: _subtleSurfaceColor(isDark),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _surfaceBorderColor(isDark)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: action.color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(16),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: action.onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.04)
+                : const Color(0xFFF8F6F2),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _surfaceBorderColor(isDark)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: action.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(action.icon, color: action.color, size: 22),
               ),
-              child: Icon(action.icon, color: action.color, size: 22),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              action.label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
-                fontSize: 10,
-                height: 1.35,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white70 : AppColors.textPrimary,
+              const SizedBox(height: 14),
+              Text(
+                action.label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: _titleStyle(isDark, size: 13, height: 1.25),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -833,33 +852,24 @@ class AdminTab extends StatelessWidget {
           child: Icon(icon, color: color, size: 20),
         ),
         const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            title,
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : AppColors.textPrimary,
-            ),
-          ),
-        ),
+        Expanded(child: Text(title, style: _titleStyle(isDark, size: 17))),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
             color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : const Color(0xFFF4F7FB),
+                ? Colors.white.withValues(alpha: 0.05)
+                : const Color(0xFFF8F6F2),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: _surfaceBorderColor(isDark)),
           ),
           child: Text(
             context
                 .tr('admin_menu_count')
                 .replaceAll('{count}', count.toString()),
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white60 : Colors.grey.shade700,
+            style: _bodyStyle(
+              isDark,
+              size: 11,
+              weight: FontWeight.w700,
+              height: 1.2,
             ),
           ),
         ),
@@ -869,150 +879,99 @@ class AdminTab extends StatelessWidget {
 
   Widget _buildAdminMenuCard(
     BuildContext context, {
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Gradient gradient,
-    String? badge,
-    required VoidCallback onTap,
+    required _AdminMenuItem item,
     required bool isDark,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: gradient,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(22),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(22),
-          child: Stack(
+    final tone = _toneFromGradient(item.gradient);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: item.onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Positioned(
-                right: -20,
-                top: -16,
-                child: Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.1),
-                  ),
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: tone.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
+                child: Icon(item.icon, color: tone, size: 22),
               ),
-              Positioned(
-                right: 28,
-                bottom: -26,
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.08),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.24),
+                    Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _titleStyle(isDark, size: 14, height: 1.25),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _bodyStyle(isDark, size: 12, height: 1.4),
+                    ),
+                    if (item.badge != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: tone.withValues(alpha: isDark ? 0.18 : 0.10),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          item.badge!,
+                          style: _bodyStyle(
+                            isDark,
+                            size: 10,
+                            weight: FontWeight.w700,
+                            color: tone,
+                            height: 1.2,
+                          ),
                         ),
                       ),
-                      child: Icon(icon, color: Colors.white, size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            subtitle,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              height: 1.45,
-                              color: Colors.white.withValues(alpha: 0.9),
-                            ),
-                          ),
-                          if (badge != null) ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.16),
-                                ),
-                              ),
-                              child: Text(
-                                badge,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.arrow_forward_rounded,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
+                    ],
                   ],
                 ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : const Color(0xFFF8F6F2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.arrow_forward_rounded, color: tone, size: 16),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Color _toneFromGradient(Gradient gradient) {
+    if (gradient is LinearGradient && gradient.colors.isNotEmpty) {
+      return gradient.colors.first;
+    }
+
+    return _accentColor;
   }
 }
 

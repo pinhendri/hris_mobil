@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -11,6 +12,7 @@ class SessionStorage {
   static const String rememberMeKey = 'remember_me';
   static const String rememberedEmailKey = 'remembered_email';
   static const String rememberedPasswordKey = 'remembered_password';
+  static const String themeModeKey = 'theme_mode';
   static const List<String> _legacyTokenKeys = <String>[
     'auth_token',
     'token',
@@ -24,14 +26,23 @@ class SessionStorage {
   ];
 
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
+  static String? _cachedToken;
+  static String? _cachedCompanyCode;
 
   static Future<void> saveToken(String token) async {
+    _cachedToken = token;
     await _secureStorage.write(key: tokenKey, value: token);
   }
 
   static Future<String> getToken() async {
+    final cachedToken = _cachedToken;
+    if (cachedToken != null && cachedToken.isNotEmpty) {
+      return cachedToken;
+    }
+
     final secureToken = await _secureStorage.read(key: tokenKey);
     if (secureToken != null && secureToken.isNotEmpty) {
+      _cachedToken = secureToken;
       return secureToken;
     }
 
@@ -52,13 +63,24 @@ class SessionStorage {
   }
 
   static Future<void> saveCompanyCode(String companyCode) async {
+    _cachedCompanyCode = companyCode;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(companyCodeKey, companyCode);
   }
 
   static Future<String?> getCompanyCode() async {
+    final cachedCompanyCode = _cachedCompanyCode;
+    if (cachedCompanyCode != null && cachedCompanyCode.isNotEmpty) {
+      return cachedCompanyCode;
+    }
+
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(companyCodeKey);
+    final companyCode = prefs.getString(companyCodeKey);
+    if (companyCode != null && companyCode.isNotEmpty) {
+      _cachedCompanyCode = companyCode;
+    }
+
+    return companyCode;
   }
 
   static Future<void> saveUserData(String rawJson) async {
@@ -112,7 +134,30 @@ class SessionStorage {
     await _secureStorage.delete(key: rememberedPasswordKey);
   }
 
+  static Future<void> saveThemeMode(ThemeMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(themeModeKey, mode.name);
+  }
+
+  static Future<ThemeMode?> getThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedTheme = prefs.getString(themeModeKey)?.trim();
+
+    switch (savedTheme) {
+      case 'dark':
+        return ThemeMode.dark;
+      case 'system':
+        return ThemeMode.system;
+      case 'light':
+        return ThemeMode.light;
+      default:
+        return null;
+    }
+  }
+
   static Future<void> clearSession() async {
+    _cachedToken = null;
+    _cachedCompanyCode = null;
     final prefs = await SharedPreferences.getInstance();
     await _secureStorage.delete(key: tokenKey);
     await prefs.remove(tokenKey);

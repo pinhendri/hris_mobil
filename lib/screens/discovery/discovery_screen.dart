@@ -25,6 +25,25 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   final ScrollController _messageScrollController = ScrollController();
   String _searchQuery = '';
 
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+  Color get _screenBackgroundColor =>
+      _isDarkMode ? const Color(0xFF121212) : Colors.grey.shade50;
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+  Color get _surfaceBorderColor =>
+      _isDarkMode ? const Color(0xFF303030) : Colors.grey.shade200;
+  Color get _primaryTextColor =>
+      _isDarkMode ? Colors.white : AppColors.textPrimary;
+  Color get _secondaryTextColor =>
+      _isDarkMode ? Colors.white70 : AppColors.textSecondary;
+  List<BoxShadow> get _cardShadow => [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: _isDarkMode ? 0.2 : 0.04),
+      blurRadius: 14,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -53,19 +72,21 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: Colors.grey[50],
+        backgroundColor: _screenBackgroundColor,
         appBar: AppBar(
           title: Text(
             context.tr('feature_label_discovery'),
             style: GoogleFonts.poppins(
-              color: AppColors.textPrimary,
+              color: _primaryTextColor,
               fontWeight: FontWeight.bold,
             ),
           ),
-          backgroundColor: Colors.white,
+          backgroundColor: _surfaceColor,
           elevation: 0,
+          foregroundColor: _primaryTextColor,
+          surfaceTintColor: Colors.transparent,
           centerTitle: true,
-          iconTheme: const IconThemeData(color: AppColors.textPrimary),
+          iconTheme: IconThemeData(color: _primaryTextColor),
           actions: [
             Consumer<DiscoveryProvider>(
               builder: (context, provider, child) {
@@ -84,13 +105,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               },
             ),
           ],
-          bottom: const TabBar(
+          bottom: TabBar(
             labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondary,
+            unselectedLabelColor: _secondaryTextColor,
             indicatorColor: AppColors.primary,
             tabs: [
-              Tab(text: 'Chat'),
-              Tab(text: 'Documents'),
+              const Tab(text: 'Chat'),
+              const Tab(text: 'Documents'),
             ],
           ),
         ),
@@ -226,7 +247,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       Icon(
                         Icons.auto_awesome_outlined,
                         size: 56,
-                        color: Colors.grey[400],
+                        color: _isDarkMode ? Colors.white38 : Colors.grey[400],
                       ),
                       const SizedBox(height: 16),
                       Center(
@@ -238,7 +259,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                                 : 'Tidak ada dokumen yang cocok dengan pencarian saat ini.',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.poppins(
-                              color: Colors.grey[600],
+                              color: _secondaryTextColor,
                               fontSize: 14,
                             ),
                           ),
@@ -265,21 +286,15 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: _surfaceColor,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: isSelected
                                     ? AppColors.primary
-                                    : Colors.grey.shade200,
+                                    : _surfaceBorderColor,
                                 width: isSelected ? 1.4 : 1,
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
+                              boxShadow: _cardShadow,
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,7 +325,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                                             document.name,
                                             style: GoogleFonts.poppins(
                                               fontWeight: FontWeight.w600,
-                                              color: AppColors.textPrimary,
+                                              color: _primaryTextColor,
                                             ),
                                           ),
                                           const SizedBox(height: 6),
@@ -349,7 +364,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                                   'Size: ${document.sizeLabel} • Uploaded ${_formatDate(document.uploadDate)}',
                                   style: GoogleFonts.poppins(
                                     fontSize: 12,
-                                    color: AppColors.textSecondary,
+                                    color: _secondaryTextColor,
                                   ),
                                 ),
                                 if (document.discoveryLastError.isNotEmpty) ...[
@@ -370,7 +385,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                                       document.discoveryLastError,
                                       style: GoogleFonts.poppins(
                                         fontSize: 12,
-                                        color: Colors.red.shade700,
+                                        color: _isDarkMode
+                                            ? Colors.red.shade300
+                                            : Colors.red.shade700,
                                       ),
                                     ),
                                   ),
@@ -394,9 +411,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.08),
+        color: Colors.orange.withValues(alpha: _isDarkMode ? 0.16 : 0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.16)),
+        border: Border.all(
+          color: Colors.orange.withValues(alpha: _isDarkMode ? 0.32 : 0.16),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,7 +426,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             child: Text(
               'OPENAI_API_KEY belum diisi di backend. Dokumen tetap bisa diupload dan dipilih, tapi AI belum bisa menjawab sampai konfigurasi OpenAI aktif.',
               style: GoogleFonts.poppins(
-                color: Colors.orange.shade900,
+                color: _isDarkMode ? Colors.white : Colors.orange.shade900,
                 fontSize: 13,
               ),
             ),
@@ -423,15 +442,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: _surfaceBorderColor),
+        boxShadow: _cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,7 +457,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   'Percakapan',
                   style: GoogleFonts.poppins(
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: _primaryTextColor,
                   ),
                 ),
               ),
@@ -462,7 +476,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             Text(
               'Belum ada riwayat chat. Pilih dokumen lalu kirim pertanyaan pertama Anda.',
               style: GoogleFonts.poppins(
-                color: AppColors.textSecondary,
+                color: _secondaryTextColor,
                 fontSize: 13,
               ),
             )
@@ -480,12 +494,26 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
                           selected: isSelected,
+                          backgroundColor: _isDarkMode
+                              ? const Color(0xFF2A2A2A)
+                              : Colors.white,
+                          selectedColor: AppColors.primary.withValues(
+                            alpha: _isDarkMode ? 0.22 : 0.12,
+                          ),
+                          side: BorderSide(
+                            color: isSelected
+                                ? AppColors.primary
+                                : _surfaceBorderColor,
+                          ),
                           label: SizedBox(
                             width: 160,
                             child: Text(
                               conversation.title,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.poppins(fontSize: 12),
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: _primaryTextColor,
+                              ),
                             ),
                           ),
                           onSelected: (_) async {
@@ -522,15 +550,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: _surfaceBorderColor),
+        boxShadow: _cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -542,7 +565,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   'Knowledge Base',
                   style: GoogleFonts.poppins(
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: _primaryTextColor,
                   ),
                 ),
               ),
@@ -560,7 +583,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 : '${selectedDocuments.length} dokumen aktif untuk percakapan ini.',
             style: GoogleFonts.poppins(
               fontSize: 13,
-              color: AppColors.textSecondary,
+              color: _secondaryTextColor,
             ),
           ),
           if (selectedDocuments.isNotEmpty) ...[
@@ -588,7 +611,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       padding: const EdgeInsets.all(24),
       children: [
         const SizedBox(height: 80),
-        Icon(Icons.auto_awesome, size: 56, color: Colors.blueGrey[300]),
+        Icon(
+          Icons.auto_awesome,
+          size: 56,
+          color: _isDarkMode ? Colors.white38 : Colors.blueGrey[300],
+        ),
         const SizedBox(height: 16),
         Center(
           child: Text(
@@ -596,7 +623,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: _primaryTextColor,
             ),
             textAlign: TextAlign.center,
           ),
@@ -609,7 +636,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 : 'Coba pertanyaan seperti "Ringkas isi dokumen ini" atau "Apa kebijakan cuti tahunan?".',
             style: GoogleFonts.poppins(
               fontSize: 13,
-              color: AppColors.textSecondary,
+              color: _secondaryTextColor,
             ),
             textAlign: TextAlign.center,
           ),
@@ -623,7 +650,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        decoration: const BoxDecoration(color: Colors.white),
+        decoration: BoxDecoration(
+          color: _surfaceColor,
+          border: Border(top: BorderSide(color: _surfaceBorderColor)),
+        ),
         child: Column(
           children: [
             if (provider.warningMessage != null &&
@@ -633,17 +663,21 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.08),
+                  color: Colors.orange.withValues(
+                    alpha: _isDarkMode ? 0.16 : 0.08,
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.16),
+                    color: Colors.orange.withValues(
+                      alpha: _isDarkMode ? 0.32 : 0.16,
+                    ),
                   ),
                 ),
                 child: Text(
                   provider.warningMessage!,
                   style: GoogleFonts.poppins(
                     fontSize: 12,
-                    color: Colors.orange.shade900,
+                    color: _isDarkMode ? Colors.white : Colors.orange.shade900,
                   ),
                 ),
               ),
@@ -862,6 +896,20 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isAssistant = message.isAssistant;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final assistantSurfaceColor = isDark
+        ? const Color(0xFF1E1E1E)
+        : Colors.white;
+    final assistantTextColor = isDark ? Colors.white : AppColors.textPrimary;
+    final assistantSecondaryTextColor = isDark
+        ? Colors.white60
+        : AppColors.textSecondary;
+    final citationBackgroundColor = isDark
+        ? Colors.blue.withValues(alpha: 0.18)
+        : Colors.blue.withValues(alpha: 0.08);
+    final citationTextColor = isDark
+        ? Colors.blue.shade200
+        : Colors.blue.shade800;
 
     return Align(
       alignment: isAssistant ? Alignment.centerLeft : Alignment.centerRight,
@@ -870,11 +918,11 @@ class _MessageBubble extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 340),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isAssistant ? Colors.white : AppColors.primary,
+          color: isAssistant ? assistantSurfaceColor : AppColors.primary,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -886,7 +934,7 @@ class _MessageBubble extends StatelessWidget {
             Text(
               message.content,
               style: GoogleFonts.poppins(
-                color: isAssistant ? AppColors.textPrimary : Colors.white,
+                color: isAssistant ? assistantTextColor : Colors.white,
                 height: 1.5,
               ),
             ),
@@ -903,7 +951,7 @@ class _MessageBubble extends StatelessWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.08),
+                          color: citationBackgroundColor,
                           borderRadius: BorderRadius.circular(30),
                         ),
                         child: Text(
@@ -911,7 +959,7 @@ class _MessageBubble extends StatelessWidget {
                           style: GoogleFonts.poppins(
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
-                            color: Colors.blue.shade800,
+                            color: citationTextColor,
                           ),
                         ),
                       );
@@ -929,7 +977,7 @@ class _MessageBubble extends StatelessWidget {
                 style: GoogleFonts.poppins(
                   fontSize: 11,
                   color: isAssistant
-                      ? AppColors.textSecondary
+                      ? assistantSecondaryTextColor
                       : Colors.white.withValues(alpha: 0.8),
                 ),
               ),
@@ -949,10 +997,11 @@ class _MetaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: isDark ? 0.18 : 0.1),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Text(
@@ -974,6 +1023,7 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final normalizedStatus = status.toLowerCase();
 
     Color color;
@@ -1000,7 +1050,7 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: isDark ? 0.18 : 0.1),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Text(

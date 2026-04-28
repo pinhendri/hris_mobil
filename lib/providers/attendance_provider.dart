@@ -1952,7 +1952,10 @@ class AttendanceProvider with ChangeNotifier {
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
+        final Map<String, dynamic> data = await compute(
+          _parseAttendanceJson,
+          response.body,
+        );
         if (data['success'] == true) {
           _summary = data['data'];
           print('Summary loaded: $_summary');

@@ -17,6 +17,23 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<Shift> _filteredShifts = [];
 
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _screenBackgroundColor =>
+      _isDarkMode ? const Color(0xFF020817) : const Color(0xFFF8FAFC);
+
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+
+  Color get _surfaceBorderColor =>
+      _isDarkMode ? const Color(0xFF253041) : const Color(0xFFE2E8F0);
+
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+
   @override
   void initState() {
     super.initState();
@@ -33,10 +50,13 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
     } else {
       setState(() {
         _filteredShifts = allShifts
-            .where((shift) =>
-                shift.name.toLowerCase().contains(query.toLowerCase()) ||
-                (shift.description?.toLowerCase() ?? '')
-                    .contains(query.toLowerCase()))
+            .where(
+              (shift) =>
+                  shift.name.toLowerCase().contains(query.toLowerCase()) ||
+                  (shift.description?.toLowerCase() ?? '').contains(
+                    query.toLowerCase(),
+                  ),
+            )
             .toList();
       });
     }
@@ -46,32 +66,44 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
     if (shift.shiftDays.isEmpty) {
       return 'No days set';
     }
-    
+
     // Sort days by day number
     final sortedDays = List<ShiftDay>.from(shift.shiftDays)
       ..sort((a, b) => a.dayOfWeek.compareTo(b.dayOfWeek));
-    
-    return sortedDays.map((day) {
-      switch (day.dayOfWeek) {
-        case 1: return 'Mon';
-        case 2: return 'Tue';
-        case 3: return 'Wed';
-        case 4: return 'Thu';
-        case 5: return 'Fri';
-        case 6: return 'Sat';
-        case 7: return 'Sun';
-        default: return '';
-      }
-    }).join(', ');
+
+    return sortedDays
+        .map((day) {
+          switch (day.dayOfWeek) {
+            case 1:
+              return 'Mon';
+            case 2:
+              return 'Tue';
+            case 3:
+              return 'Wed';
+            case 4:
+              return 'Thu';
+            case 5:
+              return 'Fri';
+            case 6:
+              return 'Sat';
+            case 7:
+              return 'Sun';
+            default:
+              return '';
+          }
+        })
+        .join(', ');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _screenBackgroundColor,
       appBar: AppBar(
-        title: const Text('Shift Master'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        title: Text('Shift Master', style: TextStyle(color: _primaryTextColor)),
+        backgroundColor: _surfaceColor,
+        surfaceTintColor: _surfaceColor,
+        foregroundColor: _primaryTextColor,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -104,8 +136,9 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
           }
 
           final shifts = provider.shifts;
-          final displayShifts =
-              _searchController.text.isEmpty ? shifts : _filteredShifts;
+          final displayShifts = _searchController.text.isEmpty
+              ? shifts
+              : _filteredShifts;
 
           return Column(
             children: [
@@ -113,11 +146,22 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: TextField(
                   controller: _searchController,
+                  style: TextStyle(color: _primaryTextColor),
                   decoration: InputDecoration(
                     hintText: 'Search shifts...',
-                    prefixIcon: const Icon(Icons.search),
+                    hintStyle: TextStyle(color: _secondaryTextColor),
+                    prefixIcon: Icon(Icons.search, color: _secondaryTextColor),
+                    filled: true,
+                    fillColor: _isDarkMode
+                        ? const Color(0xFF0F172A)
+                        : Colors.white,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: _surfaceBorderColor),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: _surfaceBorderColor),
                     ),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
@@ -138,19 +182,36 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                   itemBuilder: (context, index) {
                     final shift = displayShifts[index];
                     return Card(
+                      color: _surfaceColor,
                       margin: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 4,
                       ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: _surfaceBorderColor),
+                      ),
                       child: ListTile(
-                        title: Text(shift.name),
+                        title: Text(
+                          shift.name,
+                          style: TextStyle(color: _primaryTextColor),
+                        ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (shift.description?.isNotEmpty ?? false)
-                              Text(shift.description!),
-                            Text('Break: ${shift.breakMinutes} min'),
-                            Text('Days: ${_getDaysDisplay(shift)}'),
+                              Text(
+                                shift.description!,
+                                style: TextStyle(color: _secondaryTextColor),
+                              ),
+                            Text(
+                              'Break: ${shift.breakMinutes} min',
+                              style: TextStyle(color: _secondaryTextColor),
+                            ),
+                            Text(
+                              'Days: ${_getDaysDisplay(shift)}',
+                              style: TextStyle(color: _secondaryTextColor),
+                            ),
                           ],
                         ),
                         trailing: Row(
@@ -188,6 +249,8 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
           context: context,
           provider: context.read<ShiftProvider>(),
         ),
+        backgroundColor: const Color(0xFF2563EB),
+        foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
     );
@@ -200,21 +263,26 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
   }) async {
     final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController(text: shift?.name ?? '');
-    final descController = TextEditingController(text: shift?.description ?? '');
+    final descController = TextEditingController(
+      text: shift?.description ?? '',
+    );
     final graceInController = TextEditingController(
-        text: shift?.graceClockIn.toString() ?? '0');
+      text: shift?.graceClockIn.toString() ?? '0',
+    );
     final graceOutController = TextEditingController(
-        text: shift?.graceClockOut.toString() ?? '0');
+      text: shift?.graceClockOut.toString() ?? '0',
+    );
     final breakController = TextEditingController(
-        text: shift?.breakMinutes.toString() ?? '60');
-    
+      text: shift?.breakMinutes.toString() ?? '60',
+    );
+
     bool isNightShift = shift?.isNightShift ?? false;
     bool isFlexible = shift?.isFlexible ?? false;
     bool isActive = shift?.isActive ?? true;
-    
+
     // Untuk shift days
     List<ShiftDay> shiftDays = shift?.shiftDays ?? [];
-    
+
     // Map untuk konversi day number ke nama
     final dayNames = {
       1: 'Mon',
@@ -359,7 +427,8 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                         return ListTile(
                           title: Text(dayNames[day.dayOfWeek] ?? 'Unknown'),
                           subtitle: Text(
-                              '${day.clockIn.substring(0, 5)} - ${day.clockOut.substring(0, 5)}'),
+                            '${day.clockIn.substring(0, 5)} - ${day.clockOut.substring(0, 5)}',
+                          ),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
                             onPressed: () {
@@ -374,7 +443,9 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                       ElevatedButton.icon(
                         onPressed: () async {
                           final newDay = await _showAddShiftDayDialog(
-                              context, shiftDays);
+                            context,
+                            shiftDays,
+                          );
                           if (newDay != null) {
                             setState(() {
                               shiftDays.add(newDay);
@@ -397,7 +468,7 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                   onPressed: () async {
                     if (formKey.currentState!.validate()) {
                       Navigator.pop(dialogContext);
-                      
+
                       // Buat shift baru atau update shift yang ada
                       final newShift = Shift(
                         id: shift?.id ?? '',
@@ -406,7 +477,7 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                             ? descController.text
                             : null,
                         startTime: '', // Tidak digunakan di master shift
-                        endTime: '',   // Tidak digunakan di master shift
+                        endTime: '', // Tidak digunakan di master shift
                         breakMinutes: int.parse(breakController.text),
                         graceClockIn: int.parse(graceInController.text),
                         graceClockOut: int.parse(graceOutController.text),
@@ -429,17 +500,20 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                       if (success) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(shift == null
-                                ? 'Shift added successfully'
-                                : 'Shift updated successfully'),
+                            content: Text(
+                              shift == null
+                                  ? 'Shift added successfully'
+                                  : 'Shift updated successfully',
+                            ),
                             backgroundColor: Colors.green,
                           ),
                         );
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(provider.error ??
-                                'Failed to save shift'),
+                            content: Text(
+                              provider.error ?? 'Failed to save shift',
+                            ),
                             backgroundColor: Colors.red,
                           ),
                         );
@@ -457,7 +531,9 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
   }
 
   Future<ShiftDay?> _showAddShiftDayDialog(
-      BuildContext context, List<ShiftDay> existingDays) async {
+    BuildContext context,
+    List<ShiftDay> existingDays,
+  ) async {
     final formKey = GlobalKey<FormState>();
     int? selectedDay;
     final clockInController = TextEditingController();
@@ -502,7 +578,7 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                   onChanged: (value) => selectedDay = value,
                   validator: (value) {
                     if (value == null) return 'Please select day';
-                    
+
                     // Check if day already exists
                     if (existingDays.any((d) => d.dayOfWeek == value)) {
                       return 'Day already exists';
@@ -522,8 +598,9 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                     if (value == null || value.isEmpty) {
                       return 'Please enter clock in time';
                     }
-                    if (!RegExp(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$')
-                        .hasMatch(value)) {
+                    if (!RegExp(
+                      r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$',
+                    ).hasMatch(value)) {
                       return 'Invalid time format (HH:mm)';
                     }
                     return null;
@@ -541,8 +618,9 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                     if (value == null || value.isEmpty) {
                       return 'Please enter clock out time';
                     }
-                    if (!RegExp(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$')
-                        .hasMatch(value)) {
+                    if (!RegExp(
+                      r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$',
+                    ).hasMatch(value)) {
                       return 'Invalid time format (HH:mm)';
                     }
                     return null;
@@ -614,9 +692,7 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: const Text('Delete'),
             ),
           ],

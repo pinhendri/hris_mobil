@@ -15,6 +15,20 @@ class CorrectionManagementScreen extends StatefulWidget {
 
 class _CorrectionManagementScreenState
     extends State<CorrectionManagementScreen> {
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _screenBackgroundColor =>
+      _isDarkMode ? const Color(0xFF020817) : AppColors.background;
+
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF8FAFC) : AppColors.textPrimary;
+
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFCBD5E1) : AppColors.textSecondary;
+
   @override
   void initState() {
     super.initState();
@@ -26,19 +40,20 @@ class _CorrectionManagementScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: _screenBackgroundColor,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Correction Management',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: _primaryTextColor,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _surfaceColor,
+        surfaceTintColor: _surfaceColor,
         elevation: 0,
         centerTitle: true,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        iconTheme: IconThemeData(color: _primaryTextColor),
       ),
       body: Consumer<CorrectionProvider>(
         builder: (context, provider, child) {
@@ -51,8 +66,11 @@ class _CorrectionManagementScreenState
               .toList();
 
           if (requests.isEmpty) {
-            return const Center(
-              child: Text('No attendance correction requests found'),
+            return Center(
+              child: Text(
+                'No attendance correction requests found',
+                style: TextStyle(color: _secondaryTextColor),
+              ),
             );
           }
 
@@ -88,6 +106,17 @@ class _CorrectionRequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDarkMode ? const Color(0xFF111827) : Colors.white;
+    final surfaceBorderColor = isDarkMode
+        ? const Color(0xFF253041)
+        : AppColors.border;
+    final primaryTextColor = isDarkMode
+        ? const Color(0xFFF8FAFC)
+        : AppColors.textPrimary;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
     final correctionProvider = Provider.of<CorrectionProvider>(
       context,
       listen: false,
@@ -100,15 +129,18 @@ class _CorrectionRequestCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: surfaceBorderColor),
+        boxShadow: isDarkMode
+            ? const []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -116,22 +148,19 @@ class _CorrectionRequestCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Attendance Correction',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: AppColors.textPrimary,
+                  color: primaryTextColor,
                 ),
               ),
               const SizedBox(height: 4),
               if (request.targetDate != null)
                 Text(
                   'For: ${request.targetDate!.toLocal().toIso8601String().split('T').first}',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
+                  style: TextStyle(fontSize: 13, color: secondaryTextColor),
                 ),
               const SizedBox(height: 8),
               Align(
@@ -142,7 +171,7 @@ class _CorrectionRequestCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -160,9 +189,9 @@ class _CorrectionRequestCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             request.description,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
-              color: AppColors.textPrimary,
+              color: primaryTextColor,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -173,8 +202,10 @@ class _CorrectionRequestCard extends StatelessWidget {
               if (canReject)
                 OutlinedButton(
                   onPressed: () async {
-                    final ok = await correctionProvider.rejectRequest(request.id);
-                    
+                    final ok = await correctionProvider.rejectRequest(
+                      request.id,
+                    );
+
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -189,6 +220,7 @@ class _CorrectionRequestCard extends StatelessWidget {
                   },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.error,
+                    side: BorderSide(color: surfaceBorderColor),
                   ),
                   child: const Text('Reject'),
                 ),
@@ -196,21 +228,26 @@ class _CorrectionRequestCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: () async {
-                    final ok = await correctionProvider.approveRequest(request.id);
-                    
+                    final ok = await correctionProvider.approveRequest(
+                      request.id,
+                    );
+
                     if (ok && request.targetDate != null && context.mounted) {
-                      final attendanceProvider = Provider.of<AttendanceProvider>(
-                        context,
-                        listen: false,
-                      );
+                      final attendanceProvider =
+                          Provider.of<AttendanceProvider>(
+                            context,
+                            listen: false,
+                          );
 
                       // Gunakan employeeId dari request
                       final employeeId = request.employeeId;
 
                       // Ambil data dari details jika ada
                       final details = request.details ?? {};
-                      final clockIn = details['clock_in']?.toString() ?? '08:00:00';
-                      final clockOut = details['clock_out']?.toString() ?? '17:00:00';
+                      final clockIn =
+                          details['clock_in']?.toString() ?? '08:00:00';
+                      final clockOut =
+                          details['clock_out']?.toString() ?? '17:00:00';
 
                       if (employeeId.isNotEmpty) {
                         await attendanceProvider.applyCorrectionForDate(

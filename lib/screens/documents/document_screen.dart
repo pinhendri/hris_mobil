@@ -16,6 +16,25 @@ class DocumentScreen extends StatefulWidget {
 }
 
 class _DocumentScreenState extends State<DocumentScreen> {
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+  Color get _screenBackgroundColor =>
+      _isDarkMode ? const Color(0xFF121212) : Colors.grey.shade50;
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+  Color get _surfaceBorderColor =>
+      _isDarkMode ? const Color(0xFF303030) : Colors.transparent;
+  Color get _primaryTextColor =>
+      _isDarkMode ? Colors.white : AppColors.textPrimary;
+  Color get _secondaryTextColor =>
+      _isDarkMode ? Colors.white70 : AppColors.textSecondary;
+  List<BoxShadow> get _cardShadow => [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: _isDarkMode ? 0.2 : 0.03),
+      blurRadius: 10,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -30,20 +49,22 @@ class _DocumentScreenState extends State<DocumentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: _screenBackgroundColor,
       appBar: AppBar(
         title: Text(
           'Documents',
           style: GoogleFonts.poppins(
-            color: AppColors.textPrimary,
+            color: _primaryTextColor,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _surfaceColor,
+        foregroundColor: _primaryTextColor,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -101,7 +122,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
+                          color: _primaryTextColor,
                         ),
                       ),
                     ),
@@ -131,7 +152,11 @@ class _DocumentScreenState extends State<DocumentScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           const SizedBox(height: 120),
-          Icon(icon, size: 64, color: Colors.grey[400]),
+          Icon(
+            icon,
+            size: 64,
+            color: _isDarkMode ? Colors.white38 : Colors.grey[400],
+          ),
           const SizedBox(height: 16),
           Center(
             child: Padding(
@@ -140,7 +165,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
                 message,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
-                  color: Colors.grey[600],
+                  color: _secondaryTextColor,
                   fontSize: 16,
                 ),
               ),
@@ -162,15 +187,10 @@ class _DocumentScreenState extends State<DocumentScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: _surfaceBorderColor),
+        boxShadow: _cardShadow,
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
@@ -190,7 +210,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
           document.title,
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
+            color: _primaryTextColor,
             fontSize: 15,
           ),
         ),
@@ -203,20 +223,20 @@ class _DocumentScreenState extends State<DocumentScreen> {
                 Text(
                   document.size,
                   style: GoogleFonts.poppins(
-                    color: AppColors.textSecondary,
+                    color: _secondaryTextColor,
                     fontSize: 12,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   '-',
-                  style: GoogleFonts.poppins(color: AppColors.textSecondary),
+                  style: GoogleFonts.poppins(color: _secondaryTextColor),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   DateFormat('MMM d, y').format(document.updatedAt),
                   style: GoogleFonts.poppins(
-                    color: AppColors.textSecondary,
+                    color: _secondaryTextColor,
                     fontSize: 12,
                   ),
                 ),
