@@ -82,7 +82,7 @@ class BotAssistantProvider extends ChangeNotifier {
   }
 
   Future<bool> bootstrap({bool refresh = false}) async {
-    if (refresh) {R
+    if (refresh) {
       _isRefreshing = true;
     } else {
       _isLoading = true;

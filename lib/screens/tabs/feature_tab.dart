@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/localization/app_strings.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bot_assistant_provider.dart';
+import '../../providers/broadcast_provider.dart';
 import '../../providers/claim_provider.dart';
 import '../../providers/discovery_provider.dart';
 import '../../providers/document_provider.dart';
@@ -17,9 +18,14 @@ import '../../services/api_service.dart';
 import '../admin/event_management_screen.dart';
 import '../attendance/attendance_screen.dart';
 import '../bot/bot_assistant_screen.dart';
+import '../admin/broadcast_screen.dart';
 import '../claims/claims_screen.dart';
 import '../clients/client_screen.dart';
+import '../corrections/allowance_correction_screen.dart';
 import '../corrections/correction_screen.dart';
+import '../corrections/leave_balance_correction_screen.dart';
+import '../corrections/payroll_correction_screen.dart';
+import '../development/people_development_screen.dart';
 import '../discovery/discovery_screen.dart';
 import '../documents/document_screen.dart';
 import '../inventory/inventory_screen.dart';
@@ -27,7 +33,10 @@ import '../leave/leave_screen.dart';
 import '../location/my_location_screen.dart';
 import '../overtime/overtime_screen.dart';
 import '../payroll/payslip_screen.dart';
-import '../performance/performance_screen.dart';
+import '../payroll/payroll_settings_screen.dart';
+import '../payroll/payroll_process_screen.dart';
+import '../payroll/pph_report_screen.dart';
+import '../kpi/kpi_menu_screen.dart';
 import '../recruitment/recruitment_screen.dart';
 import '../saas/saas_workspace_screen.dart';
 import '../tasks/tasks_screen.dart';
@@ -661,11 +670,7 @@ class _FeatureTabState extends State<FeatureTab> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: () {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: feature.screenBuilder));
-          },
+          onTap: () => _openFeature(context, feature),
           child: Container(
             padding: EdgeInsets.all(compact ? 14 : 16),
             decoration: BoxDecoration(
@@ -767,6 +772,92 @@ class _FeatureTabState extends State<FeatureTab> {
           ),
         ),
       ),
+    );
+  }
+
+  void _openFeature(BuildContext context, FeatureItem feature) {
+    if (feature.children.isEmpty) {
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: feature.screenBuilder));
+      return;
+    }
+
+    final authProvider = context.read<AuthProvider>();
+    final visibleChildren = feature.children
+        .where((item) => authProvider.hasPermission(item.permission))
+        .toList(growable: false);
+
+    if (visibleChildren.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppStrings.of(context, 'feature_no_submenu_access', listen: false),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final title = AppStrings.of(context, feature.labelKey, listen: false);
+    final subtitle = AppStrings.of(
+      context,
+      feature.submenuHintKey,
+      listen: false,
+    );
+    final labels = {
+      for (final item in visibleChildren)
+        item.labelKey: AppStrings.of(context, item.labelKey, listen: false),
+    };
+
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: title,
+      barrierColor: Colors.black.withValues(alpha: isDark ? 0.62 : 0.42),
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: _CorrectionFloatingMenu(
+                  title: title,
+                  subtitle: subtitle,
+                  isDark: isDark,
+                  items: visibleChildren,
+                  labelFor: (item) => labels[item.labelKey] ?? item.labelKey,
+                  onClose: () => Navigator.of(dialogContext).pop(),
+                  onSelected: (item) {
+                    Navigator.of(dialogContext).pop();
+                    Navigator.of(
+                      context,
+                    ).push(MaterialPageRoute(builder: (_) => item.screen));
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.94, end: 1).animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -906,7 +997,7 @@ class _FeatureTabState extends State<FeatureTab> {
   }
 
   List<FeatureItem> _getAllFeatures(AuthProvider authProvider) {
-    final canAccessPayrollFeature = authProvider.hasPermission('view-payroll');
+    final canAccessPayrollFeature = _canAccessPayrollFeature(authProvider);
     final canAccessLeaveFeature = _canAccessLeaveFeature(authProvider);
     final canAccessAttendanceFeature = authProvider.hasPermission(
       'view-attendance',
@@ -914,18 +1005,19 @@ class _FeatureTabState extends State<FeatureTab> {
     final canAccessLocationFeature = canAccessAttendanceFeature;
     final canAccessClaimsFeature = _canAccessClaimsFeature(authProvider);
     final canAccessOvertimeFeature = _canAccessOvertimeFeature(authProvider);
-    final canAccessPerformanceFeature = _canAccessPerformanceFeature(
-      authProvider,
-    );
+    final canAccessKpiFeature = _canAccessKpiFeature(authProvider);
     final canAccessRecruitmentFeature = authProvider.hasPermission(
       'view-recruitment',
     );
     final canAccessInventoryFeature = _canAccessInventoryFeature(authProvider);
     final canAccessTrainingFeature = _canAccessTrainingFeature(authProvider);
+    final canAccessPeopleDevelopmentFeature =
+        _canAccessPeopleDevelopmentFeature(authProvider);
     final canAccessTimeTrackingFeature = _canAccessTimeTrackingFeature(
       authProvider,
     );
     final canAccessEventFeature = _canAccessEventFeature(authProvider);
+    final canAccessBroadcastFeature = _canAccessBroadcastFeature(authProvider);
     final canAccessDocumentsFeature = authProvider.hasPermission(
       'view-documents',
     );
@@ -937,8 +1029,8 @@ class _FeatureTabState extends State<FeatureTab> {
     return [
       if (canAccessPayrollFeature)
         FeatureItem(
-          icon: Icons.receipt_long,
-          labelKey: 'feature_label_payslip',
+          icon: Icons.account_balance_wallet_outlined,
+          labelKey: 'feature_label_payroll',
           gradient: const [Color(0xFF4158D0), Color(0xFFC850C0)],
           screenBuilder: (_) => ChangeNotifierProvider(
             create: (_) => PayrollProvider(),
@@ -946,6 +1038,36 @@ class _FeatureTabState extends State<FeatureTab> {
           ),
           categoryKey: 'feature_category_financial',
           isPopular: false,
+          children: [
+            const FeatureSubmenuItem(
+              labelKey: 'payroll_settings',
+              icon: Icons.tune_outlined,
+              permission: 'edit-payroll-settings',
+              screen: PayrollSettingsScreen(),
+            ),
+            const FeatureSubmenuItem(
+              labelKey: 'payroll_process',
+              icon: Icons.payments_outlined,
+              permission: 'view-payroll',
+              screen: PayrollProcessScreen(),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'feature_label_payslip',
+              icon: Icons.receipt_long_outlined,
+              permission: 'view-payroll',
+              screen: ChangeNotifierProvider(
+                create: (_) => PayrollProvider(),
+                child: const PayslipScreen(),
+              ),
+            ),
+            const FeatureSubmenuItem(
+              labelKey: 'payroll_pph_report',
+              icon: Icons.summarize_outlined,
+              permission: 'view-pphreport',
+              screen: PphReportScreen(),
+            ),
+          ],
+          submenuHintKey: 'payroll_submenu_hint',
         ),
       if (canAccessLeaveFeature)
         FeatureItem(
@@ -999,14 +1121,66 @@ class _FeatureTabState extends State<FeatureTab> {
           categoryKey: 'feature_category_core_hr',
           isPopular: false,
         ),
-      if (canAccessPerformanceFeature)
+      if (canAccessKpiFeature)
         FeatureItem(
-          icon: Icons.trending_up,
-          labelKey: 'feature_label_performance',
+          icon: Icons.bar_chart_rounded,
+          labelKey: 'feature_label_kpi',
           gradient: const [Color(0xFF02AAB0), Color(0xFF00CDAC)],
-          screenBuilder: (_) => const PerformanceScreen(),
+          screenBuilder: (_) => const KpiMenuScreen(
+            titleKey: 'feature_label_kpi',
+            requiredPermission: 'view-kpi',
+            icon: Icons.bar_chart_rounded,
+            type: KpiMenuType.overview,
+          ),
           categoryKey: 'feature_category_core_hr',
           isPopular: false,
+          children: const [
+            FeatureSubmenuItem(
+              labelKey: 'kpi_master',
+              icon: Icons.fact_check_outlined,
+              permission: 'view-kpi-master',
+              screen: KpiMenuScreen(
+                titleKey: 'kpi_master',
+                requiredPermission: 'view-kpi-master',
+                icon: Icons.fact_check_outlined,
+                type: KpiMenuType.master,
+              ),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'kpi_evaluation_list',
+              icon: Icons.assignment_turned_in_outlined,
+              permission: 'view-kpi-evaluation',
+              screen: KpiMenuScreen(
+                titleKey: 'kpi_evaluation_list',
+                requiredPermission: 'view-kpi-evaluation',
+                icon: Icons.assignment_turned_in_outlined,
+                type: KpiMenuType.evaluation,
+              ),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'kpi_department_goals',
+              icon: Icons.account_tree_outlined,
+              permission: 'view-department-goals',
+              screen: KpiMenuScreen(
+                titleKey: 'kpi_department_goals',
+                requiredPermission: 'view-department-goals',
+                icon: Icons.account_tree_outlined,
+                type: KpiMenuType.departmentGoals,
+              ),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'kpi_employee_goals',
+              icon: Icons.person_search_outlined,
+              permission: 'view-employee-goals',
+              screen: KpiMenuScreen(
+                titleKey: 'kpi_employee_goals',
+                requiredPermission: 'view-employee-goals',
+                icon: Icons.person_search_outlined,
+                type: KpiMenuType.employeeGoals,
+              ),
+            ),
+          ],
+          submenuHintKey: 'kpi_submenu_hint',
         ),
       if (canAccessRecruitmentFeature)
         FeatureItem(
@@ -1029,10 +1203,10 @@ class _FeatureTabState extends State<FeatureTab> {
           categoryKey: 'feature_category_operations',
           isPopular: false,
         ),
-      if (canAccessTrainingFeature)
+      if (canAccessPeopleDevelopmentFeature)
         FeatureItem(
-          icon: Icons.school_outlined,
-          labelKey: 'feature_label_training',
+          icon: Icons.trending_up_rounded,
+          labelKey: 'people_development',
           gradient: const [Color(0xFF834D9B), Color(0xFFD04ED6)],
           screenBuilder: (_) => ChangeNotifierProvider(
             create: (_) => TrainingProvider(),
@@ -1040,6 +1214,31 @@ class _FeatureTabState extends State<FeatureTab> {
           ),
           categoryKey: 'feature_category_development',
           isPopular: false,
+          children: [
+            if (canAccessTrainingFeature)
+              FeatureSubmenuItem(
+                labelKey: 'learning_lms',
+                icon: Icons.school_outlined,
+                permission: 'view-lms',
+                screen: ChangeNotifierProvider(
+                  create: (_) => TrainingProvider(),
+                  child: const TrainingScreen(),
+                ),
+              ),
+            const FeatureSubmenuItem(
+              labelKey: 'talent_management',
+              icon: Icons.auto_graph_outlined,
+              permission: 'view-talenta',
+              screen: TalentManagementMobileScreen(),
+            ),
+            const FeatureSubmenuItem(
+              labelKey: 'employee_relations',
+              icon: Icons.groups_2_outlined,
+              permission: 'view-employee-relation',
+              screen: EmployeeRelationsMobileScreen(),
+            ),
+          ],
+          submenuHintKey: 'people_development_submenu_hint',
         ),
       if (canAccessTimeTrackingFeature)
         FeatureItem(
@@ -1059,6 +1258,18 @@ class _FeatureTabState extends State<FeatureTab> {
           labelKey: 'feature_label_event_management',
           gradient: const [Color(0xFF1D976C), Color(0xFF93F9B9)],
           screenBuilder: (_) => const EventManagementScreen(),
+          categoryKey: 'feature_category_operations',
+          isPopular: true,
+        ),
+      if (canAccessBroadcastFeature)
+        FeatureItem(
+          icon: Icons.campaign_outlined,
+          labelKey: 'feature_label_broadcast',
+          gradient: const [Color(0xFF0EA5E9), Color(0xFF2563EB)],
+          screenBuilder: (_) => ChangeNotifierProvider(
+            create: (_) => BroadcastProvider(),
+            child: const BroadcastScreen(),
+          ),
           categoryKey: 'feature_category_operations',
           isPopular: true,
         ),
@@ -1118,6 +1329,33 @@ class _FeatureTabState extends State<FeatureTab> {
           screenBuilder: (_) => const CorrectionScreen(),
           categoryKey: 'feature_category_core_hr',
           isPopular: false,
+          children: const [
+            FeatureSubmenuItem(
+              labelKey: 'correction_attendance',
+              icon: Icons.event_available_outlined,
+              permission: 'view-settings',
+              screen: CorrectionScreen(),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'correction_allowance',
+              icon: Icons.payments_outlined,
+              permission: 'view-settings',
+              screen: AllowanceCorrectionScreen(),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'correction_payroll',
+              icon: Icons.request_quote_outlined,
+              permission: 'view-settings',
+              screen: PayrollCorrectionScreen(),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'correction_leave_balance',
+              icon: Icons.beach_access_outlined,
+              permission: 'view-settings',
+              screen: LeaveBalanceCorrectionScreen(),
+            ),
+          ],
+          submenuHintKey: 'correction_submenu_hint',
         ),
       FeatureItem(
         icon: Icons.shield_outlined,
@@ -1147,6 +1385,10 @@ class _FeatureTabState extends State<FeatureTab> {
         authProvider.canAccessClaimsModule;
   }
 
+  bool _canAccessPayrollFeature(AuthProvider authProvider) {
+    return authProvider.hasPermission('view-settings');
+  }
+
   bool _canAccessOvertimeFeature(AuthProvider authProvider) {
     return authProvider.hasAnyPermission([
           'view-overtime',
@@ -1166,19 +1408,27 @@ class _FeatureTabState extends State<FeatureTab> {
         _featureCapabilityFlags['leave'] == true;
   }
 
-  bool _canAccessPerformanceFeature(AuthProvider authProvider) {
+  bool _canAccessKpiFeature(AuthProvider authProvider) {
     return authProvider.hasAnyPermission([
       'view-kpi',
       'view-kpi-master',
       'view-kpi-evaluation',
       'view-department-goals',
       'view-employee-goals',
-      'view-performance',
     ]);
   }
 
   bool _canAccessTrainingFeature(AuthProvider authProvider) {
     return authProvider.hasPermission('view-lms');
+  }
+
+  bool _canAccessPeopleDevelopmentFeature(AuthProvider authProvider) {
+    return authProvider.hasAnyPermission([
+      'view-pengembangan-sdm',
+      'view-lms',
+      'view-talenta',
+      'view-employee-relation',
+    ]);
   }
 
   bool _canAccessInventoryFeature(AuthProvider authProvider) {
@@ -1200,6 +1450,16 @@ class _FeatureTabState extends State<FeatureTab> {
 
   bool _canAccessEventFeature(AuthProvider authProvider) {
     return authProvider.hasPermission('view-settings');
+  }
+
+  bool _canAccessBroadcastFeature(AuthProvider authProvider) {
+    return authProvider.canAccessBroadcastModule ||
+        authProvider.hasAnyPermission([
+          'view-Broadcast',
+          'view-broadcast',
+          'send-broadcast',
+          'create-broadcast',
+        ]);
   }
 
   bool _canAccessCorrectionsFeature(AuthProvider authProvider) {
@@ -1376,15 +1636,414 @@ class FeatureItem {
   final WidgetBuilder screenBuilder;
   final String categoryKey;
   final bool isPopular;
+  final List<FeatureSubmenuItem> children;
+  final String submenuHintKey;
 
-  FeatureItem({
+  const FeatureItem({
     required this.icon,
     required this.labelKey,
     required this.gradient,
     required this.screenBuilder,
     required this.categoryKey,
     this.isPopular = false,
+    this.children = const [],
+    this.submenuHintKey = 'feature_submenu_hint',
   });
+}
+
+class FeatureSubmenuItem {
+  final String labelKey;
+  final IconData icon;
+  final String permission;
+  final Widget screen;
+
+  const FeatureSubmenuItem({
+    required this.labelKey,
+    required this.icon,
+    required this.permission,
+    required this.screen,
+  });
+}
+
+class _CorrectionFloatingMenu extends StatelessWidget {
+  const _CorrectionFloatingMenu({
+    required this.title,
+    required this.subtitle,
+    required this.isDark,
+    required this.items,
+    required this.labelFor,
+    required this.onClose,
+    required this.onSelected,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool isDark;
+  final List<FeatureSubmenuItem> items;
+  final String Function(FeatureSubmenuItem item) labelFor;
+  final VoidCallback onClose;
+  final ValueChanged<FeatureSubmenuItem> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = isDark ? const Color(0xFF111827) : Colors.white;
+    final border = isDark
+        ? Colors.white.withValues(alpha: 0.10)
+        : const Color(0xFFE5E7EB);
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.42 : 0.18),
+              blurRadius: 34,
+              offset: const Offset(0, 22),
+            ),
+            BoxShadow(
+              color: const Color(
+                0xFF2563EB,
+              ).withValues(alpha: isDark ? 0.18 : 0.10),
+              blurRadius: 46,
+              offset: const Offset(-14, -18),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHeader(context),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final useGrid =
+                      constraints.maxWidth >= 360 && items.length > 2;
+                  if (useGrid) {
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: items.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            mainAxisExtent: 118,
+                          ),
+                      itemBuilder: (context, index) {
+                        return _buildMenuTile(items[index], compact: true);
+                      },
+                    );
+                  }
+
+                  return Column(
+                    children: items
+                        .map(
+                          (item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _buildMenuTile(item, compact: false),
+                          ),
+                        )
+                        .toList(growable: false),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 18, 12, 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? const [Color(0xFF0F172A), Color(0xFF172554), Color(0xFF7F1D1D)]
+              : const [Color(0xFFFFFFFF), Color(0xFFEFF6FF), Color(0xFFFFF1F2)],
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.14),
+                ),
+              ),
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : Colors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(17),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.16)
+                        : Colors.white,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2563EB).withValues(alpha: 0.16),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.bar_chart_rounded,
+                  color: isDark ? Colors.white : const Color(0xFF1D4ED8),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF111827),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : const Color(0xFF4B5563),
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.10)
+                        : Colors.white.withValues(alpha: 0.78),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.12)
+                          : Colors.white,
+                    ),
+                  ),
+                  child: Text(
+                    AppStrings.of(
+                      context,
+                      'feature_submenu_available_count',
+                      listen: false,
+                    ).replaceAll('{count}', items.length.toString()),
+                    style: TextStyle(
+                      color: isDark ? Colors.white70 : const Color(0xFF374151),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Close',
+            onPressed: onClose,
+            icon: Icon(
+              Icons.close_rounded,
+              color: isDark ? Colors.white70 : const Color(0xFF4B5563),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuTile(FeatureSubmenuItem item, {required bool compact}) {
+    final tone = _toneFor(item.labelKey);
+    final label = labelFor(item);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => onSelected(item),
+        child: Ink(
+          padding: EdgeInsets.all(compact ? 13 : 14),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.055)
+                : tone.background,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : tone.color.withValues(alpha: 0.14),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: tone.color.withValues(alpha: isDark ? 0.06 : 0.10),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _iconShell(item.icon, tone.color),
+                        const Spacer(),
+                        Icon(
+                          Icons.north_east_rounded,
+                          color: tone.color.withValues(alpha: 0.75),
+                          size: 17,
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _tileTitleStyle,
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 36,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: tone.color.withValues(alpha: 0.42),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    _iconShell(item.icon, tone.color),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: _tileTitleStyle,
+                      ),
+                    ),
+                    Icon(Icons.chevron_right_rounded, color: tone.color),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _iconShell(IconData icon, Color color) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.18 : 0.12),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Icon(icon, color: color, size: 21),
+    );
+  }
+
+  TextStyle get _tileTitleStyle {
+    return TextStyle(
+      color: isDark ? Colors.white : const Color(0xFF111827),
+      fontSize: 13,
+      height: 1.22,
+      fontWeight: FontWeight.w800,
+    );
+  }
+
+  _CorrectionMenuTone _toneFor(String labelKey) {
+    switch (labelKey) {
+      case 'kpi_evaluation_list':
+        return const _CorrectionMenuTone(
+          color: Color(0xFF0891B2),
+          background: Color(0xFFECFEFF),
+        );
+      case 'kpi_department_goals':
+        return const _CorrectionMenuTone(
+          color: Color(0xFF7C3AED),
+          background: Color(0xFFF5F3FF),
+        );
+      case 'kpi_employee_goals':
+        return const _CorrectionMenuTone(
+          color: Color(0xFF047857),
+          background: Color(0xFFECFDF5),
+        );
+      case 'kpi_master':
+        return const _CorrectionMenuTone(
+          color: Color(0xFF2563EB),
+          background: Color(0xFFEFF6FF),
+        );
+      case 'correction_allowance':
+        return const _CorrectionMenuTone(
+          color: Color(0xFFB45309),
+          background: Color(0xFFFFF7ED),
+        );
+      case 'correction_payroll':
+        return const _CorrectionMenuTone(
+          color: Color(0xFF047857),
+          background: Color(0xFFECFDF5),
+        );
+      case 'correction_leave_balance':
+        return const _CorrectionMenuTone(
+          color: Color(0xFF7C3AED),
+          background: Color(0xFFF5F3FF),
+        );
+      case 'correction_attendance':
+      default:
+        return const _CorrectionMenuTone(
+          color: Color(0xFF2563EB),
+          background: Color(0xFFEFF6FF),
+        );
+    }
+  }
+}
+
+class _CorrectionMenuTone {
+  const _CorrectionMenuTone({required this.color, required this.background});
+
+  final Color color;
+  final Color background;
 }
 
 class _FeatureTone {

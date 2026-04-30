@@ -1,12 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/api_constants.dart';
+import '../../data/models/attendance_location.dart';
+import '../../providers/attendance_provider.dart';
 
 class MyLocationScreen extends StatefulWidget {
   const MyLocationScreen({super.key});
@@ -26,6 +31,7 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
   final MapController _mapController = MapController();
 
   Position? _currentPosition;
+  AttendanceLocation? _attendanceLocationHint;
   StreamSubscription<Position>? _positionStream;
 
   bool _isMapReady = false;
@@ -40,6 +46,7 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
   void initState() {
     super.initState();
     _initLocation();
+    unawaited(_loadAttendanceLocationHint());
   }
 
   @override
@@ -71,6 +78,33 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
       _startLocationStream();
     } catch (e) {
       _setError('Init error: $e');
+    }
+  }
+
+  Future<void> _loadAttendanceLocationHint() async {
+    try {
+      final provider = Provider.of<AttendanceProvider>(context, listen: false);
+      await provider.loadLocations();
+      if (!mounted) {
+        return;
+      }
+
+      _safeSetState(() {
+        _attendanceLocationHint = provider.defaultLocation;
+      });
+
+      if (_shouldUseAttendanceLocationHint) {
+        _safeSetState(() {
+          _statusMessage = 'Lokasi emulator disesuaikan dengan lokasi absensi';
+          _address = _attendanceLocationHintLabel;
+        });
+      }
+
+      if (_isMapReady && _shouldUseAttendanceLocationHint) {
+        _mapController.move(_currentLatLng, 16);
+      }
+    } catch (_) {
+      // Lokasi saya tetap bisa berjalan walau lokasi absensi belum tersedia.
     }
   }
 
@@ -117,20 +151,26 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
       return;
     }
 
-    final latLng = LatLng(position.latitude, position.longitude);
-
     _safeSetState(() {
       _currentPosition = position;
       _isLoading = false;
-      _statusMessage = 'Lokasi ditemukan';
+      _statusMessage = _adjustedEmulatorLocationMessage ?? 'Lokasi ditemukan';
     });
 
     if (_isMapReady && mounted) {
       final zoom = moveMap ? 16.0 : _mapController.camera.zoom;
-      _mapController.move(latLng, zoom);
+      _mapController.move(_currentLatLng, zoom);
     }
 
-    await _getAddress(latLng.latitude, latLng.longitude);
+    final displayLatLng = _currentLatLng;
+    if (_shouldUseAttendanceLocationHint) {
+      _safeSetState(() {
+        _address = _attendanceLocationHintLabel;
+      });
+      return;
+    }
+
+    await _getAddress(displayLatLng.latitude, displayLatLng.longitude);
   }
 
   Future<void> _getAddress(double lat, double lon) async {
@@ -147,7 +187,7 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
           place?.subLocality,
           place?.locality,
           place?.administrativeArea,
-        ].where((part) => part != null && part!.trim().isNotEmpty).join(', ');
+        ].where((part) => part != null && part.trim().isNotEmpty).join(', ');
 
         if (_address.trim().isEmpty) {
           _address = 'Alamat tidak tersedia';
@@ -209,6 +249,15 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
   }
 
   LatLng get _currentLatLng {
+    final hint = _attendanceLocationHint;
+    if (_shouldUseAttendanceLocationHint && hint != null) {
+      return LatLng(hint.latitude, hint.longitude);
+    }
+
+    if (_shouldUseFallbackForDefaultEmulator) {
+      return _fallbackLatLng;
+    }
+
     final position = _currentPosition;
     if (position == null) {
       return _fallbackLatLng;
@@ -218,6 +267,15 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
   }
 
   String get _coordinateLabel {
+    final hint = _attendanceLocationHint;
+    if (_shouldUseAttendanceLocationHint && hint != null) {
+      return '${hint.latitude.toStringAsFixed(6)}, ${hint.longitude.toStringAsFixed(6)}';
+    }
+
+    if (_shouldUseFallbackForDefaultEmulator) {
+      return '${_fallbackLatLng.latitude.toStringAsFixed(6)}, ${_fallbackLatLng.longitude.toStringAsFixed(6)}';
+    }
+
     final position = _currentPosition;
     if (position == null) {
       return '-6.2088, 106.8456';
@@ -235,6 +293,48 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
     return (position.latitude - _defaultEmulatorLatLng.latitude).abs() <
             0.001 &&
         (position.longitude - _defaultEmulatorLatLng.longitude).abs() < 0.001;
+  }
+
+  bool get _shouldUseAttendanceLocationHint {
+    return _isDebugAndroidDefaultEmulatorLocation &&
+        _attendanceLocationHint != null;
+  }
+
+  bool get _shouldUseFallbackForDefaultEmulator {
+    return _isDebugAndroidDefaultEmulatorLocation &&
+        _attendanceLocationHint == null;
+  }
+
+  bool get _isDebugAndroidDefaultEmulatorLocation {
+    if (!_isLikelyDefaultEmulatorLocation ||
+        !Platform.isAndroid ||
+        kReleaseMode) {
+      return false;
+    }
+
+    return true;
+  }
+
+  String? get _adjustedEmulatorLocationMessage {
+    if (_shouldUseAttendanceLocationHint) {
+      return 'Lokasi emulator disesuaikan dengan lokasi absensi';
+    }
+
+    if (_shouldUseFallbackForDefaultEmulator) {
+      return 'Lokasi default emulator diabaikan';
+    }
+
+    return null;
+  }
+
+  String get _attendanceLocationHintLabel {
+    final hintAddress = _attendanceLocationHint?.address;
+    final label = [
+      _attendanceLocationHint?.name,
+      if (hintAddress != null && hintAddress.trim().isNotEmpty) hintAddress,
+    ].where((part) => part != null && part.trim().isNotEmpty).join(', ');
+
+    return label.trim().isEmpty ? 'Lokasi absensi' : label;
   }
 
   @override
@@ -320,7 +420,7 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
                 ),
               ),
             ),
-          if (_isLikelyDefaultEmulatorLocation)
+          if (_isDebugAndroidDefaultEmulatorLocation)
             Positioned(
               top: _hasMapLoadIssue ? 164 : 92,
               left: 16,
@@ -330,7 +430,9 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Text(
-                    'Koordinat saat ini adalah lokasi default emulator Android. Ubah lokasi emulator jika ingin melihat titik lain.',
+                    _shouldUseAttendanceLocationHint
+                        ? 'Emulator mengirim lokasi default Android. Peta disesuaikan ke lokasi absensi agar pengujian tetap relevan.'
+                        : 'Emulator mengirim lokasi default Android. Peta diarahkan ke fallback sampai lokasi emulator diatur manual.',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       color: Colors.blue.shade900,

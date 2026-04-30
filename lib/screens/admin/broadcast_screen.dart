@@ -987,12 +987,21 @@ class _BroadcastScreenState extends State<BroadcastScreen>
   }
 
   void _showPreviewDialog() {
+    final provider = context.read<BroadcastProvider>();
+    final recipientCount = _getRecipientCount(provider);
+    final previewTitle = _titleController.text.trim().isEmpty
+        ? '(Tanpa judul)'
+        : _titleController.text.trim();
+    final previewMessage = _messageController.text.trim().isEmpty
+        ? '(Pesan masih kosong)'
+        : _messageController.text.trim();
+    final audienceLabel = _audienceLabel(_recipientType);
+    final priorityLabel = _priorityLabel(_priority);
+    final priorityColor = _priorityColor(_priority);
+
     showDialog<void>(
       context: context,
-      builder: (context) {
-        final provider = context.read<BroadcastProvider>();
-        final recipientCount = _getRecipientCount(provider);
-
+      builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: _surfaceColor,
           title: Text(
@@ -1005,9 +1014,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  _titleController.text.trim().isEmpty
-                      ? '(Tanpa judul)'
-                      : _titleController.text.trim(),
+                  previewTitle,
                   style: TextStyle(
                     color: _primaryTextColor,
                     fontWeight: FontWeight.w700,
@@ -1016,9 +1023,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  _messageController.text.trim().isEmpty
-                      ? '(Pesan masih kosong)'
-                      : _messageController.text.trim(),
+                  previewMessage,
                   style: TextStyle(color: _secondaryTextColor, height: 1.5),
                 ),
                 const SizedBox(height: 16),
@@ -1027,13 +1032,10 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                   runSpacing: 8,
                   children: [
                     _buildTag(
-                      label: _audienceLabel(_recipientType),
+                      label: audienceLabel,
                       color: const Color(0xFF0EA5E9),
                     ),
-                    _buildTag(
-                      label: _priorityLabel(_priority),
-                      color: _priorityColor(_priority),
-                    ),
+                    _buildTag(label: priorityLabel, color: priorityColor),
                     _buildTag(
                       label: '$recipientCount recipients',
                       color: const Color(0xFF2F9D78),
@@ -1045,7 +1047,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Tutup'),
             ),
           ],

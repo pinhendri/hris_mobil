@@ -375,8 +375,6 @@ class _ProfileTabState extends State<ProfileTab> {
   }) {
     final rawUserName = (user?.name ?? '').trim();
     final rawRole = (user?.position ?? '').trim();
-    final rawEmployeeUuid = (user?.employeeUuid ?? '').trim();
-    final rawUuid = (user?.uuid ?? '').trim();
     final userName = rawUserName.isNotEmpty
         ? rawUserName
         : context.tr('profile_user_fallback');
@@ -384,11 +382,7 @@ class _ProfileTabState extends State<ProfileTab> {
         ? rawRole
         : context.tr('profile_employee_fallback');
     final companyCode = (currentCompany?.cCode ?? '').trim();
-    final identifier = rawEmployeeUuid.isNotEmpty
-        ? rawEmployeeUuid
-        : rawUuid.isNotEmpty
-        ? rawUuid
-        : 'EMP-0000';
+    final roles = _buildRolesLabel(user);
 
     return _buildSurfaceCard(
       isDark: isDark,
@@ -578,9 +572,9 @@ class _ProfileTabState extends State<ProfileTab> {
                           SizedBox(
                             width: factWidth,
                             child: _buildProfileFactCard(
-                              label: 'ID',
-                              value: identifier,
-                              icon: Icons.badge_outlined,
+                              label: 'Roles',
+                              value: roles,
+                              icon: Icons.admin_panel_settings_outlined,
                               tone: AppColors.secondary,
                               isDark: isDark,
                             ),
@@ -1230,6 +1224,20 @@ class _ProfileTabState extends State<ProfileTab> {
         ],
       ),
     );
+  }
+
+  String _buildRolesLabel(User? user) {
+    final roles = <String>{
+      ...(user?.roles ?? const <String>[]).map((role) => role.trim()),
+      if ((user?.role ?? '').trim().isNotEmpty) (user?.role ?? '').trim(),
+    }..removeWhere((role) => role.isEmpty);
+
+    if (roles.isNotEmpty) {
+      return roles.join(', ');
+    }
+
+    final position = (user?.position ?? '').trim();
+    return position.isNotEmpty ? position : 'Role belum tersedia';
   }
 
   Color _pageBackground(bool isDark) {

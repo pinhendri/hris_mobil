@@ -34,6 +34,29 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
   Color get _secondaryTextColor =>
       _isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
 
+  InputDecoration _dialogInputDecoration(String label, {String? hint}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      labelStyle: TextStyle(color: _secondaryTextColor),
+      hintStyle: TextStyle(color: _secondaryTextColor),
+      filled: true,
+      fillColor: _isDarkMode ? const Color(0xFF0F172A) : Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: _surfaceBorderColor),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: _surfaceBorderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.4),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -300,7 +323,11 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
         return StatefulBuilder(
           builder: (stateContext, setState) {
             return AlertDialog(
-              title: Text(shift == null ? 'Add Shift' : 'Edit Shift'),
+              backgroundColor: _surfaceColor,
+              title: Text(
+                shift == null ? 'Add Shift' : 'Edit Shift',
+                style: TextStyle(color: _primaryTextColor),
+              ),
               content: SingleChildScrollView(
                 child: Form(
                   key: formKey,
@@ -309,10 +336,8 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                     children: [
                       TextFormField(
                         controller: nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Shift Name',
-                          border: OutlineInputBorder(),
-                        ),
+                        style: TextStyle(color: _primaryTextColor),
+                        decoration: _dialogInputDecoration('Shift Name'),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Please enter shift name';
@@ -323,10 +348,8 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: descController,
-                        decoration: const InputDecoration(
-                          labelText: 'Description',
-                          border: OutlineInputBorder(),
-                        ),
+                        style: TextStyle(color: _primaryTextColor),
+                        decoration: _dialogInputDecoration('Description'),
                         maxLines: 2,
                       ),
                       const SizedBox(height: 12),
@@ -335,9 +358,9 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                           Expanded(
                             child: TextFormField(
                               controller: graceInController,
-                              decoration: const InputDecoration(
-                                labelText: 'Grace Clock In (min)',
-                                border: OutlineInputBorder(),
+                              style: TextStyle(color: _primaryTextColor),
+                              decoration: _dialogInputDecoration(
+                                'Grace Clock In (min)',
                               ),
                               keyboardType: TextInputType.number,
                               validator: (value) {
@@ -352,9 +375,9 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                           Expanded(
                             child: TextFormField(
                               controller: graceOutController,
-                              decoration: const InputDecoration(
-                                labelText: 'Grace Clock Out (min)',
-                                border: OutlineInputBorder(),
+                              style: TextStyle(color: _primaryTextColor),
+                              decoration: _dialogInputDecoration(
+                                'Grace Clock Out (min)',
                               ),
                               keyboardType: TextInputType.number,
                               validator: (value) {
@@ -370,10 +393,8 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: breakController,
-                        decoration: const InputDecoration(
-                          labelText: 'Break Minutes',
-                          border: OutlineInputBorder(),
-                        ),
+                        style: TextStyle(color: _primaryTextColor),
+                        decoration: _dialogInputDecoration('Break Minutes'),
                         keyboardType: TextInputType.number,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -387,7 +408,10 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                         children: [
                           Expanded(
                             child: CheckboxListTile(
-                              title: const Text('Night Shift'),
+                              title: Text(
+                                'Night Shift',
+                                style: TextStyle(color: _primaryTextColor),
+                              ),
                               value: isNightShift,
                               onChanged: (val) {
                                 setState(() => isNightShift = val ?? false);
@@ -396,7 +420,10 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                           ),
                           Expanded(
                             child: CheckboxListTile(
-                              title: const Text('Flexible'),
+                              title: Text(
+                                'Flexible',
+                                style: TextStyle(color: _primaryTextColor),
+                              ),
                               value: isFlexible,
                               onChanged: (val) {
                                 setState(() => isFlexible = val ?? false);
@@ -407,27 +434,35 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                       ),
                       const SizedBox(height: 8),
                       CheckboxListTile(
-                        title: const Text('Active'),
+                        title: Text(
+                          'Active',
+                          style: TextStyle(color: _primaryTextColor),
+                        ),
                         value: isActive,
                         onChanged: (val) {
                           setState(() => isActive = val ?? true);
                         },
                       ),
                       const Divider(height: 24),
-                      const Text(
+                      Text(
                         'Shift Days',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: _primaryTextColor,
                         ),
                       ),
                       const SizedBox(height: 8),
                       // Tampilkan shift days yang sudah ada
                       ...shiftDays.map((day) {
                         return ListTile(
-                          title: Text(dayNames[day.dayOfWeek] ?? 'Unknown'),
+                          title: Text(
+                            dayNames[day.dayOfWeek] ?? 'Unknown',
+                            style: TextStyle(color: _primaryTextColor),
+                          ),
                           subtitle: Text(
                             '${day.clockIn.substring(0, 5)} - ${day.clockOut.substring(0, 5)}',
+                            style: TextStyle(color: _secondaryTextColor),
                           ),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
@@ -555,17 +590,20 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Add Shift Day'),
+          backgroundColor: _surfaceColor,
+          title: Text(
+            'Add Shift Day',
+            style: TextStyle(color: _primaryTextColor),
+          ),
           content: Form(
             key: formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<int>(
-                  decoration: const InputDecoration(
-                    labelText: 'Day of Week',
-                    border: OutlineInputBorder(),
-                  ),
+                  dropdownColor: _surfaceColor,
+                  style: TextStyle(color: _primaryTextColor),
+                  decoration: _dialogInputDecoration('Day of Week'),
                   items: const [
                     DropdownMenuItem(value: 1, child: Text('Monday')),
                     DropdownMenuItem(value: 2, child: Text('Tuesday')),
@@ -589,10 +627,10 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: clockInController,
-                  decoration: const InputDecoration(
-                    labelText: 'Clock In (HH:mm)',
-                    border: OutlineInputBorder(),
-                    hintText: '08:00',
+                  style: TextStyle(color: _primaryTextColor),
+                  decoration: _dialogInputDecoration(
+                    'Clock In (HH:mm)',
+                    hint: '08:00',
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -609,10 +647,10 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: clockOutController,
-                  decoration: const InputDecoration(
-                    labelText: 'Clock Out (HH:mm)',
-                    border: OutlineInputBorder(),
-                    hintText: '17:00',
+                  style: TextStyle(color: _primaryTextColor),
+                  decoration: _dialogInputDecoration(
+                    'Clock Out (HH:mm)',
+                    hint: '17:00',
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -629,10 +667,8 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: breakController,
-                  decoration: const InputDecoration(
-                    labelText: 'Break Minutes',
-                    border: OutlineInputBorder(),
-                  ),
+                  style: TextStyle(color: _primaryTextColor),
+                  decoration: _dialogInputDecoration('Break Minutes'),
                   keyboardType: TextInputType.number,
                   validator: (value) {
                     if (value == null || value.isEmpty) {

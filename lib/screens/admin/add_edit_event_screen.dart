@@ -30,6 +30,66 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
   final Set<String> _selectedInvitees = <String>{};
   String _loadedCompanyCode = '';
 
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _pageColor =>
+      _isDarkMode ? const Color(0xFF020817) : const Color(0xFFF8FAFC);
+
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+
+  Color get _fieldColor => _isDarkMode ? const Color(0xFF0F172A) : Colors.white;
+
+  Color get _borderColor =>
+      _isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+
+  InputDecoration _inputDecoration(
+    String label, {
+    String? hint,
+    IconData? icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: icon == null ? null : Icon(icon, color: _secondaryTextColor),
+      labelStyle: TextStyle(color: _secondaryTextColor),
+      hintStyle: TextStyle(color: _secondaryTextColor),
+      filled: true,
+      fillColor: _fieldColor,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: _borderColor),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: _borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.4),
+      ),
+    );
+  }
+
+  ThemeData _pickerTheme(BuildContext context) {
+    final base = Theme.of(context);
+    return base.copyWith(
+      colorScheme: base.colorScheme.copyWith(
+        surface: _surfaceColor,
+        onSurface: _primaryTextColor,
+        primary: const Color(0xFF2563EB),
+        onPrimary: Colors.white,
+      ),
+      dialogTheme: DialogThemeData(backgroundColor: _surfaceColor),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -82,6 +142,8 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
       initialDate: initial,
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 3650)),
+      builder: (context, child) =>
+          Theme(data: _pickerTheme(context), child: child!),
     );
 
     if (pickedDate == null || !mounted) {
@@ -91,6 +153,8 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
     final pickedTime = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(initial),
+      builder: (context, child) =>
+          Theme(data: _pickerTheme(context), child: child!),
     );
 
     if (pickedTime == null || !mounted) {
@@ -190,8 +254,12 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
         .toList(growable: false);
 
     return Scaffold(
+      backgroundColor: _pageColor,
       appBar: AppBar(
         title: Text(widget.event == null ? 'Create Event' : 'Edit Event'),
+        backgroundColor: _surfaceColor,
+        surfaceTintColor: _surfaceColor,
+        foregroundColor: _primaryTextColor,
         actions: [
           TextButton(
             onPressed: eventProvider.isSubmitting ? null : _save,
@@ -208,10 +276,8 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
             children: [
               TextFormField(
                 controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Event Title',
-                  border: OutlineInputBorder(),
-                ),
+                style: TextStyle(color: _primaryTextColor),
+                decoration: _inputDecoration('Event Title'),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Judul event wajib diisi.';
@@ -222,31 +288,35 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _locationController,
-                decoration: const InputDecoration(
-                  labelText: 'Location',
-                  border: OutlineInputBorder(),
-                ),
+                style: TextStyle(color: _primaryTextColor),
+                decoration: _inputDecoration('Location'),
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _descriptionController,
                 minLines: 3,
                 maxLines: 5,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                ),
+                style: TextStyle(color: _primaryTextColor),
+                decoration: _inputDecoration('Description'),
               ),
               const SizedBox(height: 16),
               _DateTimeTile(
                 label: 'Start',
                 value: _formatDateTime(_startsAt),
+                surfaceColor: _surfaceColor,
+                borderColor: _borderColor,
+                primaryTextColor: _primaryTextColor,
+                secondaryTextColor: _secondaryTextColor,
                 onTap: () => _pickDateTime(isStart: true),
               ),
               const SizedBox(height: 12),
               _DateTimeTile(
                 label: 'End',
                 value: _endsAt == null ? 'Optional' : _formatDateTime(_endsAt!),
+                surfaceColor: _surfaceColor,
+                borderColor: _borderColor,
+                primaryTextColor: _primaryTextColor,
+                secondaryTextColor: _secondaryTextColor,
                 onTap: () => _pickDateTime(isStart: false),
                 onClear: _endsAt == null
                     ? null
@@ -260,9 +330,13 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
               SwitchListTile(
                 value: _isCompanyWide,
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Company-wide event'),
-                subtitle: const Text(
+                title: Text(
+                  'Company-wide event',
+                  style: TextStyle(color: _primaryTextColor),
+                ),
+                subtitle: Text(
                   'Jika aktif, semua karyawan di company ini bisa melihat event.',
+                  style: TextStyle(color: _secondaryTextColor),
                 ),
                 onChanged: (value) {
                   setState(() {
@@ -275,22 +349,26 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
                 TextField(
                   controller: _searchController,
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Cari karyawan untuk diundang',
-                    border: OutlineInputBorder(),
+                  style: TextStyle(color: _primaryTextColor),
+                  decoration: _inputDecoration(
+                    'Cari karyawan untuk diundang',
+                    icon: Icons.search,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   'Invitees (${_selectedInvitees.length})',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: _primaryTextColor,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Container(
                   constraints: const BoxConstraints(maxHeight: 320),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
+                    color: _surfaceColor,
+                    border: Border.all(color: _borderColor),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: employeeProvider.isLoading
@@ -301,9 +379,12 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
                           ),
                         )
                       : filteredEmployees.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Text('Tidak ada karyawan yang bisa dipilih.'),
+                      ? Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'Tidak ada karyawan yang bisa dipilih.',
+                            style: TextStyle(color: _secondaryTextColor),
+                          ),
                         )
                       : ListView.builder(
                           shrinkWrap: true,
@@ -316,11 +397,17 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
 
                             return CheckboxListTile(
                               value: isSelected,
-                              title: Text(employee.name),
+                              activeColor: const Color(0xFF2563EB),
+                              checkColor: Colors.white,
+                              title: Text(
+                                employee.name,
+                                style: TextStyle(color: _primaryTextColor),
+                              ),
                               subtitle: Text(
                                 employee.position.isEmpty
                                     ? employee.department
                                     : '${employee.position} • ${employee.department}',
+                                style: TextStyle(color: _secondaryTextColor),
                               ),
                               onChanged: (value) {
                                 setState(() {
@@ -393,12 +480,20 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
 class _DateTimeTile extends StatelessWidget {
   final String label;
   final String value;
+  final Color surfaceColor;
+  final Color borderColor;
+  final Color primaryTextColor;
+  final Color secondaryTextColor;
   final VoidCallback onTap;
   final VoidCallback? onClear;
 
   const _DateTimeTile({
     required this.label,
     required this.value,
+    required this.surfaceColor,
+    required this.borderColor,
+    required this.primaryTextColor,
+    required this.secondaryTextColor,
     required this.onTap,
     this.onClear,
   });
@@ -407,12 +502,13 @@ class _DateTimeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      tileColor: surfaceColor,
       shape: RoundedRectangleBorder(
-        side: BorderSide(color: Colors.grey.shade300),
+        side: BorderSide(color: borderColor),
         borderRadius: BorderRadius.circular(12),
       ),
-      title: Text(label),
-      subtitle: Text(value),
+      title: Text(label, style: TextStyle(color: primaryTextColor)),
+      subtitle: Text(value, style: TextStyle(color: secondaryTextColor)),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

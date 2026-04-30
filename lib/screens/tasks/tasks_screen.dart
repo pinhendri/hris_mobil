@@ -87,9 +87,12 @@ class TasksScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
+        backgroundColor: isDark ? const Color(0xFF101214) : const Color(0xFFF6F8FC),
         appBar: AppBar(
           title: Text(
             'My Tasks',
@@ -156,6 +159,10 @@ class TasksScreen extends StatelessWidget {
     TaskProvider provider,
     List<TaskModel> tasks,
   ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryTextColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF111827);
+    final secondaryTextColor = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+
     if (provider.error != null && provider.tasks.isEmpty) {
       return Center(
         child: Padding(
@@ -163,14 +170,14 @@ class TasksScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              Icon(Icons.error_outline, size: 64, color: secondaryTextColor),
               const SizedBox(height: 16),
               Text(
                 provider.error!,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
                   fontSize: 14,
-                  color: Colors.grey.shade700,
+                  color: secondaryTextColor,
                 ),
               ),
               const SizedBox(height: 16),
@@ -196,17 +203,17 @@ class TasksScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.check_circle_outline,
                       size: 64,
-                      color: Colors.grey,
+                      color: secondaryTextColor,
                     ),
                     const SizedBox(height: 16),
                     Text(
                       'No tasks found',
                       style: GoogleFonts.poppins(
                         fontSize: 16,
-                        color: Colors.grey,
+                        color: primaryTextColor,
                       ),
                     ),
                   ],
@@ -221,7 +228,7 @@ class TasksScreen extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: provider.refresh,
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         itemCount: tasks.length,
         itemBuilder: (context, index) {
           final task = tasks[index];
@@ -236,11 +243,19 @@ class TasksScreen extends StatelessWidget {
     TaskProvider provider,
     TaskModel task,
   ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isBusy = provider.isUpdating(task.id) || provider.isDeleting(task.id);
     final isOverdue =
         task.dueDate != null &&
         task.dueDate!.isBefore(DateTime.now()) &&
         !task.isCompleted;
+    final cardColor = isDark ? const Color(0xFF1B1F24) : Colors.white;
+    final borderColor = isDark ? const Color(0xFF2F3844) : const Color(0xFFE2E8F0);
+    final primaryTextColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF1F2937);
+    final secondaryTextColor = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF6B7280);
+    final mutedTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF6B7280);
+    final chipColor = isDark ? const Color(0xFF27303B) : const Color(0xFFF3F4F6);
+    final checkboxBorderColor = isDark ? const Color(0xFF93C5FD) : AppColors.primary;
 
     Color priorityColor;
     switch (task.priority) {
@@ -262,11 +277,12 @@ class TasksScreen extends StatelessWidget {
         child: Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardColor,
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
+                color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -284,7 +300,20 @@ class TasksScreen extends StatelessWidget {
                       scale: 1.2,
                       child: Checkbox(
                         value: task.isCompleted,
-                        activeColor: const Color(0xFF1A237E),
+                        activeColor: AppColors.primary,
+                        checkColor: Colors.white,
+                        side: BorderSide(color: checkboxBorderColor, width: 1.8),
+                        fillColor: WidgetStateProperty.resolveWith((states) {
+                          if (states.contains(WidgetState.selected)) {
+                            return AppColors.primary;
+                          }
+                          if (states.contains(WidgetState.disabled)) {
+                            return isDark
+                                ? const Color(0xFF27303B)
+                                : const Color(0xFFF1F5F9);
+                          }
+                          return Colors.transparent;
+                        }),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(4),
                         ),
@@ -332,10 +361,11 @@ class TasksScreen extends StatelessWidget {
                                   style: GoogleFonts.poppins(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF1F2937),
+                                    color: primaryTextColor,
                                     decoration: task.isCompleted
                                         ? TextDecoration.lineThrough
                                         : null,
+                                    decorationColor: secondaryTextColor,
                                   ),
                                 ),
                               ),
@@ -362,6 +392,10 @@ class TasksScreen extends StatelessWidget {
                                 const SizedBox(width: 4),
                                 PopupMenuButton<String>(
                                   tooltip: 'Task actions',
+                                  color: isDark
+                                      ? const Color(0xFF1F2937)
+                                      : Colors.white,
+                                  iconColor: secondaryTextColor,
                                   onSelected: (value) {
                                     if (value == 'edit') {
                                       _openTaskForm(context, task: task);
@@ -394,7 +428,7 @@ class TasksScreen extends StatelessWidget {
                               task.description,
                               style: GoogleFonts.poppins(
                                 fontSize: 14,
-                                color: const Color(0xFF6B7280),
+                                color: secondaryTextColor,
                               ),
                             ),
                           ],
@@ -414,10 +448,12 @@ class TasksScreen extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.calendar_today,
                             size: 14,
-                            color: Color(0xFF9CA3AF),
+                            color: isOverdue
+                                ? Colors.red.shade400
+                                : mutedTextColor,
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -428,7 +464,7 @@ class TasksScreen extends StatelessWidget {
                               fontSize: 12,
                               color: isOverdue
                                   ? Colors.red
-                                  : const Color(0xFF6B7280),
+                                  : mutedTextColor,
                               fontWeight: isOverdue
                                   ? FontWeight.w600
                                   : FontWeight.normal,
@@ -442,15 +478,16 @@ class TasksScreen extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
+                          color: chipColor,
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: borderColor),
                         ),
                         child: Text(
                           task.type.toUpperCase(),
                           style: GoogleFonts.poppins(
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
-                            color: const Color(0xFF4B5563),
+                            color: secondaryTextColor,
                           ),
                         ),
                       ),
@@ -791,11 +828,36 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
 
   Future<void> _pickDueDate() async {
     final now = DateTime.now();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final picked = await showDatePicker(
       context: context,
       initialDate: _dueDate ?? now,
       firstDate: DateTime(now.year - 5),
       lastDate: DateTime(now.year + 10),
+      builder: (context, child) {
+        final baseTheme = Theme.of(context);
+        return Theme(
+          data: baseTheme.copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: AppColors.primary,
+                    onPrimary: Colors.white,
+                    surface: Color(0xFF1B1F24),
+                    onSurface: Color(0xFFF8FAFC),
+                  )
+                : const ColorScheme.light(
+                    primary: AppColors.primary,
+                    onPrimary: Colors.white,
+                    surface: Colors.white,
+                    onSurface: Color(0xFF111827),
+                  ),
+            dialogTheme: DialogThemeData(
+              backgroundColor: isDark ? const Color(0xFF1B1F24) : Colors.white,
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
 
     if (picked == null) {
@@ -866,14 +928,63 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
     Navigator.of(context).pop();
   }
 
+  InputDecoration _inputDecoration({
+    required bool isDark,
+    required Color fieldColor,
+    required Color borderColor,
+  }) {
+    final labelColor = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569);
+
+    return InputDecoration(
+      filled: true,
+      fillColor: fieldColor,
+      labelStyle: GoogleFonts.poppins(
+        color: labelColor,
+        fontWeight: FontWeight.w500,
+      ),
+      hintStyle: GoogleFonts.poppins(
+        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF9CA3AF),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: borderColor.withValues(alpha: 0.55)),
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: borderColor),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? const Color(0xFF1B1F24) : Colors.white;
+    final fieldColor = isDark ? const Color(0xFF111827) : const Color(0xFFF8FAFC);
+    final borderColor = isDark ? const Color(0xFF334155) : const Color(0xFFD1D5DB);
+    final primaryTextColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF1F2937);
+    final secondaryTextColor = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF4B5563);
+    final mutedTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF6B7280);
+    final inputDecoration = _inputDecoration(
+      isDark: isDark,
+      fieldColor: fieldColor,
+      borderColor: borderColor,
+    );
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border(top: BorderSide(color: borderColor)),
       ),
       child: SafeArea(
         top: false,
@@ -887,7 +998,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                   width: 42,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: isDark ? const Color(0xFF475569) : Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -898,16 +1009,17 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                 style: GoogleFonts.poppins(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1F2937),
+                  color: primaryTextColor,
                 ),
               ),
               const SizedBox(height: 20),
               TextField(
                 controller: _titleController,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
+                style: GoogleFonts.poppins(color: primaryTextColor),
+                cursorColor: AppColors.primary,
+                decoration: inputDecoration.copyWith(
                   labelText: 'Title',
-                  border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 16),
@@ -915,9 +1027,10 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                 controller: _descriptionController,
                 minLines: 3,
                 maxLines: 5,
-                decoration: const InputDecoration(
+                style: GoogleFonts.poppins(color: primaryTextColor),
+                cursorColor: AppColors.primary,
+                decoration: inputDecoration.copyWith(
                   labelText: 'Description',
-                  border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 16),
@@ -926,9 +1039,11 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _priority,
-                      decoration: const InputDecoration(
+                      dropdownColor: surfaceColor,
+                      style: GoogleFonts.poppins(color: primaryTextColor),
+                      iconEnabledColor: secondaryTextColor,
+                      decoration: inputDecoration.copyWith(
                         labelText: 'Priority',
-                        border: OutlineInputBorder(),
                       ),
                       items: const [
                         DropdownMenuItem(value: 'high', child: Text('High')),
@@ -955,9 +1070,11 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _type,
-                      decoration: const InputDecoration(
+                      dropdownColor: surfaceColor,
+                      style: GoogleFonts.poppins(color: primaryTextColor),
+                      iconEnabledColor: secondaryTextColor,
+                      decoration: inputDecoration.copyWith(
                         labelText: 'Type',
-                        border: OutlineInputBorder(),
                       ),
                       items: const [
                         DropdownMenuItem(
@@ -993,7 +1110,8 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
+                  color: fieldColor,
+                  border: Border.all(color: borderColor),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -1004,6 +1122,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                       style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
+                        color: primaryTextColor,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -1013,7 +1132,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                           : 'Belum diatur',
                       style: GoogleFonts.poppins(
                         fontSize: 14,
-                        color: const Color(0xFF4B5563),
+                        color: mutedTextColor,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1023,6 +1142,12 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                         OutlinedButton.icon(
                           onPressed: _isSubmitting ? null : _pickDueDate,
                           icon: const Icon(Icons.date_range),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: isDark
+                                ? const Color(0xFF93C5FD)
+                                : AppColors.primary,
+                            side: BorderSide(color: borderColor),
+                          ),
                           label: Text(
                             _dueDate == null ? 'Pick Date' : 'Change Date',
                           ),
@@ -1036,6 +1161,11 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                                       _dueDate = null;
                                     });
                                   },
+                            style: TextButton.styleFrom(
+                              foregroundColor: isDark
+                                  ? const Color(0xFFFCA5A5)
+                                  : Colors.red.shade600,
+                            ),
                             child: const Text('Clear'),
                           ),
                       ],
@@ -1051,6 +1181,10 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                       onPressed: _isSubmitting
                           ? null
                           : () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: secondaryTextColor,
+                        side: BorderSide(color: borderColor),
+                      ),
                       child: const Text('Cancel'),
                     ),
                   ),

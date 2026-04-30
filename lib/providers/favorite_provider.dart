@@ -56,9 +56,9 @@ class FavoriteProvider with ChangeNotifier {
       color: Colors.amber,
     ),
     FeatureItem(
-      id: 'performance',
-      label: 'Performance',
-      icon: Icons.trending_up,
+      id: 'kpi',
+      label: 'KPI',
+      icon: Icons.bar_chart_rounded,
       color: Colors.redAccent,
     ),
     FeatureItem(
@@ -105,7 +105,7 @@ class FavoriteProvider with ChangeNotifier {
     ),
     FeatureItem(
       id: 'corrections',
-      label: 'Corrections',
+      label: 'Correction',
       icon: Icons.build_circle_outlined,
       color: Colors.redAccent,
     ),

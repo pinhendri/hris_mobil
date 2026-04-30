@@ -117,6 +117,41 @@ class ApiService {
     }
   }
 
+  Future<dynamic> patch(String endpoint, [Map<String, dynamic>? data]) async {
+    final headers = await _getHeaders();
+    final url = '$baseUrl/api$endpoint';
+
+    _debugLog('PATCH: $url');
+    if (data != null) {
+      _debugLog('PATCH Payload: ${_previewBody(jsonEncode(data))}');
+    }
+
+    try {
+      final response = await http
+          .patch(
+            Uri.parse(url),
+            headers: headers,
+            body: data == null ? null : jsonEncode(data),
+          )
+          .timeout(_requestTimeout);
+
+      _debugLog(
+        'PATCH Response (${response.statusCode}): ${_previewBody(response.body)}',
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return _decodeResponse(response);
+      }
+
+      throw Exception(
+        'HTTP ${response.statusCode}: ${_previewBody(response.body)}',
+      );
+    } catch (error) {
+      _debugLog('PATCH error: $error');
+      throw Exception('Network error: $error');
+    }
+  }
+
   Future<dynamic> delete(String endpoint) async {
     final headers = await _getHeaders();
     final url = '$baseUrl/api$endpoint';

@@ -189,6 +189,52 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
   String get _employeeIdPreview =>
       _generatedEmployeeId ?? '${_employeePrefix}XXXXX';
 
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _pageColor =>
+      _isDarkMode ? const Color(0xFF020817) : const Color(0xFFF8FAFC);
+
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+
+  Color get _fieldColor =>
+      _isDarkMode ? const Color(0xFF0F172A) : AppColors.inputBackground;
+
+  Color get _borderColor =>
+      _isDarkMode ? const Color(0xFF334155) : AppColors.inputBorder;
+
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF8FAFC) : AppColors.textPrimary;
+
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFCBD5E1) : AppColors.textSecondary;
+
+  InputDecoration _employeeInputDecoration({
+    required String label,
+    required IconData icon,
+    String? hint,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon, color: _secondaryTextColor),
+      labelStyle: TextStyle(color: _secondaryTextColor),
+      hintStyle: TextStyle(color: _secondaryTextColor),
+      floatingLabelBehavior: FloatingLabelBehavior.auto,
+      filled: true,
+      fillColor: _fieldColor,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: _borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -327,11 +373,13 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       );
 
       final dynamic raw = response;
-      final dynamic data =
-          raw is Map<String, dynamic> ? (raw['data'] ?? raw) : raw;
+      final dynamic data = raw is Map<String, dynamic>
+          ? (raw['data'] ?? raw)
+          : raw;
 
-      final dynamic prefixValue =
-          data is Map<String, dynamic> ? data['emp_type'] : null;
+      final dynamic prefixValue = data is Map<String, dynamic>
+          ? data['emp_type']
+          : null;
 
       final prefix = (prefixValue ?? '').toString().trim().toUpperCase();
 
@@ -344,7 +392,9 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
   Future<void> _loadPositions() async {
     try {
       final response = await _apiService.get('/employees/master/position');
-      final rawData = response is Map<String, dynamic> ? response['data'] : null;
+      final rawData = response is Map<String, dynamic>
+          ? response['data']
+          : null;
       if (rawData is! List) {
         return;
       }
@@ -430,14 +480,16 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       firstDate: DateTime(1900),
       lastDate: DateTime(2101),
       builder: (context, child) {
+        final base = Theme.of(context);
         return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
+          data: base.copyWith(
+            colorScheme: base.colorScheme.copyWith(
               primary: AppColors.primary,
               onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: AppColors.textPrimary,
+              surface: _surfaceColor,
+              onSurface: _primaryTextColor,
             ),
+            dialogTheme: DialogThemeData(backgroundColor: _surfaceColor),
           ),
           child: child!,
         );
@@ -461,7 +513,11 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text("Select Year"),
+          backgroundColor: _surfaceColor,
+          title: Text(
+            "Select Year",
+            style: TextStyle(color: _primaryTextColor),
+          ),
           content: SizedBox(
             width: 300,
             height: 300,
@@ -485,56 +541,59 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
-    final requiredPermission =
-        widget.employee == null ? 'create-employee' : 'edit-employee';
+    final requiredPermission = widget.employee == null
+        ? 'create-employee'
+        : 'edit-employee';
 
     if (!authProvider.hasPermission(requiredPermission)) {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: _pageColor,
         appBar: AppBar(
           title: Text(
             widget.employee == null ? 'Add New Employee' : 'Edit Employee',
-            style: const TextStyle(
-              color: AppColors.textPrimary,
+            style: TextStyle(
+              color: _primaryTextColor,
               fontWeight: FontWeight.bold,
             ),
           ),
-          backgroundColor: Colors.white,
+          backgroundColor: _surfaceColor,
+          surfaceTintColor: _surfaceColor,
+          foregroundColor: _primaryTextColor,
           elevation: 0,
           centerTitle: true,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
             onPressed: () => Navigator.pop(context),
           ),
         ),
-        body: AccessDeniedState(
-          permissionLabel: requiredPermission,
-        ),
+        body: AccessDeniedState(permissionLabel: requiredPermission),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _pageColor,
       appBar: AppBar(
         title: Text(
           widget.employee == null ? 'Add New Employee' : 'Edit Employee',
-          style: const TextStyle(
-            color: AppColors.textPrimary,
+          style: TextStyle(
+            color: _primaryTextColor,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _surfaceColor,
+        surfaceTintColor: _surfaceColor,
+        foregroundColor: _primaryTextColor,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
           onPressed: () => Navigator.pop(context),
         ),
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
           labelColor: AppColors.primary,
-          unselectedLabelColor: Colors.grey,
+          unselectedLabelColor: _secondaryTextColor,
           indicatorColor: AppColors.primary,
           tabs: const [
             Tab(text: '1. Personal'),
@@ -1439,7 +1498,9 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text(widget.employee == null ? 'Employee Created' : 'Employee Updated'),
+          title: Text(
+            widget.employee == null ? 'Employee Created' : 'Employee Updated',
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1634,10 +1695,10 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
-        color: AppColors.textPrimary,
+        color: _primaryTextColor,
       ),
     );
   }
@@ -1660,16 +1721,11 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       maxLines: maxLines,
       readOnly: readOnly,
       enabled: enabled,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon, color: AppColors.textSecondary),
-        floatingLabelBehavior: FloatingLabelBehavior.auto,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.inputBorder),
-        ),
+      style: TextStyle(color: _primaryTextColor),
+      decoration: _employeeInputDecoration(
+        label: label,
+        hint: hint,
+        icon: icon,
       ),
     );
   }
@@ -1691,22 +1747,18 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       initialValue: safeValue,
       items: items
           .map(
-            (String item) =>
-                DropdownMenuItem<String>(value: item, child: Text(item)),
+            (String item) => DropdownMenuItem<String>(
+              value: item,
+              child: Text(item, style: TextStyle(color: _primaryTextColor)),
+            ),
           )
           .toList(),
       onChanged: onChanged,
       validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: AppColors.textSecondary),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.inputBorder),
-        ),
-      ),
-      icon: const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary),
+      dropdownColor: _surfaceColor,
+      style: TextStyle(color: _primaryTextColor),
+      decoration: _employeeInputDecoration(label: label, icon: icon),
+      icon: Icon(Icons.arrow_drop_down, color: _secondaryTextColor),
     );
   }
 
@@ -1729,22 +1781,20 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
           .map(
             (item) => DropdownMenuItem<String>(
               value: item.value,
-              child: Text(item.label, overflow: TextOverflow.ellipsis),
+              child: Text(
+                item.label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: _primaryTextColor),
+              ),
             ),
           )
           .toList(),
       onChanged: onChanged,
       validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: AppColors.textSecondary),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.inputBorder),
-        ),
-      ),
-      icon: const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary),
+      dropdownColor: _surfaceColor,
+      style: TextStyle(color: _primaryTextColor),
+      decoration: _employeeInputDecoration(label: label, icon: icon),
+      icon: Icon(Icons.arrow_drop_down, color: _secondaryTextColor),
     );
   }
 
@@ -1759,17 +1809,17 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: AppColors.inputBackground,
+          color: _fieldColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: errorText != null ? Colors.red : AppColors.inputBorder,
+            color: errorText != null ? Colors.red : _borderColor,
           ),
         ),
         child: Row(
           children: [
             Icon(
               Icons.calendar_today_outlined,
-              color: errorText != null ? Colors.red : AppColors.textSecondary,
+              color: errorText != null ? Colors.red : _secondaryTextColor,
             ),
             const SizedBox(width: 12),
             Text(
@@ -1778,8 +1828,8 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
                   : DateFormat('dd/MM/yyyy').format(selectedDate),
               style: TextStyle(
                 color: selectedDate == null
-                    ? (errorText != null ? Colors.red : AppColors.textSecondary)
-                    : AppColors.textPrimary,
+                    ? (errorText != null ? Colors.red : _secondaryTextColor)
+                    : _primaryTextColor,
                 fontSize: 16,
               ),
             ),

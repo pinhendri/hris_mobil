@@ -32,6 +32,28 @@ class _AddEditDepartmentScreenState extends State<AddEditDepartmentScreen> {
 
   bool _isInit = true;
 
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _pageColor =>
+      _isDarkMode ? const Color(0xFF020817) : const Color(0xFFF8FAFC);
+
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+
+  Color get _fieldColor => _isDarkMode ? const Color(0xFF0F172A) : Colors.white;
+
+  Color get _readOnlyFieldColor =>
+      _isDarkMode ? const Color(0xFF1F2937) : const Color(0xFFF1F5F9);
+
+  Color get _borderColor =>
+      _isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+
   @override
   void initState() {
     super.initState();
@@ -49,7 +71,7 @@ class _AddEditDepartmentScreenState extends State<AddEditDepartmentScreen> {
     _selectedLocation = widget.department?.location;
     _selectedType = widget.department?.type ?? 'Functional';
     _selectedManagerRole = widget.department?.managerRole;
-_selectedParentId = widget.department?.parentId?.toString();
+    _selectedParentId = widget.department?.parentId?.toString();
     _status = widget.department?.status ?? 'Active';
   }
 
@@ -71,73 +93,79 @@ _selectedParentId = widget.department?.parentId?.toString();
   }
 
   void _saveDepartment() async {
-  if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
 
-  final provider = Provider.of<DepartmentProvider>(context, listen: false);
-  
-  // Prepare data for API - this matches what your backend expects
-  final Map<String, dynamic> departmentData = {
-    'name': _nameController.text,
-    'code': _codeController.text,
-    'description': _descriptionController.text,
-    'employee_id': _selectedHeadId, // Backend uses employee_id
-    'location': _selectedLocation,
-    'type': _selectedType ?? 'Functional',
-    'manager_role': _selectedManagerRole,
-    'status': _status ?? 'Active',
-  };
-  
-  // Add parent_id only if it's not null
-  if (_selectedParentId != null && _selectedParentId!.isNotEmpty) {
-    departmentData['parent_id'] = int.tryParse(_selectedParentId!);
-  }
+    final provider = Provider.of<DepartmentProvider>(context, listen: false);
 
-  try {
-    bool success;
-    if (widget.department == null) {
-      // Create new department
-      success = await provider.addDepartment(departmentData);
-    } else {
-      // Update existing department
-      success = await provider.updateDepartment(widget.department!.id, departmentData);
+    // Prepare data for API - this matches what your backend expects
+    final Map<String, dynamic> departmentData = {
+      'name': _nameController.text,
+      'code': _codeController.text,
+      'description': _descriptionController.text,
+      'employee_id': _selectedHeadId, // Backend uses employee_id
+      'location': _selectedLocation,
+      'type': _selectedType ?? 'Functional',
+      'manager_role': _selectedManagerRole,
+      'status': _status ?? 'Active',
+    };
+
+    // Add parent_id only if it's not null
+    if (_selectedParentId != null && _selectedParentId!.isNotEmpty) {
+      departmentData['parent_id'] = int.tryParse(_selectedParentId!);
     }
-    
-    if (success && mounted) {
-      Navigator.pop(context, true); // Return true to indicate success
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.department == null
-                ? 'Department created successfully'
-                : 'Department updated successfully',
-            style: GoogleFonts.poppins(),
+
+    try {
+      bool success;
+      if (widget.department == null) {
+        // Create new department
+        success = await provider.addDepartment(departmentData);
+      } else {
+        // Update existing department
+        success = await provider.updateDepartment(
+          widget.department!.id,
+          departmentData,
+        );
+      }
+
+      if (success && mounted) {
+        Navigator.pop(context, true); // Return true to indicate success
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.department == null
+                  ? 'Department created successfully'
+                  : 'Department updated successfully',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.green,
           ),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else if (!success && mounted) {
-      // Show error from provider
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            provider.error ?? 'Operation failed',
-            style: GoogleFonts.poppins(),
+        );
+      } else if (!success && mounted) {
+        // Show error from provider
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              provider.error ?? 'Operation failed',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.red,
           ),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  } catch (error) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${error.toString()}', style: GoogleFonts.poppins()),
-          backgroundColor: Colors.red,
-        ),
-      );
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error: ${error.toString()}',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -150,19 +178,21 @@ _selectedParentId = widget.department?.parentId?.toString();
     }).toList();
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: _pageColor,
       appBar: AppBar(
         title: Text(
           widget.department == null ? 'Add Department' : 'Edit Department',
           style: GoogleFonts.poppins(
-            color: Colors.black,
+            color: _primaryTextColor,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _surfaceColor,
+        surfaceTintColor: _surfaceColor,
+        foregroundColor: _primaryTextColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
@@ -327,7 +357,7 @@ _selectedParentId = widget.department?.parentId?.toString();
       style: GoogleFonts.poppins(
         fontSize: 18,
         fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
+        color: _primaryTextColor,
       ),
     );
   }
@@ -347,7 +377,7 @@ _selectedParentId = widget.department?.parentId?.toString();
           label,
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
+            color: _secondaryTextColor,
             fontSize: 14,
           ),
         ),
@@ -357,19 +387,19 @@ _selectedParentId = widget.department?.parentId?.toString();
           maxLines: maxLines,
           readOnly: readOnly,
           validator: validator,
-          style: GoogleFonts.poppins(),
+          style: GoogleFonts.poppins(color: _primaryTextColor),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
-            filled: readOnly,
-            fillColor: readOnly ? Colors.grey[100] : Colors.white,
+            hintStyle: GoogleFonts.poppins(color: _secondaryTextColor),
+            filled: true,
+            fillColor: readOnly ? _readOnlyFieldColor : _fieldColor,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderSide: BorderSide(color: _borderColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderSide: BorderSide(color: _borderColor),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -402,7 +432,7 @@ _selectedParentId = widget.department?.parentId?.toString();
           label,
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
+            color: _secondaryTextColor,
             fontSize: 14,
           ),
         ),
@@ -412,17 +442,19 @@ _selectedParentId = widget.department?.parentId?.toString();
           initialValue: safeValue,
           items: items,
           onChanged: onChanged,
-          style: GoogleFonts.poppins(color: AppColors.textPrimary),
+          style: GoogleFonts.poppins(color: _primaryTextColor),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
+            hintStyle: GoogleFonts.poppins(color: _secondaryTextColor),
+            filled: true,
+            fillColor: _fieldColor,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderSide: BorderSide(color: _borderColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+              borderSide: BorderSide(color: _borderColor),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -433,8 +465,8 @@ _selectedParentId = widget.department?.parentId?.toString();
               vertical: 16,
             ),
           ),
-          dropdownColor: Colors.white,
-          icon: const Icon(Icons.keyboard_arrow_down),
+          dropdownColor: _surfaceColor,
+          icon: Icon(Icons.keyboard_arrow_down, color: _secondaryTextColor),
         ),
       ],
     );

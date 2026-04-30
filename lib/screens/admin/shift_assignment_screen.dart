@@ -18,6 +18,73 @@ class ShiftAssignmentScreen extends StatefulWidget {
 }
 
 class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+
+  Color get _pageColor =>
+      _isDarkMode ? const Color(0xFF020817) : const Color(0xFFF8FAFC);
+
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+
+  Color get _fieldColor => _isDarkMode ? const Color(0xFF0F172A) : Colors.white;
+
+  Color get _borderColor =>
+      _isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+
+  InputDecoration _inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: _secondaryTextColor),
+      filled: true,
+      fillColor: _fieldColor,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: _borderColor),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: _borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+      ),
+    );
+  }
+
+  Future<DateTime?> _pickDate({
+    required DateTime initialDate,
+    required DateTime firstDate,
+  }) {
+    final base = Theme.of(context);
+    return showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: base.copyWith(
+            colorScheme: base.colorScheme.copyWith(
+              surface: _surfaceColor,
+              onSurface: _primaryTextColor,
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+            ),
+            dialogTheme: DialogThemeData(backgroundColor: _surfaceColor),
+          ),
+          child: child!,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
@@ -26,23 +93,22 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
 
     if (!canAccessShiftAssignment) {
       return Scaffold(
-        backgroundColor: Colors.grey[50],
+        backgroundColor: _pageColor,
         appBar: AppBar(
-          title: const Text(
+          title: Text(
             'Shift Assignment',
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: _primaryTextColor,
               fontWeight: FontWeight.bold,
             ),
           ),
-          backgroundColor: Colors.white,
+          backgroundColor: _surfaceColor,
+          surfaceTintColor: _surfaceColor,
+          foregroundColor: _primaryTextColor,
           centerTitle: true,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios,
-              color: AppColors.textPrimary,
-            ),
+            icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
             onPressed: () => Navigator.pop(context),
           ),
         ),
@@ -51,20 +117,22 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: _pageColor,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Shift Assignment',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: _primaryTextColor,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _surfaceColor,
+        surfaceTintColor: _surfaceColor,
+        foregroundColor: _primaryTextColor,
         centerTitle: true,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -116,16 +184,12 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.assignment,
-            color: AppColors.textSecondary,
-            size: 48,
-          ),
+          Icon(Icons.assignment, color: _secondaryTextColor, size: 48),
           const SizedBox(height: 12),
           Text(
             'No shift orders yet',
             style: GoogleFonts.poppins(
-              color: AppColors.textSecondary,
+              color: _secondaryTextColor,
               fontSize: 14,
             ),
           ),
@@ -154,11 +218,12 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _borderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: _isDarkMode ? 0.18 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -175,17 +240,17 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                   children: [
                     Text(
                       shift?.name ?? 'Unknown Shift',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: _primaryTextColor,
                         fontSize: 16,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Range: $rangeStr • Created: $createdStr',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: _secondaryTextColor,
                         fontSize: 12,
                       ),
                     ),
@@ -300,7 +365,11 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('Add Shift Order'),
+              backgroundColor: _surfaceColor,
+              title: Text(
+                'Add Shift Order',
+                style: TextStyle(color: _primaryTextColor),
+              ),
               content: SizedBox(
                 width: 480,
                 child: SingleChildScrollView(
@@ -310,17 +379,22 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                     children: [
                       // Shift Selection
                       DropdownButtonFormField<String>(
-                        value: selectedShiftId,
+                        initialValue: selectedShiftId,
+                        dropdownColor: _surfaceColor,
+                        style: TextStyle(color: _primaryTextColor),
                         items: shifts
                             .map(
                               (s) => DropdownMenuItem(
                                 value: s.id,
-                                child: Text(s.name),
+                                child: Text(
+                                  s.name,
+                                  style: TextStyle(color: _primaryTextColor),
+                                ),
                               ),
                             )
                             .toList(),
                         onChanged: (v) => setState(() => selectedShiftId = v),
-                        decoration: const InputDecoration(labelText: 'Shift'),
+                        decoration: _inputDecoration('Shift'),
                       ),
                       const SizedBox(height: 12),
 
@@ -330,15 +404,14 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                           Expanded(
                             child: Text(
                               'Start: ${DateFormat('MMM dd, yyyy').format(startDate)}',
+                              style: TextStyle(color: _primaryTextColor),
                             ),
                           ),
                           TextButton(
                             onPressed: () async {
-                              final picked = await showDatePicker(
-                                context: context,
+                              final picked = await _pickDate(
                                 initialDate: startDate,
                                 firstDate: DateTime(2020),
-                                lastDate: DateTime(2100),
                               );
                               if (picked != null) {
                                 setState(() => startDate = picked);
@@ -356,15 +429,14 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                           Expanded(
                             child: Text(
                               'End: ${endDate != null ? DateFormat('MMM dd, yyyy').format(endDate!) : 'No end'}',
+                              style: TextStyle(color: _primaryTextColor),
                             ),
                           ),
                           TextButton(
                             onPressed: () async {
-                              final picked = await showDatePicker(
-                                context: context,
+                              final picked = await _pickDate(
                                 initialDate: endDate ?? startDate,
                                 firstDate: startDate,
-                                lastDate: DateTime(2100),
                               );
                               if (picked != null) {
                                 setState(() => endDate = picked);
@@ -384,9 +456,12 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                       // Active Switch
                       Row(
                         children: [
-                          const Text(
+                          Text(
                             'Active',
-                            style: TextStyle(fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              color: _primaryTextColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Switch(
@@ -401,6 +476,7 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                       Text(
                         'Select Employees',
                         style: GoogleFonts.poppins(
+                          color: _primaryTextColor,
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
@@ -408,16 +484,16 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: empQueryController,
-                        decoration: const InputDecoration(
-                          labelText: 'Search name or NIP',
-                        ),
+                        style: TextStyle(color: _primaryTextColor),
+                        decoration: _inputDecoration('Search name or NIP'),
                         onChanged: (v) => setState(() {}),
                       ),
                       const SizedBox(height: 8),
                       Container(
                         constraints: const BoxConstraints(maxHeight: 180),
                         decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.inputBorder),
+                          color: _fieldColor,
+                          border: Border.all(color: _borderColor),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: ListView.builder(
@@ -439,10 +515,18 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                             final e = filtered[index];
                             final checked = selectedEmployeeIds.contains(e.id);
                             return ListTile(
-                              title: Text('${e.name} (${e.id})'),
-                              subtitle: Text(e.position),
+                              title: Text(
+                                '${e.name} (${e.id})',
+                                style: TextStyle(color: _primaryTextColor),
+                              ),
+                              subtitle: Text(
+                                e.position,
+                                style: TextStyle(color: _secondaryTextColor),
+                              ),
                               trailing: Checkbox(
                                 value: checked,
+                                activeColor: AppColors.primary,
+                                checkColor: Colors.white,
                                 onChanged: (v) {
                                   setState(() {
                                     if (v == true) {
@@ -488,6 +572,7 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                       Text(
                         'Select Departments',
                         style: GoogleFonts.poppins(
+                          color: _primaryTextColor,
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
@@ -495,16 +580,16 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: deptQueryController,
-                        decoration: const InputDecoration(
-                          labelText: 'Search name or code',
-                        ),
+                        style: TextStyle(color: _primaryTextColor),
+                        decoration: _inputDecoration('Search name or code'),
                         onChanged: (v) => setState(() {}),
                       ),
                       const SizedBox(height: 8),
                       Container(
                         constraints: const BoxConstraints(maxHeight: 180),
                         decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.inputBorder),
+                          color: _fieldColor,
+                          border: Border.all(color: _borderColor),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: ListView.builder(
@@ -534,10 +619,18 @@ class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
                             );
 
                             return ListTile(
-                              title: Text(d.name),
-                              subtitle: Text('Code: ${d.code ?? 'N/A'}'),
+                              title: Text(
+                                d.name,
+                                style: TextStyle(color: _primaryTextColor),
+                              ),
+                              subtitle: Text(
+                                'Code: ${d.code ?? 'N/A'}',
+                                style: TextStyle(color: _secondaryTextColor),
+                              ),
                               trailing: Checkbox(
                                 value: checked,
+                                activeColor: AppColors.primary,
+                                checkColor: Colors.white,
                                 onChanged: (v) {
                                   setState(() {
                                     if (v == true) {

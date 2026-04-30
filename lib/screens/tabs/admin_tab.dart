@@ -7,15 +7,19 @@ import '../../providers/auth_provider.dart';
 import '../../providers/broadcast_provider.dart';
 import '../../providers/claim_provider.dart';
 import '../../providers/department_provider.dart';
+import '../../providers/employee_provider.dart';
 import '../admin/broadcast_screen.dart';
 import '../admin/claim_management_screen.dart';
 import '../admin/claim_reports_screen.dart';
+import '../admin/common_master_menu_screen.dart';
 import '../admin/correction_management_screen.dart';
 import '../admin/department_list_screen.dart';
 import '../admin/event_management_screen.dart';
 import '../admin/leave_management_enhanced_screen.dart';
 import '../admin/master_shift_screen.dart';
+import '../admin/org_structure_screen.dart';
 import '../admin/shift_assignment_screen.dart';
+import '../admin/user_management_menu_screen.dart';
 import '../attendance/attendance_settings_screen.dart';
 import '../employee/add_employee_screen.dart';
 import '../employee/employee_list_screen.dart';
@@ -595,6 +599,72 @@ class AdminTab extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const EmployeeListScreen(),
+                  ),
+                );
+              },
+            ),
+          if (authProvider.hasPermission('view-struktur-organisasi') ||
+              authProvider.canAccessEmployeeMasterModule)
+            _AdminMenuItem(
+              title: context.tr('admin_org_structure'),
+              subtitle: context.tr('admin_org_structure_subtitle'),
+              icon: Icons.account_tree_outlined,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF2563EB), Color(0xFF38BDF8)],
+              ),
+              badge: context.tr('admin_badge_master'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ChangeNotifierProvider(
+                      create: (_) => EmployeeProvider(),
+                      child: const OrgStructureScreen(),
+                    ),
+                  ),
+                );
+              },
+            ),
+          if (authProvider.hasAnyPermission([
+            'view-settings',
+            'assign-roles',
+            'view-roles',
+          ]))
+            _AdminMenuItem(
+              title: context.tr('admin_common_master'),
+              subtitle: context.tr('admin_common_master_subtitle'),
+              icon: Icons.dataset_outlined,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0F766E), Color(0xFF14B8A6)],
+              ),
+              badge: context.tr('admin_badge_master'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CommonMasterMenuScreen(),
+                  ),
+                );
+              },
+            ),
+          if (authProvider.hasAnyPermission([
+            'assign-roles',
+            'view-roles',
+            'view-permissions',
+          ]))
+            _AdminMenuItem(
+              title: context.tr('admin_user_management'),
+              subtitle: context.tr('admin_user_management_subtitle'),
+              icon: Icons.manage_accounts_outlined,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4F46E5), Color(0xFF8B5CF6)],
+              ),
+              badge: context.tr('admin_badge_master'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const UserManagementMenuScreen(),
                   ),
                 );
               },

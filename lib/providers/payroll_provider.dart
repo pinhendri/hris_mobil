@@ -28,6 +28,9 @@ class PayrollProvider with ChangeNotifier {
   }
 
   Future<void> downloadPayslip(String id) async {
+    if (_payslips.isEmpty) {
+      throw StateError('Tidak ada payslip untuk didownload');
+    }
     final payslip = _payslips.firstWhere(
       (p) => p.id == id,
       orElse: () => _payslips.first,

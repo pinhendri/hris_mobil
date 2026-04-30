@@ -13,11 +13,18 @@ class PayslipScreen extends StatefulWidget {
 }
 
 class _PayslipScreenState extends State<PayslipScreen> {
+  static const int _pageSize = 20;
+
+  int _visibleCount = _pageSize;
+  String _query = '';
+  String _statusFilter = 'all';
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<PayrollProvider>(context, listen: false).fetchPayslips();
+      if (!mounted) return;
+      context.read<PayrollProvider>().fetchPayslips();
     });
   }
 
@@ -51,17 +58,110 @@ class _PayslipScreenState extends State<PayslipScreen> {
             return const Center(child: Text('No payslips available'));
           }
 
+          final payslips = _filteredPayslips(provider.payslips);
+          final visiblePayslips = payslips.take(_visibleCount).toList();
+          final hiddenCount = payslips.length - visiblePayslips.length;
+
           return ListView.builder(
             padding: const EdgeInsets.all(20),
-            itemCount: provider.payslips.length,
+            itemCount: visiblePayslips.length + 2 + (hiddenCount > 0 ? 1 : 0),
             itemBuilder: (context, index) {
-              final payslip = provider.payslips[index];
+              if (index == 0) {
+                return _buildFilters(provider.payslips);
+              }
+              if (index == 1) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Menampilkan ${visiblePayslips.length} dari ${payslips.length} payslip',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                );
+              }
+              final payslipIndex = index - 2;
+              if (payslipIndex >= visiblePayslips.length) {
+                return Center(
+                  child: TextButton.icon(
+                    onPressed: () => setState(() {
+                      _visibleCount += _pageSize;
+                    }),
+                    icon: const Icon(Icons.expand_more_rounded),
+                    label: Text('Muat 20 lagi ($hiddenCount tersisa)'),
+                  ),
+                );
+              }
+              final payslip = visiblePayslips[payslipIndex];
               return _buildPayslipCard(context, payslip);
             },
           );
         },
       ),
     );
+  }
+
+  Widget _buildFilters(List<Payslip> payslips) {
+    final statuses = {
+      'all': 'All',
+      for (final payslip in payslips)
+        payslip.status.toLowerCase(): payslip.status,
+    };
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        children: [
+          TextField(
+            decoration: const InputDecoration(
+              labelText: 'Cari payslip',
+              prefixIcon: Icon(Icons.search_rounded),
+            ),
+            onChanged: (value) => setState(() {
+              _query = value;
+              _visibleCount = _pageSize;
+            }),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: statuses.containsKey(_statusFilter)
+                ? _statusFilter
+                : 'all',
+            decoration: const InputDecoration(labelText: 'Status'),
+            items: statuses.entries
+                .map(
+                  (entry) => DropdownMenuItem(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) => setState(() {
+              _statusFilter = value ?? 'all';
+              _visibleCount = _pageSize;
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Payslip> _filteredPayslips(List<Payslip> payslips) {
+    final query = _query.trim().toLowerCase();
+    return payslips.where((payslip) {
+      if (_statusFilter != 'all' &&
+          payslip.status.toLowerCase() != _statusFilter) {
+        return false;
+      }
+      if (query.isEmpty) return true;
+      return [
+        payslip.id,
+        payslip.month,
+        payslip.year,
+        payslip.status,
+      ].join(' ').toLowerCase().contains(query);
+    }).toList();
   }
 
   Widget _buildPayslipCard(BuildContext context, Payslip payslip) {
@@ -178,6 +278,7 @@ class _PayslipScreenState extends State<PayslipScreen> {
                   context,
                   listen: false,
                 ).downloadPayslip(payslip.id);
+                if (!context.mounted) return;
                 messenger.showSnackBar(
                   const SnackBar(
                     content: Text(

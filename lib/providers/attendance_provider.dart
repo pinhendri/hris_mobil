@@ -2041,24 +2041,24 @@ class AttendanceProvider with ChangeNotifier {
       return;
     }
 
+    final locations = <AttendanceLocation>[];
     final employeeUuid = await _getCurrentEmployeeUuid();
     final resolvedLocation = await _loadResolvedEmployeeLocation(employeeUuid);
     if (resolvedLocation != null) {
-      _allowedLocations = [resolvedLocation];
-      notifyListeners();
-      return;
+      locations.add(resolvedLocation);
     }
 
     final vendorLocation = await _loadAssignedVendorLocation(employeeUuid);
     if (vendorLocation != null) {
-      _allowedLocations = [vendorLocation];
-      notifyListeners();
-      return;
+      locations.add(vendorLocation);
     }
 
-    final entityLookup = await _loadPrimaryEntityLocation();
-    if (entityLookup.location != null) {
-      _allowedLocations = [entityLookup.location!];
+    final entityLookup = await _loadActiveEntityLocations();
+    locations.addAll(entityLookup.locations);
+
+    final uniqueLocations = _uniqueLocations(locations);
+    if (uniqueLocations.isNotEmpty) {
+      _allowedLocations = uniqueLocations;
       notifyListeners();
       return;
     }
@@ -2095,7 +2095,12 @@ class AttendanceProvider with ChangeNotifier {
     return null;
   }
 
-  Future<_EntityLocationLookupResult> _loadPrimaryEntityLocation() async {
+  Future<_EntityLocationLookupResult> _loadActiveEntityLocations() async {
+    final entityListLookup = await _loadEntityLocationsFromList();
+    if (entityListLookup.locations.isNotEmpty) {
+      return entityListLookup;
+    }
+
     var shouldFallbackToSettings = false;
 
     try {
@@ -2117,7 +2122,7 @@ class AttendanceProvider with ChangeNotifier {
           final entity = Map<String, dynamic>.from(data['data'] as Map);
           final location = _parseEntityLocation(entity);
           if (location != null) {
-            return _EntityLocationLookupResult(location: location);
+            return _EntityLocationLookupResult(locations: [location]);
           }
         }
       }
@@ -2125,18 +2130,12 @@ class AttendanceProvider with ChangeNotifier {
       print('Error loading active default entity location: $e');
     }
 
-    final entityListLookup = await _loadEntityLocationFromList();
-    if (entityListLookup.location != null) {
-      return entityListLookup;
-    }
-
     return _EntityLocationLookupResult(
-      shouldFallbackToSettings:
-          shouldFallbackToSettings || entityListLookup.shouldFallbackToSettings,
+      shouldFallbackToSettings: shouldFallbackToSettings,
     );
   }
 
-  Future<_EntityLocationLookupResult> _loadEntityLocationFromList() async {
+  Future<_EntityLocationLookupResult> _loadEntityLocationsFromList() async {
     try {
       final headers = await _getHeaders();
       final response = await http
@@ -2164,6 +2163,7 @@ class AttendanceProvider with ChangeNotifier {
         );
       }
 
+      final locations = <AttendanceLocation>[];
       for (final entity in entities) {
         if (!_isEntityActive(entity)) {
           continue;
@@ -2171,17 +2171,40 @@ class AttendanceProvider with ChangeNotifier {
 
         final location = _parseEntityLocation(entity);
         if (location != null) {
-          print('Using active entity from list fallback: ${location.name}');
-          return _EntityLocationLookupResult(location: location);
+          locations.add(location);
         }
       }
 
-      print('Entity list fallback found rows, but no active entity location');
+      if (locations.isNotEmpty) {
+        print('Using ${locations.length} active entity attendance locations');
+        return _EntityLocationLookupResult(locations: locations);
+      }
+
+      print('Entity list found rows, but no active entity location');
       return const _EntityLocationLookupResult(shouldFallbackToSettings: true);
     } catch (e) {
       print('Error loading entity list fallback: $e');
       return const _EntityLocationLookupResult(shouldFallbackToSettings: true);
     }
+  }
+
+  List<AttendanceLocation> _uniqueLocations(
+    List<AttendanceLocation> locations,
+  ) {
+    final unique = <AttendanceLocation>[];
+    final seenKeys = <String>{};
+
+    for (final location in locations) {
+      final id = location.id.trim();
+      final key = id.isNotEmpty
+          ? 'id:$id'
+          : 'coord:${location.latitude.toStringAsFixed(6)},${location.longitude.toStringAsFixed(6)}';
+      if (seenKeys.add(key)) {
+        unique.add(location);
+      }
+    }
+
+    return unique;
   }
 
   List<Map<String, dynamic>> _extractEntityItems(
@@ -3197,11 +3220,11 @@ class _ClientListPayload {
 }
 
 class _EntityLocationLookupResult {
-  final AttendanceLocation? location;
+  final List<AttendanceLocation> locations;
   final bool shouldFallbackToSettings;
 
   const _EntityLocationLookupResult({
-    this.location,
+    this.locations = const <AttendanceLocation>[],
     this.shouldFallbackToSettings = false,
   });
 }
