@@ -7,16 +7,25 @@ import '../../providers/auth_provider.dart';
 import '../../providers/bot_assistant_provider.dart';
 import '../../providers/broadcast_provider.dart';
 import '../../providers/claim_provider.dart';
+import '../../providers/department_provider.dart';
 import '../../providers/discovery_provider.dart';
 import '../../providers/document_provider.dart';
+import '../../providers/employee_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../providers/payroll_provider.dart';
 import '../../providers/saas_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/training_provider.dart';
-import '../../services/api_service.dart';
 import '../admin/event_management_screen.dart';
+import '../admin/claim_reports_screen.dart';
+import '../admin/common_master_menu_screen.dart';
+import '../admin/department_list_screen.dart';
+import '../admin/master_shift_screen.dart';
+import '../admin/org_structure_screen.dart';
+import '../admin/shift_assignment_screen.dart';
+import '../admin/user_management_menu_screen.dart';
 import '../attendance/attendance_screen.dart';
+import '../attendance/attendance_settings_screen.dart';
 import '../bot/bot_assistant_screen.dart';
 import '../admin/broadcast_screen.dart';
 import '../claims/claims_screen.dart';
@@ -28,6 +37,7 @@ import '../corrections/payroll_correction_screen.dart';
 import '../development/people_development_screen.dart';
 import '../discovery/discovery_screen.dart';
 import '../documents/document_screen.dart';
+import '../employee/employee_list_screen.dart';
 import '../inventory/inventory_screen.dart';
 import '../leave/leave_screen.dart';
 import '../location/my_location_screen.dart';
@@ -62,7 +72,6 @@ class _FeatureTabState extends State<FeatureTab> {
     'feature_label_tasks',
   };
 
-  final ApiService _apiService = ApiService();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
@@ -70,7 +79,6 @@ class _FeatureTabState extends State<FeatureTab> {
   String _selectedCategory = 'feature_category_all';
   String? _lastFeatureContextKey;
   String? _lastFeatureUserKey;
-  Map<String, bool> _featureCapabilityFlags = const <String, bool>{};
 
   @override
   void didChangeDependencies() {
@@ -96,12 +104,6 @@ class _FeatureTabState extends State<FeatureTab> {
 
     _lastFeatureUserKey = userKey;
     _lastFeatureContextKey = contextKey;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _refreshFeatureCapabilities(authProvider);
-      }
-    });
   }
 
   @override
@@ -785,7 +787,7 @@ class _FeatureTabState extends State<FeatureTab> {
 
     final authProvider = context.read<AuthProvider>();
     final visibleChildren = feature.children
-        .where((item) => authProvider.hasPermission(item.permission))
+        .where((item) => authProvider.hasAnyPermission(item.permissions))
         .toList(growable: false);
 
     if (visibleChildren.isEmpty) {
@@ -1002,13 +1004,17 @@ class _FeatureTabState extends State<FeatureTab> {
     final canAccessAttendanceFeature = authProvider.hasPermission(
       'view-attendance',
     );
-    final canAccessLocationFeature = canAccessAttendanceFeature;
+    final canAccessLocationFeature = authProvider.hasPermission(
+      'view-my-location',
+    );
     final canAccessClaimsFeature = _canAccessClaimsFeature(authProvider);
     final canAccessOvertimeFeature = _canAccessOvertimeFeature(authProvider);
     final canAccessKpiFeature = _canAccessKpiFeature(authProvider);
-    final canAccessRecruitmentFeature = authProvider.hasPermission(
+    final canAccessRecruitmentFeature = authProvider.hasAnyPermission([
       'view-recruitment',
-    );
+      'create-recruitment',
+      'edit-recruitment',
+    ]);
     final canAccessInventoryFeature = _canAccessInventoryFeature(authProvider);
     final canAccessTrainingFeature = _canAccessTrainingFeature(authProvider);
     final canAccessPeopleDevelopmentFeature =
@@ -1021,12 +1027,72 @@ class _FeatureTabState extends State<FeatureTab> {
     final canAccessDocumentsFeature = authProvider.hasPermission(
       'view-documents',
     );
+    final canAccessDiscoveryFeature = authProvider.hasPermission(
+      'view-discovery',
+    );
     final canAccessClientsFeature = authProvider.hasPermission('view-client');
     final canAccessCorrectionsFeature = _canAccessCorrectionsFeature(
       authProvider,
     );
+    final canAccessEmployeeFeature = _canAccessEmployeeFeature(authProvider);
+    final canAccessDepartmentFeature = _canAccessDepartmentFeature(
+      authProvider,
+    );
+    final canAccessOrgStructureFeature = _canAccessOrgStructureFeature(
+      authProvider,
+    );
+    final canAccessSettingsFeature = _canAccessSettingsFeature(authProvider);
+    final canAccessCommonMasterFeature = _canAccessCommonMasterFeature(
+      authProvider,
+    );
+    final canAccessUserManagementFeature = _canAccessUserManagementFeature(
+      authProvider,
+    );
+    final canAccessReportsFeature = _canAccessReportsFeature(authProvider);
 
     return [
+      if (canAccessEmployeeFeature)
+        FeatureItem(
+          icon: Icons.people_alt_outlined,
+          labelKey: 'admin_master_employee',
+          gradient: const [Color(0xFFFF9966), Color(0xFFFF5E62)],
+          screenBuilder: (_) => const EmployeeListScreen(),
+          categoryKey: 'feature_category_core_hr',
+          isPopular: true,
+        ),
+      if (authProvider.hasPermission('view-employee-one'))
+        FeatureItem(
+          icon: Icons.badge_outlined,
+          labelKey: 'feature_label_employee_one',
+          gradient: const [Color(0xFFEA580C), Color(0xFFFACC15)],
+          screenBuilder: (_) => const EmployeeListScreen(),
+          categoryKey: 'feature_category_core_hr',
+          isPopular: false,
+        ),
+      if (canAccessDepartmentFeature)
+        FeatureItem(
+          icon: Icons.business_outlined,
+          labelKey: 'admin_master_department',
+          gradient: const [Color(0xFF4158D0), Color(0xFFC850C0)],
+          screenBuilder: (_) => ChangeNotifierProvider(
+            create: (_) => DepartmentProvider(),
+            child: const DepartmentListScreen(),
+          ),
+          categoryKey: 'feature_category_core_hr',
+          isPopular: false,
+        ),
+      if (canAccessOrgStructureFeature)
+        FeatureItem(
+          icon: Icons.account_tree_outlined,
+          labelKey: 'admin_org_structure',
+          gradient: const [Color(0xFF2563EB), Color(0xFF38BDF8)],
+          screenBuilder: (_) => ChangeNotifierProvider(
+            create: (_) => EmployeeProvider(),
+            child: const OrgStructureScreen(),
+          ),
+          categoryKey: 'feature_category_core_hr',
+          isPopular: false,
+        ),
       if (canAccessPayrollFeature)
         FeatureItem(
           icon: Icons.account_balance_wallet_outlined,
@@ -1042,19 +1108,22 @@ class _FeatureTabState extends State<FeatureTab> {
             const FeatureSubmenuItem(
               labelKey: 'payroll_settings',
               icon: Icons.tune_outlined,
-              permission: 'edit-payroll-settings',
+              permission: 'view-payroll-settings',
+              fallbackPermissions: ['edit-payroll-settings'],
               screen: PayrollSettingsScreen(),
             ),
             const FeatureSubmenuItem(
               labelKey: 'payroll_process',
               icon: Icons.payments_outlined,
               permission: 'view-payroll',
+              fallbackPermissions: ['process-payroll'],
               screen: PayrollProcessScreen(),
             ),
             FeatureSubmenuItem(
               labelKey: 'feature_label_payslip',
               icon: Icons.receipt_long_outlined,
-              permission: 'view-payroll',
+              permission: 'view-payslip',
+              fallbackPermissions: const ['view-payroll'],
               screen: ChangeNotifierProvider(
                 create: (_) => PayrollProvider(),
                 child: const PayslipScreen(),
@@ -1191,6 +1260,24 @@ class _FeatureTabState extends State<FeatureTab> {
           categoryKey: 'feature_category_core_hr',
           isPopular: false,
         ),
+      if (authProvider.hasPermission('view-applications'))
+        FeatureItem(
+          icon: Icons.assignment_ind_outlined,
+          labelKey: 'feature_label_applications',
+          gradient: const [Color(0xFF7C3AED), Color(0xFFEC4899)],
+          screenBuilder: (_) => const RecruitmentScreen(),
+          categoryKey: 'feature_category_core_hr',
+          isPopular: false,
+        ),
+      if (canAccessRecruitmentFeature)
+        FeatureItem(
+          icon: Icons.manage_search_outlined,
+          labelKey: 'feature_label_recruitment_ops',
+          gradient: const [Color(0xFF0F766E), Color(0xFF84CC16)],
+          screenBuilder: (_) => const RecruitmentScreen(),
+          categoryKey: 'feature_category_operations',
+          isPopular: false,
+        ),
       if (canAccessInventoryFeature)
         FeatureItem(
           icon: Icons.inventory_2_outlined,
@@ -1202,6 +1289,46 @@ class _FeatureTabState extends State<FeatureTab> {
           ),
           categoryKey: 'feature_category_operations',
           isPopular: false,
+          children: [
+            FeatureSubmenuItem(
+              labelKey: 'inventory_master',
+              icon: Icons.inventory_2_outlined,
+              permission: 'view-inventory-master',
+              fallbackPermissions: const ['view-inventory'],
+              screen: ChangeNotifierProvider(
+                create: (_) => InventoryProvider(),
+                child: const InventoryScreen(),
+              ),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'inventory_request_stock',
+              icon: Icons.output_outlined,
+              permission: 'view-inventory-request',
+              screen: ChangeNotifierProvider(
+                create: (_) => InventoryProvider(),
+                child: const InventoryScreen(),
+              ),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'inventory_receipt_stock',
+              icon: Icons.input_outlined,
+              permission: 'view-inventory-receipt',
+              screen: ChangeNotifierProvider(
+                create: (_) => InventoryProvider(),
+                child: const InventoryScreen(),
+              ),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'inventory_report_stock',
+              icon: Icons.summarize_outlined,
+              permission: 'view-inventory-report',
+              screen: ChangeNotifierProvider(
+                create: (_) => InventoryProvider(),
+                child: const InventoryScreen(),
+              ),
+            ),
+          ],
+          submenuHintKey: 'inventory_submenu_hint',
         ),
       if (canAccessPeopleDevelopmentFeature)
         FeatureItem(
@@ -1229,6 +1356,7 @@ class _FeatureTabState extends State<FeatureTab> {
               labelKey: 'talent_management',
               icon: Icons.auto_graph_outlined,
               permission: 'view-talenta',
+              fallbackPermissions: ['view-pengembangan-sdm'],
               screen: TalentManagementMobileScreen(),
             ),
             const FeatureSubmenuItem(
@@ -1251,6 +1379,19 @@ class _FeatureTabState extends State<FeatureTab> {
           ),
           categoryKey: 'feature_category_operations',
           isPopular: true,
+        ),
+      if (authProvider.hasPermission('view-time-tracking'))
+        FeatureItem(
+          icon: Icons.timer_outlined,
+          labelKey: 'feature_label_time_tracking',
+          gradient: const [Color(0xFF2563EB), Color(0xFF06B6D4)],
+          screenBuilder: (_) => const _FeaturePlaceholderScreen(
+            titleKey: 'feature_label_time_tracking',
+            messageKey: 'feature_mobile_placeholder',
+            icon: Icons.timer_outlined,
+          ),
+          categoryKey: 'feature_category_operations',
+          isPopular: false,
         ),
       if (canAccessEventFeature)
         FeatureItem(
@@ -1285,7 +1426,7 @@ class _FeatureTabState extends State<FeatureTab> {
           categoryKey: 'feature_category_operations',
           isPopular: false,
         ),
-      if (canAccessDocumentsFeature)
+      if (canAccessDiscoveryFeature)
         FeatureItem(
           icon: Icons.auto_awesome,
           labelKey: 'feature_label_discovery',
@@ -1298,6 +1439,104 @@ class _FeatureTabState extends State<FeatureTab> {
           ),
           categoryKey: 'feature_category_operations',
           isPopular: true,
+        ),
+      if (canAccessReportsFeature)
+        FeatureItem(
+          icon: Icons.bar_chart_outlined,
+          labelKey: 'feature_label_reports',
+          gradient: const [Color(0xFF834D9B), Color(0xFFD04ED6)],
+          screenBuilder: (_) => ChangeNotifierProvider(
+            create: (_) => ClaimProvider(),
+            child: const ClaimReportsScreen(),
+          ),
+          categoryKey: 'feature_category_financial',
+          isPopular: false,
+        ),
+      if (canAccessSettingsFeature)
+        FeatureItem(
+          icon: Icons.settings_outlined,
+          labelKey: 'admin_section_configuration',
+          gradient: const [Color(0xFF3A1C71), Color(0xFFD76D77)],
+          screenBuilder: (_) => const AttendanceSettingsScreen(),
+          categoryKey: 'feature_category_workspace',
+          isPopular: false,
+          children: const [
+            FeatureSubmenuItem(
+              labelKey: 'settings_general',
+              icon: Icons.tune_outlined,
+              permission: 'view-settings',
+              fallbackPermissions: ['edit-settings', 'create-settings'],
+              screen: AttendanceSettingsScreen(),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'admin_attendance_settings',
+              icon: Icons.location_on_outlined,
+              permission: 'view-default-location',
+              fallbackPermissions: [
+                'create-default-location',
+                'edit-default-location',
+                'delete-default-location',
+                'view-settings',
+              ],
+              screen: AttendanceSettingsScreen(),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'admin_master_shift',
+              icon: Icons.schedule_outlined,
+              permission: 'view-shift',
+              fallbackPermissions: [
+                'create-shift',
+                'edit-shift',
+                'delete-shift',
+                'view-settings',
+              ],
+              screen: MasterShiftScreen(),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'admin_master_shift_day',
+              icon: Icons.calendar_view_week_outlined,
+              permission: 'view-shift-day',
+              fallbackPermissions: [
+                'create-shift-day',
+                'edit-shift-day',
+                'delete-shift-day',
+                'view-settings',
+              ],
+              screen: MasterShiftScreen(),
+            ),
+            FeatureSubmenuItem(
+              labelKey: 'admin_shift_assignment',
+              icon: Icons.assignment_turned_in_outlined,
+              permission: 'view-shift-assignment',
+              fallbackPermissions: [
+                'assign-shift',
+                'edit-shift-assignment',
+                'delete-shift-assignment',
+                'view-settings',
+                'edit-settings',
+              ],
+              screen: ShiftAssignmentScreen(),
+            ),
+          ],
+          submenuHintKey: 'feature_admin_submenu_hint',
+        ),
+      if (canAccessCommonMasterFeature)
+        FeatureItem(
+          icon: Icons.dataset_outlined,
+          labelKey: 'admin_common_master',
+          gradient: const [Color(0xFF0F766E), Color(0xFF14B8A6)],
+          screenBuilder: (_) => const CommonMasterMenuScreen(),
+          categoryKey: 'feature_category_workspace',
+          isPopular: false,
+        ),
+      if (canAccessUserManagementFeature)
+        FeatureItem(
+          icon: Icons.manage_accounts_outlined,
+          labelKey: 'admin_user_management',
+          gradient: const [Color(0xFF4F46E5), Color(0xFF8B5CF6)],
+          screenBuilder: (_) => const UserManagementMenuScreen(),
+          categoryKey: 'feature_category_workspace',
+          isPopular: false,
         ),
       FeatureItem(
         icon: Icons.smart_toy_outlined,
@@ -1333,79 +1572,94 @@ class _FeatureTabState extends State<FeatureTab> {
             FeatureSubmenuItem(
               labelKey: 'correction_attendance',
               icon: Icons.event_available_outlined,
-              permission: 'view-settings',
+              permission: 'view-correction-attendance',
+              fallbackPermissions: ['view-settings'],
               screen: CorrectionScreen(),
             ),
             FeatureSubmenuItem(
               labelKey: 'correction_allowance',
               icon: Icons.payments_outlined,
-              permission: 'view-settings',
+              permission: 'view-correction-allowance',
+              fallbackPermissions: ['view-settings'],
               screen: AllowanceCorrectionScreen(),
             ),
             FeatureSubmenuItem(
               labelKey: 'correction_payroll',
               icon: Icons.request_quote_outlined,
-              permission: 'view-settings',
+              permission: 'view-correction-payroll',
+              fallbackPermissions: ['view-settings'],
               screen: PayrollCorrectionScreen(),
             ),
             FeatureSubmenuItem(
               labelKey: 'correction_leave_balance',
               icon: Icons.beach_access_outlined,
-              permission: 'view-settings',
+              permission: 'view-correction-leave-balance',
+              fallbackPermissions: ['view-settings'],
               screen: LeaveBalanceCorrectionScreen(),
             ),
           ],
           submenuHintKey: 'correction_submenu_hint',
         ),
-      FeatureItem(
-        icon: Icons.shield_outlined,
-        labelKey: 'feature_label_saas',
-        gradient: const [Color(0xFF1565C0), Color(0xFF26C6DA)],
-        screenBuilder: (_) => const SaasWorkspaceScreen(),
-        categoryKey: 'feature_category_workspace',
-        isPopular:
-            authProvider.companyAssignments.length > 1 ||
-            authProvider.canAccessPlatformAdmin,
-      ),
+      if (authProvider.canAccessAnySaasWorkspace)
+        FeatureItem(
+          icon: Icons.shield_outlined,
+          labelKey: 'feature_label_saas',
+          gradient: const [Color(0xFF1565C0), Color(0xFF26C6DA)],
+          screenBuilder: (_) => const SaasWorkspaceScreen(),
+          categoryKey: 'feature_category_workspace',
+          isPopular:
+              authProvider.companyAssignments.length > 1 ||
+              authProvider.canAccessSaasBilling ||
+              authProvider.canAccessSaasInvitations,
+        ),
     ];
   }
 
   bool _canAccessClaimsFeature(AuthProvider authProvider) {
     return authProvider.hasAnyPermission([
-          'view-claims',
-          'view-claim',
-          'view-claims-management',
-          'create-claims',
-          'create-claim',
-          'edit-claims',
-          'edit-claim',
-          'view-claims-self',
-        ]) ||
-        _featureCapabilityFlags['claims'] == true ||
-        authProvider.canAccessClaimsModule;
+      'view-claims',
+      'view-claim',
+      'view-claims-management',
+      'create-claims',
+      'create-claim',
+      'edit-claims',
+      'edit-claim',
+      'approve-claims',
+      'reject-claims',
+      'view-claims-self',
+    ]);
   }
 
   bool _canAccessPayrollFeature(AuthProvider authProvider) {
-    return authProvider.hasPermission('view-settings');
+    return authProvider.hasAnyPermission([
+      'view-payroll',
+      'view-payroll-settings',
+      'edit-payroll-settings',
+      'process-payroll',
+      'view-pphreport',
+      'view-payslip',
+    ]);
   }
 
   bool _canAccessOvertimeFeature(AuthProvider authProvider) {
     return authProvider.hasAnyPermission([
-          'view-overtime',
-          'view-overtime-self',
-          'create-overtime',
-          'edit-overtime',
-        ]) ||
-        _featureCapabilityFlags['overtime'] == true;
+      'view-overtime',
+      'view-overtime-self',
+      'create-overtime',
+      'edit-overtime',
+      'approve-overtime',
+      'reject-overtime',
+    ]);
   }
 
   bool _canAccessLeaveFeature(AuthProvider authProvider) {
     return authProvider.hasAnyPermission([
-          'view-leave',
-          'create-leave',
-          'edit-leave',
-        ]) ||
-        _featureCapabilityFlags['leave'] == true;
+      'view-leave',
+      'create-leave',
+      'edit-leave',
+      'approve-leave',
+      'reject-leave',
+    ]);
   }
 
   bool _canAccessKpiFeature(AuthProvider authProvider) {
@@ -1433,6 +1687,7 @@ class _FeatureTabState extends State<FeatureTab> {
 
   bool _canAccessInventoryFeature(AuthProvider authProvider) {
     return authProvider.hasAnyPermission([
+      'view-inventory',
       'view-inventory-master',
       'view-inventory-request',
       'view-inventory-receipt',
@@ -1443,27 +1698,128 @@ class _FeatureTabState extends State<FeatureTab> {
 
   bool _canAccessTimeTrackingFeature(AuthProvider authProvider) {
     return authProvider.hasAnyPermission([
-      'view-time-tracking',
-      'create-time-tracking',
+      'view-tasks',
+      'create-tasks',
+      'edit-tasks',
+      'delete-tasks',
     ]);
   }
 
   bool _canAccessEventFeature(AuthProvider authProvider) {
-    return authProvider.hasPermission('view-settings');
+    return authProvider.hasPermission('view-events');
   }
 
   bool _canAccessBroadcastFeature(AuthProvider authProvider) {
-    return authProvider.canAccessBroadcastModule ||
-        authProvider.hasAnyPermission([
-          'view-Broadcast',
-          'view-broadcast',
-          'send-broadcast',
-          'create-broadcast',
-        ]);
+    return authProvider.hasAnyPermission([
+      'view-broadcast',
+      'send-broadcast',
+      'create-broadcast',
+      'edit-broadcast',
+      'delete-broadcast',
+    ]);
   }
 
   bool _canAccessCorrectionsFeature(AuthProvider authProvider) {
-    return authProvider.hasPermission('view-settings');
+    return authProvider.hasAnyPermission([
+      'view-correction-attendance',
+      'view-correction-allowance',
+      'view-correction-payroll',
+      'view-correction-leave-balance',
+    ]);
+  }
+
+  bool _canAccessEmployeeFeature(AuthProvider authProvider) {
+    return authProvider.hasAnyPermission([
+      'view-employee',
+      'view-employee-one',
+      'create-employee',
+      'edit-employee',
+      'delete-employee',
+    ]);
+  }
+
+  bool _canAccessDepartmentFeature(AuthProvider authProvider) {
+    return authProvider.hasAnyPermission([
+      'view-department',
+      'create-department',
+      'edit-department',
+      'delete-department',
+    ]);
+  }
+
+  bool _canAccessOrgStructureFeature(AuthProvider authProvider) {
+    return authProvider.hasAnyPermission([
+      'view-struktur-organisasi',
+      'view-org-structure',
+    ]);
+  }
+
+  bool _canAccessSettingsFeature(AuthProvider authProvider) {
+    return authProvider.hasAnyPermission([
+      'view-settings',
+      'create-settings',
+      'edit-settings',
+      'view-default-location',
+      'create-default-location',
+      'edit-default-location',
+      'delete-default-location',
+      'view-shift',
+      'create-shift',
+      'edit-shift',
+      'delete-shift',
+      'view-shift-day',
+      'create-shift-day',
+      'edit-shift-day',
+      'delete-shift-day',
+      'view-shift-assignment',
+      'assign-shift',
+      'edit-shift-assignment',
+      'delete-shift-assignment',
+    ]);
+  }
+
+  bool _canAccessCommonMasterFeature(AuthProvider authProvider) {
+    return authProvider.hasAnyPermission([
+      'view-company-master',
+      'create-company-master',
+      'edit-company-master',
+      'delete-company-master',
+      'view-ptkp',
+      'create-ptkp',
+      'edit-ptkp',
+      'delete-ptkp',
+      'view-progressive-tax-rate',
+      'create-progressive-tax-rate',
+      'edit-progressive-tax-rate',
+      'delete-progressive-tax-rate',
+      'view-company-assignment',
+      'assign-company',
+      'assign-roles',
+    ]);
+  }
+
+  bool _canAccessUserManagementFeature(AuthProvider authProvider) {
+    return authProvider.hasAnyPermission([
+      'view-permissions',
+      'create-permissions',
+      'edit-permissions',
+      'delete-permissions',
+      'view-roles',
+      'create-roles',
+      'edit-roles',
+      'delete-roles',
+      'view-users',
+      'assign-user',
+      'assign-roles',
+    ]);
+  }
+
+  bool _canAccessReportsFeature(AuthProvider authProvider) {
+    return authProvider.hasAnyPermission([
+      'view-reports',
+      'view-claims-report',
+      'view-claim-reports',
+    ]);
   }
 
   List<String> _buildAvailableCategories(List<FeatureItem> features) {
@@ -1543,90 +1899,6 @@ class _FeatureTabState extends State<FeatureTab> {
       compact: false,
     );
   }
-
-  Future<void> _refreshFeatureCapabilities(AuthProvider authProvider) async {
-    final nextFlags = <String, bool>{};
-
-    if (authProvider.isAuthenticated) {
-      if (!_canAccessClaimsFromPermissions(authProvider)) {
-        nextFlags['claims'] = await _probeFeatureEndpoint('/claims');
-      }
-
-      if (!_canAccessOvertimeFromPermissions(authProvider)) {
-        nextFlags['overtime'] = await _probeFeatureEndpoint('/overtime');
-      }
-
-      if (!_canAccessLeaveFromPermissions(authProvider)) {
-        nextFlags['leave'] = await _probeFeatureEndpoint('/leave-balance');
-      }
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    if (_mapsEqual(_featureCapabilityFlags, nextFlags)) {
-      return;
-    }
-
-    setState(() {
-      _featureCapabilityFlags = nextFlags;
-    });
-  }
-
-  bool _canAccessClaimsFromPermissions(AuthProvider authProvider) {
-    return authProvider.hasAnyPermission([
-          'view-claims',
-          'view-claim',
-          'view-claims-management',
-          'create-claims',
-          'create-claim',
-          'edit-claims',
-          'edit-claim',
-          'view-claims-self',
-        ]) ||
-        authProvider.canAccessClaimsModule;
-  }
-
-  bool _canAccessOvertimeFromPermissions(AuthProvider authProvider) {
-    return authProvider.hasAnyPermission([
-      'view-overtime',
-      'view-overtime-self',
-      'create-overtime',
-      'edit-overtime',
-    ]);
-  }
-
-  bool _canAccessLeaveFromPermissions(AuthProvider authProvider) {
-    return authProvider.hasAnyPermission([
-      'view-leave',
-      'create-leave',
-      'edit-leave',
-    ]);
-  }
-
-  Future<bool> _probeFeatureEndpoint(String endpoint) async {
-    try {
-      await _apiService.get(endpoint);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  bool _mapsEqual(Map<String, bool> left, Map<String, bool> right) {
-    if (left.length != right.length) {
-      return false;
-    }
-
-    for (final entry in left.entries) {
-      if (right[entry.key] != entry.value) {
-        return false;
-      }
-    }
-
-    return true;
-  }
 }
 
 class FeatureItem {
@@ -1655,14 +1927,101 @@ class FeatureSubmenuItem {
   final String labelKey;
   final IconData icon;
   final String permission;
+  final List<String> fallbackPermissions;
   final Widget screen;
 
   const FeatureSubmenuItem({
     required this.labelKey,
     required this.icon,
     required this.permission,
+    this.fallbackPermissions = const [],
     required this.screen,
   });
+
+  List<String> get permissions => [permission, ...fallbackPermissions];
+}
+
+class _FeaturePlaceholderScreen extends StatelessWidget {
+  final String titleKey;
+  final String messageKey;
+  final IconData icon;
+
+  const _FeaturePlaceholderScreen({
+    required this.titleKey,
+    required this.messageKey,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: isDark ? _FeatureTabState._darkBackground : Colors.white,
+      appBar: AppBar(
+        title: Text(AppStrings.of(context, titleKey, listen: false)),
+        backgroundColor: isDark ? const Color(0xFF111827) : Colors.white,
+        foregroundColor: isDark ? Colors.white : const Color(0xFF111827),
+        elevation: 0,
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1F2937)
+                    : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF374151)
+                      : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Icon(icon, color: AppColors.primary, size: 30),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    AppStrings.of(context, titleKey, listen: false),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    AppStrings.of(context, messageKey, listen: false),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.45,
+                      color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CorrectionFloatingMenu extends StatelessWidget {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 
 class CommonMasterMenuScreen extends StatelessWidget {
@@ -11,6 +13,7 @@ class CommonMasterMenuScreen extends StatelessWidget {
       title: 'Master Perusahaan',
       subtitle: 'Company Master File',
       endpoint: '/company-master',
+      permissions: ['view-company-master', 'assign-roles'],
       icon: Icons.business,
       color: Color(0xFF2563EB),
       fields: [
@@ -25,6 +28,7 @@ class CommonMasterMenuScreen extends StatelessWidget {
       title: 'Master PTKP',
       subtitle: 'PTKP Master File',
       endpoint: '/master-ptkp',
+      permissions: ['view-ptkp', 'view-settings'],
       icon: Icons.family_restroom,
       color: Color(0xFF059669),
       fields: [
@@ -38,6 +42,7 @@ class CommonMasterMenuScreen extends StatelessWidget {
       title: 'Master Tarif Progresif',
       subtitle: 'Progressive Tax Rate Master File',
       endpoint: '/master-progressive-tax-rates',
+      permissions: ['view-progressive-tax-rate', 'view-settings'],
       icon: Icons.percent,
       color: Color(0xFF7C3AED),
       fields: [
@@ -52,6 +57,11 @@ class CommonMasterMenuScreen extends StatelessWidget {
       title: 'Grup User',
       subtitle: 'User Group - Company Assignment',
       endpoint: '/company-assignments',
+      permissions: [
+        'view-company-assignment',
+        'assign-company',
+        'assign-roles',
+      ],
       icon: Icons.groups_2_outlined,
       color: Color(0xFFEA580C),
       fields: [
@@ -81,14 +91,22 @@ class CommonMasterMenuScreen extends StatelessWidget {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemBuilder: (context, index) {
-          final item = _menus[index];
-          return _MasterMenuCard(config: item);
+      body: Consumer<AuthProvider>(
+        builder: (context, authProvider, _) {
+          final visibleMenus = _menus
+              .where((menu) => authProvider.hasAnyPermission(menu.permissions))
+              .toList(growable: false);
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemBuilder: (context, index) {
+              final item = visibleMenus[index];
+              return _MasterMenuCard(config: item);
+            },
+            separatorBuilder: (_, index) => const SizedBox(height: 12),
+            itemCount: visibleMenus.length,
+          );
         },
-        separatorBuilder: (_, index) => const SizedBox(height: 12),
-        itemCount: _menus.length,
       ),
     );
   }
@@ -579,6 +597,7 @@ class _MasterMenuConfig {
   final Color color;
   final List<_MasterField> fields;
   final String searchHint;
+  final List<String> permissions;
   final List<String>? dataPath;
 
   const _MasterMenuConfig({
@@ -589,6 +608,7 @@ class _MasterMenuConfig {
     required this.color,
     required this.fields,
     required this.searchHint,
+    required this.permissions,
     this.dataPath,
   });
 }

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/localization/app_strings.dart';
+import '../../core/widgets/access_denied_state.dart';
 import '../../models/company.dart';
 import '../../models/saas_models.dart';
 import '../../providers/auth_provider.dart';
@@ -35,6 +36,7 @@ class _SaasWorkspaceScreenState extends State<SaasWorkspaceScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = context.read<AuthProvider>();
       context.read<SaasProvider>().loadWorkspace(
+        authProvider: authProvider,
         includeAdminOverview: authProvider.canAccessPlatformAdmin,
       );
     });
@@ -59,6 +61,25 @@ class _SaasWorkspaceScreenState extends State<SaasWorkspaceScreen> {
         ? saasProvider.companies
         : authProvider.companyAssignments;
 
+    if (!authProvider.canAccessAnySaasWorkspace) {
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF0A0A0A) : Colors.grey.shade50,
+        appBar: AppBar(
+          title: Text(
+            context.tr('saas_workspace_title'),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: isDark ? const Color(0xFF111827) : Colors.white,
+          foregroundColor: isDark ? Colors.white : Colors.black87,
+          elevation: 0,
+        ),
+        body: const AccessDeniedState(
+          permissionLabel:
+              'view-saas-workspace / view-saas-billing / view-saas-invitations',
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A0A0A) : Colors.grey.shade50,
       appBar: AppBar(
@@ -73,6 +94,7 @@ class _SaasWorkspaceScreenState extends State<SaasWorkspaceScreen> {
       body: RefreshIndicator(
         onRefresh: () {
           return context.read<SaasProvider>().loadWorkspace(
+            authProvider: authProvider,
             includeAdminOverview: authProvider.canAccessPlatformAdmin,
             force: true,
           );
@@ -133,21 +155,23 @@ class _SaasWorkspaceScreenState extends State<SaasWorkspaceScreen> {
                     companies: companies,
                     saasProvider: saasProvider,
                   ),
-                  const SizedBox(height: 20),
-                  _buildSectionCard(
-                    context: context,
-                    isDark: isDark,
-                    title: context.tr('saas_send_invitation'),
-                    subtitle: currentCompany?.companyName.isNotEmpty == true
-                        ? '${currentCompany!.companyName} (${currentCompany.cCode})'
-                        : context.tr('saas_send_invitation_subtitle'),
-                    child: _buildInvitationForm(
+                  if (authProvider.canAccessSaasInvitations) ...[
+                    const SizedBox(height: 20),
+                    _buildSectionCard(
                       context: context,
                       isDark: isDark,
-                      authProvider: authProvider,
-                      saasProvider: saasProvider,
+                      title: context.tr('saas_send_invitation'),
+                      subtitle: currentCompany?.companyName.isNotEmpty == true
+                          ? '${currentCompany!.companyName} (${currentCompany.cCode})'
+                          : context.tr('saas_send_invitation_subtitle'),
+                      child: _buildInvitationForm(
+                        context: context,
+                        isDark: isDark,
+                        authProvider: authProvider,
+                        saasProvider: saasProvider,
+                      ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 20),
                   _buildSectionCard(
                     context: context,
@@ -180,34 +204,38 @@ class _SaasWorkspaceScreenState extends State<SaasWorkspaceScreen> {
                                 .toList(growable: false),
                           ),
                   ),
-                  const SizedBox(height: 20),
-                  _buildSectionCard(
-                    context: context,
-                    isDark: isDark,
-                    title: context.tr('saas_invitations'),
-                    subtitle: context.tr('saas_invitations_subtitle'),
-                    child: saasProvider.invitations.isEmpty
-                        ? _buildEmptyState(
-                            context,
-                            isDark,
-                            context.tr('saas_no_invitations'),
-                          )
-                        : Column(
-                            children: saasProvider.invitations
-                                .take(5)
-                                .map(
-                                  (invitation) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: _buildInvitationTile(
-                                      context,
-                                      isDark,
-                                      invitation,
+                  if (authProvider.canAccessSaasInvitations) ...[
+                    const SizedBox(height: 20),
+                    _buildSectionCard(
+                      context: context,
+                      isDark: isDark,
+                      title: context.tr('saas_invitations'),
+                      subtitle: context.tr('saas_invitations_subtitle'),
+                      child: saasProvider.invitations.isEmpty
+                          ? _buildEmptyState(
+                              context,
+                              isDark,
+                              context.tr('saas_no_invitations'),
+                            )
+                          : Column(
+                              children: saasProvider.invitations
+                                  .take(5)
+                                  .map(
+                                    (invitation) => Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: _buildInvitationTile(
+                                        context,
+                                        isDark,
+                                        invitation,
+                                      ),
                                     ),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
-                  ),
+                                  )
+                                  .toList(growable: false),
+                            ),
+                    ),
+                  ],
                   if (authProvider.canAccessPlatformAdmin &&
                       saasProvider.adminOverview != null) ...[
                     const SizedBox(height: 20),
@@ -1017,6 +1045,7 @@ class _SaasWorkspaceScreenState extends State<SaasWorkspaceScreen> {
     });
 
     final result = await saasProvider.createInvitation(
+      authProvider: authProvider,
       email: email,
       name: name,
       role: _inviteRole,
@@ -1093,6 +1122,7 @@ class _SaasWorkspaceScreenState extends State<SaasWorkspaceScreen> {
     });
 
     final result = await saasProvider.revokeInvitation(
+      authProvider: authProvider,
       invitationId: invitation.id,
       includeAdminOverview: authProvider.canAccessPlatformAdmin,
     );

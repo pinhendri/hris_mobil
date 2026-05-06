@@ -76,61 +76,68 @@ class _ProfileTabState extends State<ProfileTab> {
     );
     final trialSubtitle = _buildTrialSubtitle(context, saasProvider);
     final sections = [
-      _buildSection(
-        context,
-        title: context.tr('profile_saas_workspace'),
-        icon: Icons.apartment_outlined,
-        count: 3,
-        tone: AppColors.primary,
-        isDark: isDark,
-        children: [
-          _buildMenuItem(
-            icon: Icons.shield_outlined,
-            title: context.tr('saas_workspace_title'),
-            subtitle: context.tr('profile_saas_workspace_subtitle'),
-            color: const Color(0xFF3478F6),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SaasWorkspaceScreen(),
-                ),
-              );
-            },
-            isDark: isDark,
-          ),
-          _buildMenuItem(
-            icon: Icons.apartment_outlined,
-            title: context.tr('saas_current_company'),
-            subtitle: companySubtitle,
-            color: const Color(0xFF2F9D78),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SaasWorkspaceScreen(),
-                ),
-              );
-            },
-            isDark: isDark,
-          ),
-          _buildMenuItem(
-            icon: Icons.card_membership_outlined,
-            title: context.tr('saas_trial_status'),
-            subtitle: trialSubtitle,
-            color: const Color(0xFF7C3AED),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SaasWorkspaceScreen(),
-                ),
-              );
-            },
-            isDark: isDark,
-          ),
-        ],
-      ),
+      if (auth.canAccessAnySaasWorkspace)
+        _buildSection(
+          context,
+          title: context.tr('profile_saas_workspace'),
+          icon: Icons.apartment_outlined,
+          count: [
+            auth.canAccessSaasWorkspace,
+            auth.canAccessSaasBilling,
+            auth.canAccessSaasInvitations,
+          ].where((value) => value).length,
+          tone: AppColors.primary,
+          isDark: isDark,
+          children: [
+            if (auth.canAccessSaasWorkspace)
+              _buildMenuItem(
+                icon: Icons.shield_outlined,
+                title: context.tr('saas_workspace_title'),
+                subtitle: context.tr('profile_saas_workspace_subtitle'),
+                color: const Color(0xFF3478F6),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SaasWorkspaceScreen(),
+                    ),
+                  );
+                },
+                isDark: isDark,
+              ),
+            _buildMenuItem(
+              icon: Icons.apartment_outlined,
+              title: context.tr('saas_current_company'),
+              subtitle: companySubtitle,
+              color: const Color(0xFF2F9D78),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SaasWorkspaceScreen(),
+                  ),
+                );
+              },
+              isDark: isDark,
+            ),
+            if (auth.canAccessSaasBilling)
+              _buildMenuItem(
+                icon: Icons.card_membership_outlined,
+                title: context.tr('saas_trial_status'),
+                subtitle: trialSubtitle,
+                color: const Color(0xFF7C3AED),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SaasWorkspaceScreen(),
+                    ),
+                  );
+                },
+                isDark: isDark,
+              ),
+          ],
+        ),
       _buildSection(
         context,
         title: context.tr('profile_account'),

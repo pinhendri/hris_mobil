@@ -13,6 +13,26 @@ class SessionStorage {
   static const String rememberedEmailKey = 'remembered_email';
   static const String rememberedPasswordKey = 'remembered_password';
   static const String themeModeKey = 'theme_mode';
+  static const List<String> _sessionPreferenceKeys = <String>[
+    tokenKey,
+    companyCodeKey,
+    userDataKey,
+    companyAssignmentsKey,
+    'user',
+    'userData',
+    'selectedCompany',
+    'selectedCompanyId',
+    'selectedCcode',
+    'selected_c_code',
+    'c_code',
+    'company_assignments_json',
+    'company_assignments_data',
+    'permissions',
+    'roles',
+    'role',
+    'login_time',
+    'trialStatusSnapshot',
+  ];
   static const List<String> _legacyTokenKeys = <String>[
     'auth_token',
     'token',
@@ -98,14 +118,11 @@ class SessionStorage {
     await prefs.setString(companyAssignmentsKey, rawJson);
   }
 
-  static Future<void> saveRememberedCredentials({
-    required String email,
-    required String password,
-  }) async {
+  static Future<void> saveRememberedEmail(String email) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(rememberMeKey, true);
     await prefs.setString(rememberedEmailKey, email);
-    await _secureStorage.write(key: rememberedPasswordKey, value: password);
+    await _secureStorage.delete(key: rememberedPasswordKey);
   }
 
   static Future<Map<String, String?>> getRememberedCredentials() async {
@@ -117,9 +134,9 @@ class SessionStorage {
     }
 
     final email = prefs.getString(rememberedEmailKey);
-    final password = await _secureStorage.read(key: rememberedPasswordKey);
+    await _secureStorage.delete(key: rememberedPasswordKey);
 
-    return {'email': email, 'password': password};
+    return {'email': email, 'password': null};
   }
 
   static Future<bool> isRememberMeEnabled() async {
@@ -160,15 +177,14 @@ class SessionStorage {
     _cachedCompanyCode = null;
     final prefs = await SharedPreferences.getInstance();
     await _secureStorage.delete(key: tokenKey);
-    await prefs.remove(tokenKey);
-    await prefs.remove(companyCodeKey);
-    await prefs.remove(userDataKey);
-    await prefs.remove(companyAssignmentsKey);
+    await _secureStorage.delete(key: rememberedPasswordKey);
+
+    for (final key in _sessionPreferenceKeys) {
+      await prefs.remove(key);
+    }
 
     for (final key in _legacyTokenKeys) {
-      if (key != tokenKey) {
-        await prefs.remove(key);
-      }
+      await prefs.remove(key);
     }
   }
 }

@@ -14,6 +14,10 @@ class DiscoveryDocument {
   final DateTime? uploadDate;
   final DateTime? discoverySyncedAt;
   final String discoveryLastError;
+  final String ocrStatus;
+  final String ocrEngine;
+  final DateTime? ocrProcessedAt;
+  final String ocrLastError;
 
   const DiscoveryDocument({
     required this.id,
@@ -31,6 +35,10 @@ class DiscoveryDocument {
     required this.uploadDate,
     required this.discoverySyncedAt,
     required this.discoveryLastError,
+    required this.ocrStatus,
+    required this.ocrEngine,
+    required this.ocrProcessedAt,
+    required this.ocrLastError,
   });
 
   factory DiscoveryDocument.fromJson(Map<String, dynamic> json) {
@@ -51,10 +59,35 @@ class DiscoveryDocument {
       uploadDate: _parseDateTime(json['upload_date']),
       discoverySyncedAt: _parseDateTime(json['discovery_synced_at']),
       discoveryLastError: json['discovery_last_error']?.toString() ?? '',
+      ocrStatus: json['ocr_status']?.toString() ?? 'pending',
+      ocrEngine: json['ocr_engine']?.toString() ?? '',
+      ocrProcessedAt: _parseDateTime(json['ocr_processed_at']),
+      ocrLastError: json['ocr_last_error']?.toString() ?? '',
     );
   }
 
   bool get isReady => discoverySyncStatus.toLowerCase() == 'ready';
+
+  bool get isOcrReady => ocrStatus.toLowerCase() == 'ready';
+
+  bool get canUseForBot {
+    final status = ocrStatus.toLowerCase();
+    return discoveryEnabled && status != 'failed';
+  }
+
+  String get ocrStatusLabel {
+    switch (ocrStatus.toLowerCase()) {
+      case 'ready':
+        return 'OCR Ready';
+      case 'processing':
+        return 'OCR Processing';
+      case 'failed':
+        return 'OCR Failed';
+      case 'pending':
+      default:
+        return 'OCR Pending';
+    }
+  }
 
   String get sizeLabel {
     if (sizeBytes <= 0) {

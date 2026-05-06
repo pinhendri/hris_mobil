@@ -7,6 +7,7 @@ import '../../core/widgets/access_denied_state.dart';
 import '../../models/broadcast_models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/broadcast_provider.dart';
+import '../../providers/event_provider.dart';
 
 enum _BroadcastRecipientType { all, department, custom }
 
@@ -34,12 +35,17 @@ class _BroadcastScreenState extends State<BroadcastScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
+  final TextEditingController _eventLocationController =
+      TextEditingController();
   late final TabController _tabController;
 
   _BroadcastRecipientType _recipientType = _BroadcastRecipientType.all;
   List<int> _selectedDepartmentIds = const [];
   List<int> _selectedEmployeeIds = const [];
   String _priority = 'medium';
+  bool _isCalendarEvent = false;
+  DateTime? _eventStartsAt;
+  DateTime? _eventEndsAt;
 
   bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
 
@@ -145,6 +151,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
     _tabController.dispose();
     _titleController.dispose();
     _messageController.dispose();
+    _eventLocationController.dispose();
     super.dispose();
   }
 
@@ -200,8 +207,9 @@ class _BroadcastScreenState extends State<BroadcastScreen>
       centerTitle: true,
       actions: [
         IconButton(
-          onPressed: () =>
-              context.read<BroadcastProvider>().initialize(showLoading: false),
+          onPressed: () {
+            context.read<BroadcastProvider>().initialize(showLoading: false);
+          },
           icon: const Icon(Icons.refresh_rounded),
         ),
       ],
@@ -292,9 +300,15 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                 'Kirim pengumuman dan notifikasi ke karyawan sesuai role.',
             badgeLabel: companyCode.isEmpty ? null : 'Company $companyCode',
             metricLabels: [
-              '${provider.employees.length} karyawan',
-              '${provider.departments.length} department',
-              '${provider.history.length} riwayat',
+              provider.employeeDirectoryRestricted
+                  ? 'karyawan dibatasi'
+                  : '${provider.employees.length} karyawan',
+              provider.departmentDirectoryRestricted
+                  ? 'department dibatasi'
+                  : '${provider.departments.length} department',
+              provider.historyRestricted
+                  ? 'riwayat dibatasi'
+                  : '${provider.history.length} riwayat',
             ],
           ),
           if (provider.error != null) ...[
@@ -303,6 +317,16 @@ class _BroadcastScreenState extends State<BroadcastScreen>
               color: AppColors.error,
               icon: Icons.error_outline_rounded,
               message: provider.error!,
+            ),
+          ],
+          if (provider.employeeDirectoryRestricted ||
+              provider.departmentDirectoryRestricted) ...[
+            const SizedBox(height: 16),
+            _buildBanner(
+              color: AppColors.warning,
+              icon: Icons.lock_outline_rounded,
+              message:
+                  'Broadcast bisa dibuka, tetapi daftar penerima dibatasi oleh permission data karyawan/departemen.',
             ),
           ],
           const SizedBox(height: 16),
@@ -368,6 +392,8 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                     height: 1.4,
                   ),
                 ),
+                const SizedBox(height: 16),
+                _buildBroadcastTypePicker(),
               ],
             ),
           ),
@@ -383,7 +409,9 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                   title: 'All Employees',
                   subtitle:
                       'Kirim ke semua karyawan aktif yang tersedia di company.',
-                  badgeLabel: '${provider.employees.length} penerima',
+                  badgeLabel: provider.employeeDirectoryRestricted
+                      ? 'akses dibatasi'
+                      : '${provider.employees.length} penerima',
                   selected: _recipientType == _BroadcastRecipientType.all,
                   isDarkMode: _isDarkMode,
                   onTap: () {
@@ -614,6 +642,15 @@ class _BroadcastScreenState extends State<BroadcastScreen>
               message: provider.error!,
             ),
           ],
+          if (provider.historyRestricted) ...[
+            const SizedBox(height: 16),
+            _buildBanner(
+              color: AppColors.warning,
+              icon: Icons.lock_outline_rounded,
+              message:
+                  'Riwayat broadcast tidak dimuat karena permission riwayat belum tersedia.',
+            ),
+          ],
           const SizedBox(height: 16),
           if (provider.history.isEmpty)
             _buildSurfaceSection(
@@ -626,6 +663,112 @@ class _BroadcastScreenState extends State<BroadcastScreen>
             )
           else
             ...provider.history.map(_buildHistoryCard),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBroadcastTypePicker() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _surfaceMutedColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _surfaceBorderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Broadcast Type',
+            style: TextStyle(
+              color: _primaryTextColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Pilih Event jika pengumuman juga harus masuk kalender kantor.',
+            style: TextStyle(color: _secondaryTextColor, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _ModeButton(
+                  icon: Icons.notifications_active_outlined,
+                  label: 'Message',
+                  selected: !_isCalendarEvent,
+                  onTap: () {
+                    setState(() {
+                      _isCalendarEvent = false;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ModeButton(
+                  icon: Icons.event_available_outlined,
+                  label: 'Event',
+                  selected: _isCalendarEvent,
+                  onTap: () {
+                    setState(() {
+                      _isCalendarEvent = true;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          if (_isCalendarEvent) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _DateTimeTile(
+                    label: 'Mulai',
+                    value: _eventStartsAt,
+                    isDarkMode: _isDarkMode,
+                    onTap: () async {
+                      final picked = await _pickDateTime(_eventStartsAt);
+                      if (picked != null) {
+                        setState(() => _eventStartsAt = picked);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _DateTimeTile(
+                    label: 'Selesai',
+                    value: _eventEndsAt,
+                    isDarkMode: _isDarkMode,
+                    onTap: () async {
+                      final picked = await _pickDateTime(
+                        _eventEndsAt ?? _eventStartsAt,
+                      );
+                      if (picked != null) {
+                        setState(() => _eventEndsAt = picked);
+                      }
+                    },
+                    onClear: _eventEndsAt == null
+                        ? null
+                        : () => setState(() => _eventEndsAt = null),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _eventLocationController,
+              style: TextStyle(color: _primaryTextColor),
+              decoration: _inputDecoration(
+                hint: 'Lokasi atau link meeting',
+                prefixIcon: Icons.place_outlined,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -926,6 +1069,23 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                 label: _historyTypeLabel(item.type),
                 color: const Color(0xFF8B5CF6),
               ),
+              if (item.isCalendarEvent)
+                _buildTag(
+                  label: 'Calendar Event',
+                  color: const Color(0xFF2563EB),
+                ),
+              if (item.eventStartsAt != null)
+                _buildTag(
+                  label: DateFormat(
+                    'dd MMM yyyy, HH:mm',
+                  ).format(item.eventStartsAt!.toLocal()),
+                  color: const Color(0xFF0EA5E9),
+                ),
+              if (item.eventLocation.isNotEmpty)
+                _buildTag(
+                  label: item.eventLocation,
+                  color: const Color(0xFF14B8A6),
+                ),
               if (item.sentBy.isNotEmpty)
                 _buildTag(label: item.sentBy, color: const Color(0xFF2F9D78)),
               _buildTag(label: sentAt, color: const Color(0xFFF59E0B)),
@@ -934,6 +1094,32 @@ class _BroadcastScreenState extends State<BroadcastScreen>
         ],
       ),
     );
+  }
+
+  Future<DateTime?> _pickDateTime(DateTime? initialValue) async {
+    final now = DateTime.now();
+    final initial = initialValue ?? now.add(const Duration(hours: 1));
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 3),
+    );
+
+    if (date == null || !mounted) {
+      return null;
+    }
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+
+    if (time == null) {
+      return null;
+    }
+
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
   }
 
   Future<void> _handleSend(BroadcastProvider provider) async {
@@ -951,6 +1137,12 @@ class _BroadcastScreenState extends State<BroadcastScreen>
       return;
     }
 
+    if (_isCalendarEvent && _eventStartsAt == null) {
+      _showSnackBar('Tanggal dan jam mulai event wajib diisi.', isError: true);
+      return;
+    }
+
+    final wasCalendarEvent = _isCalendarEvent;
     final success = await provider.sendBroadcast(
       title: title,
       message: message,
@@ -959,6 +1151,10 @@ class _BroadcastScreenState extends State<BroadcastScreen>
       employeeIds: _selectedEmployeeIds,
       priority: _priority,
       recipientCount: recipientCount,
+      isCalendarEvent: _isCalendarEvent,
+      eventStartsAt: _eventStartsAt,
+      eventEndsAt: _eventEndsAt,
+      eventLocation: _eventLocationController.text,
     );
 
     if (!mounted) {
@@ -977,13 +1173,25 @@ class _BroadcastScreenState extends State<BroadcastScreen>
       _titleController.clear();
       _messageController.clear();
       _priority = 'medium';
+      _isCalendarEvent = false;
+      _eventStartsAt = null;
+      _eventEndsAt = null;
+      _eventLocationController.clear();
       _recipientType = _BroadcastRecipientType.all;
       _selectedDepartmentIds = const [];
       _selectedEmployeeIds = const [];
     });
 
+    if (wasCalendarEvent) {
+      context.read<EventProvider>().fetchUpcomingEvents();
+    }
+
     _tabController.animateTo(1);
-    _showSnackBar('Broadcast berhasil dikirim.');
+    _showSnackBar(
+      wasCalendarEvent
+          ? 'Broadcast event berhasil dikirim dan masuk kalender.'
+          : 'Broadcast berhasil dikirim.',
+    );
   }
 
   void _showPreviewDialog() {
@@ -1040,6 +1248,19 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                       label: '$recipientCount recipients',
                       color: const Color(0xFF2F9D78),
                     ),
+                    _buildTag(
+                      label: _isCalendarEvent ? 'Calendar Event' : 'Message',
+                      color: _isCalendarEvent
+                          ? const Color(0xFF2563EB)
+                          : const Color(0xFF64748B),
+                    ),
+                    if (_isCalendarEvent && _eventStartsAt != null)
+                      _buildTag(
+                        label: DateFormat(
+                          'dd MMM yyyy, HH:mm',
+                        ).format(_eventStartsAt!.toLocal()),
+                        color: const Color(0xFF0EA5E9),
+                      ),
                   ],
                 ),
               ],
@@ -1486,6 +1707,159 @@ class _BroadcastScreenState extends State<BroadcastScreen>
       SnackBar(
         content: Text(message),
         backgroundColor: isError ? AppColors.error : AppColors.success,
+      ),
+    );
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ModeButton({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary
+              : isDarkMode
+              ? const Color(0xFF111827)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected
+                ? AppColors.primary
+                : isDarkMode
+                ? const Color(0xFF253041)
+                : AppColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: selected
+                  ? Colors.white
+                  : isDarkMode
+                  ? Colors.white70
+                  : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected
+                      ? Colors.white
+                      : isDarkMode
+                      ? Colors.white
+                      : AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DateTimeTile extends StatelessWidget {
+  final String label;
+  final DateTime? value;
+  final bool isDarkMode;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  const _DateTimeTile({
+    required this.label,
+    required this.value,
+    required this.isDarkMode,
+    required this.onTap,
+    this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDarkMode ? Colors.white : AppColors.textPrimary;
+    final subtitleColor = isDarkMode
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDarkMode ? const Color(0xFF111827) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDarkMode ? const Color(0xFF253041) : AppColors.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.calendar_today_outlined,
+              color: AppColors.primary,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: subtitleColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    value == null
+                        ? 'Pilih waktu'
+                        : DateFormat('dd MMM, HH:mm').format(value!.toLocal()),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onClear != null)
+              InkWell(
+                onTap: onClear,
+                child: Icon(Icons.close, size: 16, color: subtitleColor),
+              ),
+          ],
+        ),
       ),
     );
   }

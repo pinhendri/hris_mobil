@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 
 class UserManagementMenuScreen extends StatelessWidget {
@@ -11,6 +13,7 @@ class UserManagementMenuScreen extends StatelessWidget {
       title: 'Master Permission',
       subtitle: 'Permission Master File',
       endpoint: '/permission-management/permissions',
+      permissions: ['view-permissions', 'view-roles'],
       icon: Icons.key_outlined,
       color: Color(0xFF7C3AED),
       fields: [
@@ -24,6 +27,7 @@ class UserManagementMenuScreen extends StatelessWidget {
       title: 'Master Role',
       subtitle: 'Role Master',
       endpoint: '/role-management/roles',
+      permissions: ['view-roles'],
       icon: Icons.admin_panel_settings_outlined,
       color: Color(0xFF2563EB),
       fields: [
@@ -36,6 +40,7 @@ class UserManagementMenuScreen extends StatelessWidget {
       title: 'Assign Role ke Grup',
       subtitle: 'Group Assign Roles',
       endpoint: '/role-management/group-roles',
+      permissions: ['assign-roles', 'view-roles'],
       icon: Icons.fact_check_outlined,
       color: Color(0xFF059669),
       fields: [
@@ -49,6 +54,7 @@ class UserManagementMenuScreen extends StatelessWidget {
       title: 'Assign Grup ke User',
       subtitle: 'User Assign Group',
       endpoint: '/roles',
+      permissions: ['assign-user', 'assign-roles', 'view-roles'],
       icon: Icons.manage_accounts_outlined,
       color: Color(0xFFEA580C),
       fields: [
@@ -78,11 +84,20 @@ class UserManagementMenuScreen extends StatelessWidget {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemBuilder: (context, index) => _UserMenuCard(config: _menus[index]),
-        separatorBuilder: (_, index) => const SizedBox(height: 12),
-        itemCount: _menus.length,
+      body: Consumer<AuthProvider>(
+        builder: (context, authProvider, _) {
+          final visibleMenus = _menus
+              .where((menu) => authProvider.hasAnyPermission(menu.permissions))
+              .toList(growable: false);
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemBuilder: (context, index) =>
+                _UserMenuCard(config: visibleMenus[index]),
+            separatorBuilder: (_, index) => const SizedBox(height: 12),
+            itemCount: visibleMenus.length,
+          );
+        },
       ),
     );
   }
@@ -536,6 +551,7 @@ class _UserManagementConfig {
   final Color color;
   final List<_UserField> fields;
   final String searchHint;
+  final List<String> permissions;
   final List<String>? dataPath;
 
   const _UserManagementConfig({
@@ -546,6 +562,7 @@ class _UserManagementConfig {
     required this.color,
     required this.fields,
     required this.searchHint,
+    required this.permissions,
     this.dataPath,
   });
 }

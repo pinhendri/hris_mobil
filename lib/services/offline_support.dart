@@ -35,6 +35,10 @@ class OfflineSupport {
     }
 
     final message = error.toString().toLowerCase();
+    if (RegExp(r'http\s+\d{3}').hasMatch(message)) {
+      return false;
+    }
+
     return message.contains('socketexception') ||
         message.contains('failed host lookup') ||
         message.contains('connection error') ||
@@ -58,8 +62,7 @@ class OfflineSupport {
     }
 
     final message = error.toString();
-    return message.contains('HTTP 500') ||
-        message.contains('HTTP 502') ||
+    return message.contains('HTTP 502') ||
         message.contains('HTTP 503') ||
         message.contains('HTTP 504') ||
         message.contains('HTTP 408') ||

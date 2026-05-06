@@ -40,6 +40,7 @@ class _OvertimeScreenState extends State<OvertimeScreen> {
   _OvertimeEmployeeOption? _currentEmployee;
   int? _selectedEmployeeId;
   int? _editingId;
+  String _statusFilter = 'all';
   DateTime? _requestDate;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
@@ -74,6 +75,18 @@ class _OvertimeScreenState extends State<OvertimeScreen> {
         elevation: 0,
         title: Text('Overtime Requests', style: _titleStyle(isDark, size: 18)),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _isSubmitting
+            ? null
+            : () {
+                _resetForm();
+                _openOvertimeForm();
+              },
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Overtime'),
+      ),
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -93,9 +106,9 @@ class _OvertimeScreenState extends State<OvertimeScreen> {
                   children: [
                     _buildSummaryCard(isDark, accessLabel: accessLabel),
                     const SizedBox(height: 16),
-                    _buildFormCard(isDark),
-                    const SizedBox(height: 16),
-                    _buildRequestsCard(isDark),
+                    _buildStatusFilters(isDark),
+                    const SizedBox(height: 12),
+                    _buildRequestsCard(isDark, requests: _filteredRequests()),
                   ],
                 ),
               ),
@@ -369,7 +382,88 @@ class _OvertimeScreenState extends State<OvertimeScreen> {
     );
   }
 
-  Widget _buildRequestsCard(bool isDark) {
+  Future<void> _openOvertimeForm() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 12,
+            right: 12,
+            top: 12,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 12,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.88,
+            ),
+            child: SingleChildScrollView(child: _buildFormCard(isDark)),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusFilters(bool isDark) {
+    final filters = <String, String>{
+      'all': 'Semua',
+      'pending': 'Pending',
+      'approved': 'Approved',
+      'rejected': 'Rejected',
+    };
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: filters.entries.map((entry) {
+          final selected = _statusFilter == entry.key;
+          final count = _filteredRequests(filter: entry.key).length;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              selected: selected,
+              label: Text('${entry.value} ($count)'),
+              selectedColor: _accentColor,
+              backgroundColor: _surfaceColor(isDark),
+              side: BorderSide(color: _surfaceBorderColor(isDark)),
+              labelStyle: _bodyStyle(
+                isDark,
+                size: 12,
+                weight: FontWeight.w700,
+                color: selected
+                    ? Colors.white
+                    : (isDark ? Colors.white70 : const Color(0xFF475569)),
+              ),
+              onSelected: (_) {
+                setState(() {
+                  _statusFilter = entry.key;
+                });
+              },
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  List<_OvertimeRequestItem> _filteredRequests({String? filter}) {
+    final activeFilter = filter ?? _statusFilter;
+    if (activeFilter == 'all') {
+      return _requests;
+    }
+
+    return _requests
+        .where((request) => request.status.trim().toLowerCase() == activeFilter)
+        .toList(growable: false);
+  }
+
+  Widget _buildRequestsCard(
+    bool isDark, {
+    required List<_OvertimeRequestItem> requests,
+  }) {
     return _buildSurfaceCard(
       isDark: isDark,
       padding: const EdgeInsets.all(18),
@@ -383,7 +477,7 @@ class _OvertimeScreenState extends State<OvertimeScreen> {
             style: _bodyStyle(isDark, size: 13),
           ),
           const SizedBox(height: 14),
-          if (_requests.isEmpty)
+          if (requests.isEmpty)
             _buildInlineMessage(
               isDark: isDark,
               message: 'No overtime requests found.',
@@ -392,9 +486,9 @@ class _OvertimeScreenState extends State<OvertimeScreen> {
           else
             Column(
               children: [
-                for (var index = 0; index < _requests.length; index++) ...[
-                  _buildRequestItem(isDark, _requests[index]),
-                  if (index != _requests.length - 1) ...[
+                for (var index = 0; index < requests.length; index++) ...[
+                  _buildRequestItem(isDark, requests[index]),
+                  if (index != requests.length - 1) ...[
                     const SizedBox(height: 12),
                     Divider(
                       height: 1,
@@ -520,7 +614,12 @@ class _OvertimeScreenState extends State<OvertimeScreen> {
           children: [
             if (canEdit)
               OutlinedButton(
-                onPressed: _isSubmitting ? null : () => _startEditing(request),
+                onPressed: _isSubmitting
+                    ? null
+                    : () {
+                        _startEditing(request);
+                        _openOvertimeForm();
+                      },
                 child: const Text('Edit'),
               ),
             if (canApprove)
@@ -804,6 +903,9 @@ class _OvertimeScreenState extends State<OvertimeScreen> {
       }
 
       _resetForm();
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
       await _loadData();
     } catch (error) {
       if (!mounted) {

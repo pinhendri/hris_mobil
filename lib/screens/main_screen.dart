@@ -6,7 +6,7 @@ import '../providers/auth_provider.dart';
 import '../providers/bot_assistant_provider.dart';
 import '../providers/theme_provider.dart';
 import 'bot/bot_assistant_screen.dart';
-import 'tabs/admin_tab.dart';
+import 'tabs/approval_tab.dart';
 import 'tabs/dashboard_tab.dart';
 import 'tabs/feature_tab.dart';
 import 'tabs/profile_tab.dart';
@@ -37,15 +37,20 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
-    final authProvider = context.watch<AuthProvider>();
     final isDark = themeProvider.isDarkMode;
 
     final tabs = <_MainNavigationItem>[
       _MainNavigationItem(
-        label: context.tr('nav_dashboard'),
-        icon: Icons.dashboard_outlined,
-        activeIcon: Icons.dashboard,
-        screen: const DashboardTab(),
+        label: context.tr('nav_home'),
+        icon: Icons.home_outlined,
+        activeIcon: Icons.home_rounded,
+        screen: DashboardTab(
+          onOpenFeatures: () {
+            setState(() {
+              _selectedIndex = 1;
+            });
+          },
+        ),
       ),
       _MainNavigationItem(
         label: context.tr('nav_features'),
@@ -53,13 +58,12 @@ class _MainScreenState extends State<MainScreen> {
         activeIcon: Icons.grid_view,
         screen: const FeatureTab(),
       ),
-      if (authProvider.canAccessAdminPanel)
-        _MainNavigationItem(
-          label: context.tr('nav_admin'),
-          icon: Icons.admin_panel_settings_outlined,
-          activeIcon: Icons.admin_panel_settings,
-          screen: const AdminTab(),
-        ),
+      _MainNavigationItem(
+        label: context.tr('nav_approval'),
+        icon: Icons.fact_check_outlined,
+        activeIcon: Icons.fact_check_rounded,
+        screen: const ApprovalTab(),
+      ),
       _MainNavigationItem(
         label: context.tr('nav_profile'),
         icon: Icons.person_outline,

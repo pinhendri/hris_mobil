@@ -44,6 +44,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
 
   DateTime? _expenseDate;
   String _selectedClaimType = 'reimbursement';
+  String _statusFilter = 'all';
   String? _editingId;
   int? _selectedEmployeeId;
 
@@ -89,6 +90,27 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
         elevation: 0,
         title: Text('Expense Claims', style: _titleStyle(isDark, size: 18)),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: claimProvider.isSubmitting
+            ? null
+            : () {
+                _resetForm(
+                  claimProvider,
+                  currentEmployee: currentEmployee,
+                  isAdminUser: isAdminUser,
+                );
+                _openClaimForm(
+                  claimProvider: claimProvider,
+                  authProvider: authProvider,
+                  currentEmployee: currentEmployee,
+                  isAdminUser: isAdminUser,
+                );
+              },
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Claim'),
+      ),
       body: SafeArea(
         child:
             (isBootstrapping ||
@@ -111,22 +133,20 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                     _buildSummaryCard(
                       isDark,
                       claimCount: claimProvider.claims.length,
+                      filteredCount: _filteredClaims(
+                        claimProvider.claims,
+                      ).length,
                       accessLabel: accessLabel,
                       currentEmployee: currentEmployee,
                       syncNotice: claimProvider.syncNotice,
                     ),
                     const SizedBox(height: 16),
-                    _buildFormCard(
-                      isDark,
-                      claimProvider: claimProvider,
-                      authProvider: authProvider,
-                      currentEmployee: currentEmployee,
-                      isAdminUser: isAdminUser,
-                    ),
-                    const SizedBox(height: 16),
+                    _buildStatusFilters(isDark, claimProvider.claims),
+                    const SizedBox(height: 12),
                     _buildRegisterCard(
                       isDark,
                       claimProvider: claimProvider,
+                      claims: _filteredClaims(claimProvider.claims),
                       currentEmployee: currentEmployee,
                       currentUserId: currentUserId,
                       currentUserUuid: currentUserUuid,
@@ -142,6 +162,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
   Widget _buildSummaryCard(
     bool isDark, {
     required int claimCount,
+    required int filteredCount,
     required String accessLabel,
     required ClaimEmployeeOption? currentEmployee,
     required String? syncNotice,
@@ -194,6 +215,11 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
               _buildInfoChip(
                 label: 'Claims: $claimCount',
                 color: const Color(0xFF3478F6),
+                isDark: isDark,
+              ),
+              _buildInfoChip(
+                label: 'Shown: $filteredCount',
+                color: const Color(0xFF7C3AED),
                 isDark: isDark,
               ),
               _buildInfoChip(
@@ -471,7 +497,6 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                       onPressed: claimProvider.isSubmitting
                           ? null
                           : () => _submitClaim(
-                              context,
                               claimProvider: claimProvider,
                               currentEmployee: currentEmployee,
                               isAdminUser: isAdminUser,
@@ -504,9 +529,108 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     );
   }
 
+  Future<void> _openClaimForm({
+    required ClaimProvider claimProvider,
+    required AuthProvider authProvider,
+    required ClaimEmployeeOption? currentEmployee,
+    required bool isAdminUser,
+  }) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 12,
+            right: 12,
+            top: 12,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 12,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.88,
+            ),
+            child: SingleChildScrollView(
+              child: _buildFormCard(
+                isDark,
+                claimProvider: claimProvider,
+                authProvider: authProvider,
+                currentEmployee: currentEmployee,
+                isAdminUser: isAdminUser,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusFilters(bool isDark, List<ClaimModel> claims) {
+    final filters = <String, String>{
+      'all': 'Semua',
+      'submitted': 'Pending',
+      'approved': 'Approved',
+      'paid': 'Paid',
+      'rejected': 'Rejected',
+    };
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: filters.entries.map((entry) {
+          final selected = _statusFilter == entry.key;
+          final count = _filteredClaims(claims, filter: entry.key).length;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              selected: selected,
+              label: Text('${entry.value} ($count)'),
+              selectedColor: _accentColor,
+              backgroundColor: _surfaceColor(isDark),
+              side: BorderSide(color: _surfaceBorderColor(isDark)),
+              labelStyle: _bodyStyle(
+                isDark,
+                size: 12,
+                weight: FontWeight.w700,
+                color: selected
+                    ? Colors.white
+                    : (isDark ? Colors.white70 : const Color(0xFF475569)),
+              ),
+              onSelected: (_) {
+                setState(() {
+                  _statusFilter = entry.key;
+                });
+              },
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  List<ClaimModel> _filteredClaims(List<ClaimModel> claims, {String? filter}) {
+    final activeFilter = filter ?? _statusFilter;
+    if (activeFilter == 'all') {
+      return claims;
+    }
+
+    return claims
+        .where((claim) {
+          final status = claim.status.trim().toLowerCase();
+          if (activeFilter == 'submitted') {
+            return status == 'submitted' || status == 'pending';
+          }
+          return status == activeFilter;
+        })
+        .toList(growable: false);
+  }
+
   Widget _buildRegisterCard(
     bool isDark, {
     required ClaimProvider claimProvider,
+    required List<ClaimModel> claims,
     required ClaimEmployeeOption? currentEmployee,
     required int? currentUserId,
     required String currentUserUuid,
@@ -525,7 +649,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
             style: _bodyStyle(isDark, size: 13),
           ),
           const SizedBox(height: 14),
-          if (claimProvider.claims.isEmpty)
+          if (claims.isEmpty)
             _buildInlineMessage(
               isDark: isDark,
               message: 'No claims recorded.',
@@ -534,21 +658,17 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
           else
             Column(
               children: [
-                for (
-                  var index = 0;
-                  index < claimProvider.claims.length;
-                  index++
-                ) ...[
+                for (var index = 0; index < claims.length; index++) ...[
                   _buildClaimItem(
                     isDark,
-                    claimProvider.claims[index],
+                    claims[index],
                     claimProvider: claimProvider,
                     currentEmployee: currentEmployee,
                     currentUserId: currentUserId,
                     currentUserUuid: currentUserUuid,
                     isAdminUser: isAdminUser,
                   ),
-                  if (index != claimProvider.claims.length - 1) ...[
+                  if (index != claims.length - 1) ...[
                     const SizedBox(height: 12),
                     Divider(
                       height: 1,
@@ -716,12 +836,21 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
                 OutlinedButton(
                   onPressed: claimProvider.isSubmitting
                       ? null
-                      : () => _startEditing(
-                          claim,
-                          claimProvider,
-                          currentEmployee: currentEmployee,
-                          isAdminUser: isAdminUser,
-                        ),
+                      : () {
+                          final authProvider = context.read<AuthProvider>();
+                          _startEditing(
+                            claim,
+                            claimProvider,
+                            currentEmployee: currentEmployee,
+                            isAdminUser: isAdminUser,
+                          );
+                          _openClaimForm(
+                            claimProvider: claimProvider,
+                            authProvider: authProvider,
+                            currentEmployee: currentEmployee,
+                            isAdminUser: isAdminUser,
+                          );
+                        },
                   child: const Text('Edit'),
                 ),
               if (canApprove)
@@ -929,8 +1058,7 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
     });
   }
 
-  Future<void> _submitClaim(
-    BuildContext context, {
+  Future<void> _submitClaim({
     required ClaimProvider claimProvider,
     required ClaimEmployeeOption? currentEmployee,
     required bool isAdminUser,
@@ -1011,6 +1139,9 @@ class _ClaimsScreenState extends State<ClaimsScreen> {
       currentEmployee: currentEmployee,
       isAdminUser: isAdminUser,
     );
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
     _showSnackBar(
       claimProvider.lastActionMessage ??
           (wasEditing ? 'Claim updated.' : 'Claim submitted.'),

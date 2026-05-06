@@ -25,22 +25,25 @@ class _LeaveManagementEnhancedScreenState
   bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
 
   Color get _screenBackgroundColor =>
-      _isDarkMode ? const Color(0xFF020817) : AppColors.background;
+      _isDarkMode ? const Color(0xFF050914) : AppColors.background;
 
   Color get _surfaceColor =>
-      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+      _isDarkMode ? const Color(0xFF0B1220) : Colors.white;
 
   Color get _surfaceMutedColor =>
-      _isDarkMode ? const Color(0xFF0F172A) : Colors.grey.shade100;
+      _isDarkMode ? const Color(0xFF111A2C) : Colors.grey.shade100;
 
   Color get _surfaceBorderColor =>
-      _isDarkMode ? const Color(0xFF253041) : AppColors.border;
+      _isDarkMode ? const Color(0xFF1E293B) : AppColors.border;
+
+  Color get _primarySoftColor =>
+      AppColors.primary.withValues(alpha: _isDarkMode ? 0.13 : 0.1);
 
   Color get _primaryTextColor =>
-      _isDarkMode ? const Color(0xFFF8FAFC) : AppColors.textPrimary;
+      _isDarkMode ? const Color(0xFFE5EDF8) : AppColors.textPrimary;
 
   Color get _secondaryTextColor =>
-      _isDarkMode ? const Color(0xFFCBD5E1) : AppColors.textSecondary;
+      _isDarkMode ? const Color(0xFF94A3B8) : AppColors.textSecondary;
 
   BoxDecoration _surfaceDecoration() => BoxDecoration(
     color: _surfaceColor,
@@ -50,12 +53,38 @@ class _LeaveManagementEnhancedScreenState
         ? const []
         : [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
           ],
   );
+
+  InputDecoration _inputDecoration(String label, {IconData? icon}) {
+    final radius = BorderRadius.circular(14);
+
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: _secondaryTextColor),
+      prefixIcon: icon == null
+          ? null
+          : Icon(icon, color: _secondaryTextColor, size: 20),
+      filled: true,
+      fillColor: _surfaceMutedColor,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide(color: _surfaceBorderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide(
+          color: _isDarkMode ? const Color(0xFF60A5FA) : AppColors.primary,
+          width: 1.4,
+        ),
+      ),
+      border: OutlineInputBorder(borderRadius: radius),
+    );
+  }
 
   @override
   void initState() {
@@ -104,6 +133,7 @@ class _LeaveManagementEnhancedScreenState
           elevation: 0,
           centerTitle: true,
           iconTheme: IconThemeData(color: _primaryTextColor),
+          foregroundColor: _primaryTextColor,
           actions: [
             IconButton(
               onPressed: leaveProvider.isLoading
@@ -113,9 +143,23 @@ class _LeaveManagementEnhancedScreenState
             ),
           ],
           bottom: TabBar(
-            labelColor: AppColors.primary,
+            labelColor: _isDarkMode
+                ? const Color(0xFFBFDBFE)
+                : AppColors.primary,
             unselectedLabelColor: _secondaryTextColor,
-            indicatorColor: AppColors.primary,
+            indicatorSize: TabBarIndicatorSize.tab,
+            dividerColor: _surfaceBorderColor,
+            indicator: BoxDecoration(
+              color: _primarySoftColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _isDarkMode
+                    ? const Color(0xFF1D4ED8).withValues(alpha: 0.28)
+                    : AppColors.primary.withValues(alpha: 0.12),
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            labelStyle: const TextStyle(fontWeight: FontWeight.w700),
             tabs: [
               const Tab(text: 'Requests'),
               if (canManageCompanyLeave) const Tab(text: 'Company Leave'),
@@ -123,7 +167,11 @@ class _LeaveManagementEnhancedScreenState
           ),
         ),
         body: leaveProvider.isLoading && leaveProvider.leaveRequests.isEmpty
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(
+                child: CircularProgressIndicator(
+                  color: _isDarkMode ? Colors.white70 : AppColors.primary,
+                ),
+              )
             : TabBarView(
                 children: [
                   _buildRequestsTab(leaveProvider, companyCode),
@@ -137,65 +185,156 @@ class _LeaveManagementEnhancedScreenState
 
   Widget _buildRequestsTab(LeaveProvider leaveProvider, String companyCode) {
     final requests = leaveProvider.leaveRequests;
+    final companyLeaveCount = requests
+        .where((request) => request.isCompanyLeave)
+        .length;
+    final pendingCount = requests
+        .where((request) => request.status.toLowerCase() == 'pending')
+        .length;
 
     return RefreshIndicator(
       onRefresh: leaveProvider.fetchLeaveData,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
-          if (companyCode.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: _isDarkMode ? 0.16 : 0.08),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.blue.withValues(
-                    alpha: _isDarkMode ? 0.24 : 0.15,
-                  ),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Company: $companyCode',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Requests: ${requests.length} | Company leave: ${requests.where((request) => request.isCompanyLeave).length}',
-                    style: TextStyle(color: _secondaryTextColor),
-                  ),
-                ],
-              ),
-            ),
-          if (requests.isEmpty) ...[
-            const SizedBox(height: 140),
-            Icon(
-              Icons.inbox_outlined,
-              size: 56,
-              color: _secondaryTextColor.withValues(alpha: 0.7),
-            ),
-            const SizedBox(height: 16),
-            Center(
-              child: Text(
-                'No leave requests found',
-                style: TextStyle(color: _secondaryTextColor, fontSize: 16),
-              ),
-            ),
-          ] else ...[
-            const SizedBox(height: 12),
+          _buildOverviewCard(
+            companyCode: companyCode,
+            requests: requests.length,
+            companyLeave: companyLeaveCount,
+            pending: pendingCount,
+          ),
+          const SizedBox(height: 16),
+          if (requests.isEmpty)
+            _buildEmptyState(
+              icon: Icons.inbox_outlined,
+              title: 'No leave requests found',
+              message: companyCode.isEmpty
+                  ? 'Select a company first to load leave requests.'
+                  : 'Leave requests for $companyCode will appear here.',
+            )
+          else
             ...requests.map(
               (request) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _LeaveRequestManagementCard(request: request),
               ),
             ),
-          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOverviewCard({
+    required String companyCode,
+    required int requests,
+    required int companyLeave,
+    required int pending,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _surfaceDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _primarySoftColor,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.beach_access_outlined,
+                  color: Color(0xFF60A5FA),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      companyCode.isEmpty ? 'No company selected' : companyCode,
+                      style: TextStyle(
+                        color: _primaryTextColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Leave request overview',
+                      style: TextStyle(color: _secondaryTextColor),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryPill(
+                  label: 'Requests',
+                  value: '$requests',
+                  color: _isDarkMode
+                      ? const Color(0xFF60A5FA)
+                      : AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _SummaryPill(
+                  label: 'Company',
+                  value: '$companyLeave',
+                  color: _isDarkMode ? const Color(0xFF38BDF8) : Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _SummaryPill(
+                  label: 'Pending',
+                  value: '$pending',
+                  color: _isDarkMode ? const Color(0xFFFBBF24) : Colors.orange,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState({
+    required IconData icon,
+    required String title,
+    required String message,
+  }) {
+    return Container(
+      decoration: _surfaceDecoration(),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 42),
+      child: Column(
+        children: [
+          Icon(icon, size: 48, color: _secondaryTextColor),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _primaryTextColor,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _secondaryTextColor, height: 1.35),
+          ),
         ],
       ),
     );
@@ -236,12 +375,9 @@ class _LeaveManagementEnhancedScreenState
                   TextField(
                     controller: _titleController,
                     style: TextStyle(color: _primaryTextColor),
-                    decoration: InputDecoration(
-                      labelText: 'Title',
-                      labelStyle: TextStyle(color: _secondaryTextColor),
-                      filled: true,
-                      fillColor: _surfaceMutedColor,
-                      border: const OutlineInputBorder(),
+                    decoration: _inputDecoration(
+                      'Title',
+                      icon: Icons.title_outlined,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -249,12 +385,9 @@ class _LeaveManagementEnhancedScreenState
                     controller: _descriptionController,
                     maxLines: 3,
                     style: TextStyle(color: _primaryTextColor),
-                    decoration: InputDecoration(
-                      labelText: 'Description',
-                      labelStyle: TextStyle(color: _secondaryTextColor),
-                      filled: true,
-                      fillColor: _surfaceMutedColor,
-                      border: const OutlineInputBorder(),
+                    decoration: _inputDecoration(
+                      'Description',
+                      icon: Icons.notes_outlined,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -347,25 +480,11 @@ class _LeaveManagementEnhancedScreenState
           ),
           const SizedBox(height: 12),
           if (leaveProvider.companyLeaveBatches.isEmpty)
-            Container(
-              decoration: _surfaceDecoration(),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.event_busy_outlined,
-                      size: 40,
-                      color: _secondaryTextColor,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No company leave batches yet',
-                      style: TextStyle(color: _secondaryTextColor),
-                    ),
-                  ],
-                ),
-              ),
+            _buildEmptyState(
+              icon: Icons.event_busy_outlined,
+              title: 'No company leave batches yet',
+              message:
+                  'Bulk company leave history will appear after you create a batch.',
             )
           else
             ...leaveProvider.companyLeaveBatches.map(
@@ -512,18 +631,18 @@ class _LeaveRequestManagementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDarkMode ? const Color(0xFF111827) : Colors.white;
+    final surfaceColor = isDarkMode ? const Color(0xFF0B1220) : Colors.white;
     final surfaceMutedColor = isDarkMode
-        ? const Color(0xFF0F172A)
+        ? const Color(0xFF111A2C)
         : Colors.grey.shade100;
     final surfaceBorderColor = isDarkMode
-        ? const Color(0xFF253041)
+        ? const Color(0xFF1E293B)
         : AppColors.border;
     final primaryTextColor = isDarkMode
-        ? const Color(0xFFF8FAFC)
+        ? const Color(0xFFE5EDF8)
         : AppColors.textPrimary;
     final secondaryTextColor = isDarkMode
-        ? const Color(0xFFCBD5E1)
+        ? const Color(0xFF94A3B8)
         : AppColors.textSecondary;
     final leaveProvider = context.read<LeaveProvider>();
     final canApprove =
@@ -534,6 +653,15 @@ class _LeaveRequestManagementCard extends StatelessWidget {
         color: surfaceColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: surfaceBorderColor),
+        boxShadow: isDarkMode
+            ? const []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -570,13 +698,15 @@ class _LeaveRequestManagementCard extends StatelessWidget {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.1),
+                                color: const Color(
+                                  0xFF2563EB,
+                                ).withValues(alpha: isDarkMode ? 0.2 : 0.1),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: const Text(
                                 'Company Leave',
                                 style: TextStyle(
-                                  color: Colors.blue,
+                                  color: Color(0xFF60A5FA),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -643,7 +773,15 @@ class _LeaveRequestManagementCard extends StatelessWidget {
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
-                        side: BorderSide(color: surfaceBorderColor),
+                        backgroundColor: Colors.red.withValues(
+                          alpha: isDarkMode ? 0.1 : 0.04,
+                        ),
+                        side: BorderSide(
+                          color: Colors.red.withValues(
+                            alpha: isDarkMode ? 0.5 : 0.3,
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       child: const Text('Reject'),
                     ),
@@ -659,6 +797,7 @@ class _LeaveRequestManagementCard extends StatelessWidget {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       child: const Text('Approve'),
                     ),
@@ -679,22 +818,44 @@ class _LeaveRequestManagementCard extends StatelessWidget {
   }) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${approved ? 'Approve' : 'Reject'} Leave Request'),
-        content: Text(
-          'Are you sure you want to ${approved ? 'approve' : 'reject'} this leave request?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      builder: (context) {
+        final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+        final primaryTextColor = isDarkMode
+            ? const Color(0xFFE5EDF8)
+            : AppColors.textPrimary;
+        final secondaryTextColor = isDarkMode
+            ? const Color(0xFF94A3B8)
+            : AppColors.textSecondary;
+        final surfaceColor = isDarkMode
+            ? const Color(0xFF0B1220)
+            : Colors.white;
+
+        return AlertDialog(
+          backgroundColor: surfaceColor,
+          surfaceTintColor: surfaceColor,
+          title: Text(
+            '${approved ? 'Approve' : 'Reject'} Leave Request',
+            style: TextStyle(color: primaryTextColor),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(approved ? 'Approve' : 'Reject'),
+          content: Text(
+            'Are you sure you want to ${approved ? 'approve' : 'reject'} this leave request?',
+            style: TextStyle(color: secondaryTextColor),
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(
+                foregroundColor: approved ? Colors.green : Colors.red,
+              ),
+              child: Text(approved ? 'Approve' : 'Reject'),
+            ),
+          ],
+        );
+      },
     );
 
     if (confirmed != true) {
@@ -742,15 +903,15 @@ class _CompanyLeaveBatchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDarkMode ? const Color(0xFF111827) : Colors.white;
+    final surfaceColor = isDarkMode ? const Color(0xFF0B1220) : Colors.white;
     final surfaceBorderColor = isDarkMode
-        ? const Color(0xFF253041)
+        ? const Color(0xFF1E293B)
         : AppColors.border;
     final primaryTextColor = isDarkMode
-        ? const Color(0xFFF8FAFC)
+        ? const Color(0xFFE5EDF8)
         : AppColors.textPrimary;
     final secondaryTextColor = isDarkMode
-        ? const Color(0xFFCBD5E1)
+        ? const Color(0xFF94A3B8)
         : AppColors.textSecondary;
 
     return Container(
@@ -758,6 +919,15 @@ class _CompanyLeaveBatchCard extends StatelessWidget {
         color: surfaceColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: surfaceBorderColor),
+        boxShadow: isDarkMode
+            ? const []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -793,13 +963,15 @@ class _CompanyLeaveBatchCard extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.1),
+                    color: const Color(
+                      0xFF2563EB,
+                    ).withValues(alpha: isDarkMode ? 0.2 : 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     batch.leaveType,
                     style: const TextStyle(
-                      color: Colors.blue,
+                      color: Color(0xFF60A5FA),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -846,10 +1018,7 @@ class _CompanyLeaveBatchCard extends StatelessWidget {
               batch.creatorName.isEmpty
                   ? 'Created ${_formatDate(batch.createdAt)}'
                   : 'Created ${_formatDate(batch.createdAt)} by ${batch.creatorName}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 12, color: secondaryTextColor),
             ),
           ],
         ),
@@ -870,6 +1039,55 @@ class _CompanyLeaveBatchCard extends StatelessWidget {
   }
 }
 
+class _SummaryPill extends StatelessWidget {
+  const _SummaryPill({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final secondaryTextColor = isDarkMode
+        ? const Color(0xFF94A3B8)
+        : AppColors.textSecondary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDarkMode ? 0.16 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: color.withValues(alpha: isDarkMode ? 0.22 : 0.14),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: secondaryTextColor),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DateTile extends StatelessWidget {
   const _DateTile({
     required this.label,
@@ -884,15 +1102,15 @@ class _DateTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDarkMode ? const Color(0xFF0F172A) : Colors.white;
+    final surfaceColor = isDarkMode ? const Color(0xFF111A2C) : Colors.white;
     final surfaceBorderColor = isDarkMode
-        ? const Color(0xFF253041)
+        ? const Color(0xFF1E293B)
         : Colors.grey.shade300;
     final primaryTextColor = isDarkMode
-        ? const Color(0xFFF8FAFC)
+        ? const Color(0xFFE5EDF8)
         : AppColors.textPrimary;
     final secondaryTextColor = isDarkMode
-        ? const Color(0xFFCBD5E1)
+        ? const Color(0xFF94A3B8)
         : AppColors.textSecondary;
 
     return InkWell(
@@ -950,10 +1168,10 @@ class _InfoBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final primaryTextColor = isDarkMode
-        ? const Color(0xFFF8FAFC)
+        ? const Color(0xFFE5EDF8)
         : AppColors.textPrimary;
     final secondaryTextColor = isDarkMode
-        ? const Color(0xFFCBD5E1)
+        ? const Color(0xFF94A3B8)
         : AppColors.textSecondary;
 
     return Column(
@@ -988,7 +1206,7 @@ class _MetricTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final secondaryTextColor = isDarkMode
-        ? const Color(0xFFCBD5E1)
+        ? const Color(0xFF94A3B8)
         : AppColors.textSecondary;
 
     return Container(

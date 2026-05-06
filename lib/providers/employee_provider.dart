@@ -696,6 +696,57 @@ class EmployeeProvider with ChangeNotifier {
     }).toList();
   }
 
+  static List<Employee> filterSubordinateTree({
+    required List<Employee> employees,
+    required String managerEmployeeId,
+  }) {
+    final normalizedManagerId = managerEmployeeId.trim();
+    if (normalizedManagerId.isEmpty) {
+      return const [];
+    }
+
+    final childrenByManager = <String, List<Employee>>{};
+    for (final employee in employees) {
+      final managerId = employee.managerId?.trim() ?? '';
+      if (managerId.isEmpty) {
+        continue;
+      }
+
+      childrenByManager
+          .putIfAbsent(managerId, () => <Employee>[])
+          .add(employee);
+    }
+
+    final result = <Employee>[];
+    final visited = <String>{};
+    final queue = <String>[normalizedManagerId];
+
+    while (queue.isNotEmpty) {
+      final currentManagerId = queue.removeAt(0);
+      for (final child
+          in childrenByManager[currentManagerId] ?? const <Employee>[]) {
+        final childKey = child.uuid.trim().isNotEmpty
+            ? child.uuid.trim()
+            : child.id.trim();
+        if (childKey.isEmpty || !visited.add(childKey)) {
+          continue;
+        }
+
+        result.add(child);
+        if (child.uuid.trim().isNotEmpty) {
+          queue.add(child.uuid.trim());
+        }
+        if (child.id.trim().isNotEmpty &&
+            child.id.trim() != child.uuid.trim()) {
+          queue.add(child.id.trim());
+        }
+      }
+    }
+
+    result.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return result;
+  }
+
   Future<void> loadNextPage() async {
     if (_currentPage < _lastPage && !_isLoading) {
       await fetchEmployees(page: _currentPage + 1);

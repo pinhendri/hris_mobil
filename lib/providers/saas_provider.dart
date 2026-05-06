@@ -40,6 +40,7 @@ class SaasProvider with ChangeNotifier {
       .length;
 
   Future<void> loadWorkspace({
+    required AuthProvider authProvider,
     bool includeAdminOverview = false,
     bool force = false,
   }) async {
@@ -55,11 +56,20 @@ class SaasProvider with ChangeNotifier {
 
     try {
       final results = await Future.wait<_EndpointResult>([
-        _safeGet(ApiConstants.saasContextEndpoint),
-        _safeGet(ApiConstants.saasTrialStatusEndpoint),
+        if (authProvider.canAccessSaasWorkspace)
+          _safeGet(ApiConstants.saasContextEndpoint)
+        else
+          Future.value(const _EndpointResult(ok: false)),
+        if (authProvider.canAccessSaasBilling)
+          _safeGet(ApiConstants.saasTrialStatusEndpoint)
+        else
+          Future.value(const _EndpointResult(ok: false)),
         _safeGet(ApiConstants.saasCompaniesEndpoint),
-        _safeGet(ApiConstants.saasInvitationsEndpoint),
-        if (includeAdminOverview)
+        if (authProvider.canAccessSaasInvitations)
+          _safeGet(ApiConstants.saasInvitationsEndpoint)
+        else
+          Future.value(const _EndpointResult(ok: false)),
+        if (includeAdminOverview && authProvider.canAccessPlatformAdmin)
           _safeGet(ApiConstants.saasAdminOverviewEndpoint),
       ]);
 
@@ -102,7 +112,9 @@ class SaasProvider with ChangeNotifier {
           !trialResult.ok &&
           !companiesResult.ok &&
           !invitationsResult.ok) {
-        throw Exception(contextResult.error ?? trialResult.error ?? 'Failed');
+        if (authProvider.canAccessAnySaasWorkspace) {
+          throw Exception(contextResult.error ?? trialResult.error ?? 'Failed');
+        }
       }
 
       _lastLoadedAt = DateTime.now();
@@ -132,6 +144,7 @@ class SaasProvider with ChangeNotifier {
       if (result['success'] == true) {
         await authProvider.getUserInfo();
         await loadWorkspace(
+          authProvider: authProvider,
           includeAdminOverview: includeAdminOverview,
           force: true,
         );
@@ -145,6 +158,7 @@ class SaasProvider with ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> createInvitation({
+    required AuthProvider authProvider,
     required String email,
     String name = '',
     String role = 'member',
@@ -158,6 +172,7 @@ class SaasProvider with ChangeNotifier {
       );
 
       await loadWorkspace(
+        authProvider: authProvider,
         includeAdminOverview: includeAdminOverview,
         force: true,
       );
@@ -176,6 +191,7 @@ class SaasProvider with ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> revokeInvitation({
+    required AuthProvider authProvider,
     required int invitationId,
     bool includeAdminOverview = false,
   }) async {
@@ -185,6 +201,7 @@ class SaasProvider with ChangeNotifier {
       );
 
       await loadWorkspace(
+        authProvider: authProvider,
         includeAdminOverview: includeAdminOverview,
         force: true,
       );

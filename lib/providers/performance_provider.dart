@@ -9,6 +9,8 @@ import '../models/performance_model.dart';
 import '../services/api_service.dart';
 import '../services/offline_support.dart';
 import '../services/session_storage.dart';
+import '../utils/employee_context_fallback.dart';
+import '../utils/performance_home_fallback.dart';
 import 'auth_provider.dart';
 
 class PerformanceProvider with ChangeNotifier {
@@ -36,7 +38,8 @@ class PerformanceProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isUsingCachedData => _isUsingCachedData;
   String? get error => _error;
-  bool get hasData => _kpis.isNotEmpty;
+  bool get hasData =>
+      _kpis.isNotEmpty || _evaluations.isNotEmpty || _history.isNotEmpty;
 
   PerformanceHistoryModel? get currentPeriodHistory =>
       _findHistoryForPeriod(_selectedPeriod);
@@ -54,7 +57,11 @@ class PerformanceProvider with ChangeNotifier {
 
   Future<void> loadPerformance() async {
     final employeeUuid = await _resolveEmployeeUuid();
-    final cacheKey = _cacheKey(employeeUuid, _selectedPeriod);
+    final employeeRecordId = _resolveEmployeeRecordId();
+    final cacheKey = _cacheKey(
+      employeeUuid.isNotEmpty ? employeeUuid : employeeRecordId,
+      _selectedPeriod,
+    );
 
     _isLoading = true;
     _error = null;
@@ -68,9 +75,10 @@ class PerformanceProvider with ChangeNotifier {
       }
 
       final responses = await Future.wait<dynamic>([
-        _loadAssignedKpis(employeeContext.id),
+        _safeLoadAssignedKpis(employeeContext.id),
         _safeCheckExisting(employeeContext.id, _selectedPeriod),
         _safeLoadHistory(employeeContext.id),
+        _safeLoadEvaluationListHistory(employeeContext.id),
       ]);
 
       _kpis = _extractAssignedKpis(responses[0]);
@@ -79,7 +87,10 @@ class PerformanceProvider with ChangeNotifier {
         fallbackPeriod: _selectedPeriod,
         fallbackEmployeeId: employeeContext.id.toString(),
       );
-      _history = _extractHistory(responses[2]);
+      _history = _mergeHistoryEntries([
+        ..._extractHistory(responses[2]),
+        ...responses[3] as List<PerformanceHistoryModel>,
+      ]);
       _availablePeriods = _mergePeriods(_history.map((item) => item.period));
       _error = null;
 
@@ -137,17 +148,31 @@ class PerformanceProvider with ChangeNotifier {
       calculatedScore += achievement * kpi.weight;
     }
 
-    final historyEntry = currentPeriodHistory;
+    final historyEntry = selectDisplayHistoryEntry(
+      _history,
+      selectedPeriod: _selectedPeriod,
+    );
     final overallScore = historyEntry?.finalScore ?? calculatedScore;
     final grade =
         historyEntry?.grade ?? _gradeForScore(overallScore, completedKpis);
+    final hasHistoryScore = historyEntry != null;
+    final totalKpis = _kpis.isNotEmpty
+        ? _kpis.length
+        : hasHistoryScore
+        ? 1
+        : 0;
+    final totalCompleted = completedKpis > 0
+        ? completedKpis
+        : hasHistoryScore
+        ? 1
+        : 0;
 
     return PerformanceSummary(
-      period: _selectedPeriod,
+      period: historyEntry?.period ?? _selectedPeriod,
       overallScore: overallScore,
       grade: grade,
-      totalKpis: _kpis.length,
-      completedKpis: completedKpis,
+      totalKpis: totalKpis,
+      completedKpis: totalCompleted,
     );
   }
 
@@ -188,6 +213,28 @@ class PerformanceProvider with ChangeNotifier {
     }
   }
 
+  Future<dynamic> _safeLoadAssignedKpis(int employeeId) async {
+    try {
+      return await _loadAssignedKpis(employeeId);
+    } catch (_) {
+      return const <dynamic>[];
+    }
+  }
+
+  Future<List<PerformanceHistoryModel>> _safeLoadEvaluationListHistory(
+    int employeeId,
+  ) async {
+    try {
+      final response = await _apiService.get(_performanceEvaluationListPath);
+      return extractEmployeeHistoryFromEvaluationList(
+        response,
+        employeeId: employeeId,
+      );
+    } catch (_) {
+      return const <PerformanceHistoryModel>[];
+    }
+  }
+
   Future<dynamic> _loadAssignedKpis(int employeeId) async {
     return _getFirstAvailable(
       _performanceKpiPaths(employeeId),
@@ -196,7 +243,7 @@ class PerformanceProvider with ChangeNotifier {
   }
 
   Future<String> _resolveEmployeeUuid() async {
-    final authEmployeeUuid = _authProvider.getEmployeeUuid().trim();
+    final authEmployeeUuid = _authProvider.user?.employeeUuid?.trim() ?? '';
     if (authEmployeeUuid.isNotEmpty) {
       return authEmployeeUuid;
     }
@@ -225,16 +272,30 @@ class PerformanceProvider with ChangeNotifier {
       }
 
       return decoded['employee_uuid']?.toString().trim() ??
-          decoded['uuid']?.toString().trim() ??
+          decoded['employeeUuid']?.toString().trim() ??
           '';
     } catch (_) {
       return '';
     }
   }
 
+  String _resolveEmployeeRecordId() {
+    return _authProvider.user?.employeeRecordId?.trim() ?? '';
+  }
+
   Future<_PerformanceEmployeeContext?> _resolveEmployeeContext(
     String employeeUuid,
   ) async {
+    final authRecordId = _asInt(_resolveEmployeeRecordId());
+    if (authRecordId > 0) {
+      return _PerformanceEmployeeContext(id: authRecordId, uuid: employeeUuid);
+    }
+
+    final leaveBalanceContext = await _resolveEmployeeContextFromLeaveBalance();
+    if (leaveBalanceContext != null) {
+      return leaveBalanceContext;
+    }
+
     if (employeeUuid.isNotEmpty) {
       try {
         final response = await _apiService.get('/employees/$employeeUuid');
@@ -264,7 +325,7 @@ class PerformanceProvider with ChangeNotifier {
 
     final rawUserData = await SessionStorage.getUserData();
     if (rawUserData == null || rawUserData.isEmpty) {
-      return null;
+      return _resolveEmployeeContextFromLeaveBalance();
     }
 
     try {
@@ -289,10 +350,30 @@ class PerformanceProvider with ChangeNotifier {
         return _PerformanceEmployeeContext(id: fallbackId, uuid: employeeUuid);
       }
     } catch (_) {
+      final context = await _resolveEmployeeContextFromLeaveBalance();
+      if (context != null) {
+        return context;
+      }
+
       return null;
     }
 
-    return null;
+    return _resolveEmployeeContextFromLeaveBalance();
+  }
+
+  Future<_PerformanceEmployeeContext?>
+  _resolveEmployeeContextFromLeaveBalance() async {
+    try {
+      final response = await _apiService.get(_leaveBalancePath);
+      final context = employeeContextFromLeaveBalance(response);
+      if (context == null) {
+        return null;
+      }
+
+      return _PerformanceEmployeeContext(id: context.id, uuid: context.uuid);
+    } catch (_) {
+      return null;
+    }
   }
 
   _PerformanceEmployeeContext? _employeeContextFromMap(
@@ -458,6 +539,26 @@ class PerformanceProvider with ChangeNotifier {
 
     history.sort((left, right) => right.period.compareTo(left.period));
     return history;
+  }
+
+  List<PerformanceHistoryModel> _mergeHistoryEntries(
+    List<PerformanceHistoryModel> items,
+  ) {
+    final unique = <String, PerformanceHistoryModel>{};
+    for (final item in items) {
+      if (item.period.isEmpty) {
+        continue;
+      }
+
+      final existing = unique[item.period];
+      if (existing == null || item.finalScore != 0) {
+        unique[item.period] = item;
+      }
+    }
+
+    final merged = unique.values.toList(growable: false);
+    merged.sort((left, right) => right.period.compareTo(left.period));
+    return merged;
   }
 
   List<dynamic> _extractList(
@@ -638,6 +739,12 @@ class PerformanceProvider with ChangeNotifier {
       '$legacyBase/$employeeId',
     ];
   }
+
+  String get _performanceEvaluationListPath =>
+      ApiConstants.performanceEvaluationListEndpoint.replaceFirst('/api', '');
+
+  String get _leaveBalancePath =>
+      ApiConstants.leaveBalanceEndpoint.replaceFirst('/api', '');
 
   static List<String> _defaultPeriods() {
     return List<String>.generate(6, (index) {

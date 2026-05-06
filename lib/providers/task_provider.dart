@@ -6,6 +6,18 @@ import '../core/constants/api_constants.dart';
 import '../models/task_model.dart';
 import '../services/api_service.dart';
 
+class TaskAssigneeOverride {
+  const TaskAssigneeOverride({
+    required this.assigneeEmployeeId,
+    this.assigneeName,
+    required this.assignmentScope,
+  });
+
+  final String assigneeEmployeeId;
+  final String? assigneeName;
+  final String assignmentScope;
+}
+
 class TaskProvider with ChangeNotifier {
   TaskProvider() {
     refresh();
@@ -17,6 +29,8 @@ class TaskProvider with ChangeNotifier {
   String? _error;
   final Set<String> _updatingTaskIds = <String>{};
   final Set<String> _deletingTaskIds = <String>{};
+  final Map<String, TaskAssigneeOverride> _assigneeOverrides =
+      <String, TaskAssigneeOverride>{};
 
   List<TaskModel> get tasks => _tasks;
   bool get isLoading => _isLoading;
@@ -33,15 +47,12 @@ class TaskProvider with ChangeNotifier {
       final response = await _apiService.get(
         ApiConstants.tasksEndpoint.replaceFirst('/api', ''),
       );
-      final rawTasks = response is Map<String, dynamic>
-          ? response['data']
-          : null;
-
-      if (rawTasks is List) {
-        _tasks = rawTasks
-            .whereType<Map<String, dynamic>>()
-            .map(TaskModel.fromJson)
-            .toList(growable: true);
+      final tasks = extractTasksFromResponse(response);
+      if (tasks.isNotEmpty) {
+        _tasks = applyRequestedAssigneeOverridesToTasks(
+          tasks,
+          _assigneeOverrides,
+        ).toList(growable: true);
         _sortTasks();
       } else {
         _tasks = [];
@@ -108,6 +119,10 @@ class TaskProvider with ChangeNotifier {
     DateTime? dueDate,
     String priority = 'medium',
     String type = 'regular',
+    String? assigneeEmployeeId,
+    String? assigneeName,
+    String? assigneeEmployeeRecordId,
+    String assignmentScope = 'self',
   }) async {
     _error = null;
     notifyListeners();
@@ -121,6 +136,9 @@ class TaskProvider with ChangeNotifier {
           dueDate: dueDate,
           priority: priority,
           type: type,
+          assigneeEmployeeId: assigneeEmployeeId,
+          assigneeEmployeeRecordId: assigneeEmployeeRecordId,
+          assignmentScope: assignmentScope,
         ),
       );
 
@@ -128,7 +146,14 @@ class TaskProvider with ChangeNotifier {
           ? response['data']
           : null;
       if (rawTask is Map<String, dynamic>) {
-        _upsertTask(TaskModel.fromJson(rawTask));
+        final task = _applyRequestedAssigneeFallback(
+          TaskModel.fromJson(rawTask),
+          assigneeEmployeeId: assigneeEmployeeId,
+          assigneeName: assigneeName,
+          assignmentScope: assignmentScope,
+        );
+        _rememberAssigneeOverride(task.id, task);
+        _upsertTask(task);
       }
 
       return true;
@@ -146,6 +171,10 @@ class TaskProvider with ChangeNotifier {
     DateTime? dueDate,
     String priority = 'medium',
     String type = 'regular',
+    String? assigneeEmployeeId,
+    String? assigneeName,
+    String? assigneeEmployeeRecordId,
+    String assignmentScope = 'self',
   }) async {
     final currentTask = _tasks.cast<TaskModel?>().firstWhere(
       (task) => task?.id == id,
@@ -176,6 +205,9 @@ class TaskProvider with ChangeNotifier {
           dueDate: dueDate,
           priority: priority,
           type: type,
+          assigneeEmployeeId: assigneeEmployeeId,
+          assigneeEmployeeRecordId: assigneeEmployeeRecordId,
+          assignmentScope: assignmentScope,
         ),
       );
 
@@ -183,7 +215,29 @@ class TaskProvider with ChangeNotifier {
           ? response['data']
           : null;
       if (rawTask is Map<String, dynamic>) {
-        _upsertTask(TaskModel.fromJson(rawTask));
+        final task = _applyRequestedAssigneeFallback(
+          TaskModel.fromJson(rawTask),
+          assigneeEmployeeId: assigneeEmployeeId,
+          assigneeName: assigneeName,
+          assignmentScope: assignmentScope,
+        );
+        _rememberAssigneeOverride(id, task);
+        _upsertTask(task);
+      } else {
+        final task = _applyRequestedAssigneeFallback(
+          currentTask.copyWith(
+            title: title,
+            description: description ?? '',
+            dueDate: dueDate,
+            priority: priority,
+            type: type,
+          ),
+          assigneeEmployeeId: assigneeEmployeeId,
+          assigneeName: assigneeName,
+          assignmentScope: assignmentScope,
+        );
+        _rememberAssigneeOverride(id, task);
+        _upsertTask(task);
       }
 
       return true;
@@ -250,9 +304,39 @@ class TaskProvider with ChangeNotifier {
     DateTime? dueDate,
     required String priority,
     required String type,
+    String? assigneeEmployeeId,
+    String? assigneeEmployeeRecordId,
+    String assignmentScope = 'self',
+  }) {
+    return buildTaskPayloadForRequest(
+      title: title,
+      description: description,
+      dueDate: dueDate,
+      priority: priority,
+      type: type,
+      assigneeEmployeeId: assigneeEmployeeId,
+      assigneeEmployeeRecordId: assigneeEmployeeRecordId,
+      assignmentScope: assignmentScope,
+    );
+  }
+
+  static Map<String, dynamic> buildTaskPayloadForRequest({
+    required String title,
+    String? description,
+    DateTime? dueDate,
+    required String priority,
+    required String type,
+    String? assigneeEmployeeId,
+    String? assigneeEmployeeRecordId,
+    String assignmentScope = 'self',
   }) {
     final normalizedDescription = description?.trim();
-    return {
+    final normalizedAssignee = assigneeEmployeeId?.trim();
+    final normalizedAssigneeRecordId = assigneeEmployeeRecordId?.trim();
+    final normalizedScope = assignmentScope == 'subordinate'
+        ? 'subordinate'
+        : 'self';
+    final payload = <String, dynamic>{
       'title': title.trim(),
       'description':
           normalizedDescription == null || normalizedDescription.isEmpty
@@ -261,7 +345,133 @@ class TaskProvider with ChangeNotifier {
       'due_date': dueDate?.toIso8601String(),
       'priority': priority,
       'type': type,
+      'assignment_scope': normalizedScope,
     };
+
+    if (normalizedScope == 'subordinate' &&
+        normalizedAssignee != null &&
+        normalizedAssignee.isNotEmpty) {
+      payload['assignee_employee_uuid'] = normalizedAssignee;
+      payload['assigned_to_uuid'] = normalizedAssignee;
+      payload['assigned_to_employee_uuid'] = normalizedAssignee;
+      payload['employee_uuid'] = normalizedAssignee;
+    }
+
+    if (normalizedScope == 'subordinate' &&
+        normalizedAssigneeRecordId != null &&
+        normalizedAssigneeRecordId.isNotEmpty) {
+      payload['employee_id'] = normalizedAssigneeRecordId;
+      payload['assignee_employee_id'] = normalizedAssigneeRecordId;
+      payload['assignee_id'] = normalizedAssigneeRecordId;
+      payload['assigned_to'] = normalizedAssigneeRecordId;
+      payload['assigned_to_employee_id'] = normalizedAssigneeRecordId;
+      payload['assigned_employee_id'] = normalizedAssigneeRecordId;
+      payload['target_employee_id'] = normalizedAssigneeRecordId;
+      payload['recipient_employee_id'] = normalizedAssigneeRecordId;
+    } else if (normalizedScope == 'subordinate' &&
+        normalizedAssignee != null &&
+        normalizedAssignee.isNotEmpty) {
+      payload['assignee_employee_id'] = normalizedAssignee;
+      payload['assigned_to'] = normalizedAssignee;
+    }
+
+    return payload;
+  }
+
+  TaskModel _applyRequestedAssigneeFallback(
+    TaskModel task, {
+    String? assigneeEmployeeId,
+    String? assigneeName,
+    required String assignmentScope,
+  }) {
+    return applyRequestedAssigneeFallbackForTask(
+      task,
+      assigneeEmployeeId: assigneeEmployeeId,
+      assigneeName: assigneeName,
+      assignmentScope: assignmentScope,
+    );
+  }
+
+  static List<TaskModel> extractTasksFromResponse(dynamic response) {
+    if (response is! Map<String, dynamic>) {
+      return const [];
+    }
+
+    final data = response['data'];
+    final rawTasks = data is List
+        ? data
+        : data is Map<String, dynamic>
+        ? data['tasks']
+        : response['tasks'];
+
+    if (rawTasks is! List) {
+      return const [];
+    }
+
+    return rawTasks
+        .whereType<Map>()
+        .map((item) => TaskModel.fromJson(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+  }
+
+  static TaskModel applyRequestedAssigneeFallbackForTask(
+    TaskModel task, {
+    String? assigneeEmployeeId,
+    String? assigneeName,
+    required String assignmentScope,
+  }) {
+    final normalizedAssignee = assigneeEmployeeId?.trim();
+    final normalizedAssigneeName = assigneeName?.trim();
+    if (assignmentScope != 'subordinate' ||
+        normalizedAssignee == null ||
+        normalizedAssignee.isEmpty) {
+      return task;
+    }
+
+    return task.copyWith(
+      assigneeEmployeeId: normalizedAssignee,
+      assigneeName:
+          normalizedAssigneeName ??
+          ((task.assigneeName?.trim().isNotEmpty ?? false)
+              ? task.assigneeName
+              : null),
+      assignmentScope: 'subordinate',
+    );
+  }
+
+  static List<TaskModel> applyRequestedAssigneeOverridesToTasks(
+    Iterable<TaskModel> tasks,
+    Map<String, TaskAssigneeOverride> overrides,
+  ) {
+    return tasks
+        .map((task) {
+          final override = overrides[task.id];
+          if (override == null) {
+            return task;
+          }
+
+          return applyRequestedAssigneeFallbackForTask(
+            task,
+            assigneeEmployeeId: override.assigneeEmployeeId,
+            assigneeName: override.assigneeName,
+            assignmentScope: override.assignmentScope,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  void _rememberAssigneeOverride(String id, TaskModel task) {
+    if (task.assignmentScope == 'subordinate' &&
+        (task.assigneeEmployeeId?.trim().isNotEmpty ?? false)) {
+      _assigneeOverrides[id] = TaskAssigneeOverride(
+        assigneeEmployeeId: task.assigneeEmployeeId!.trim(),
+        assigneeName: task.assigneeName,
+        assignmentScope: 'subordinate',
+      );
+      return;
+    }
+
+    _assigneeOverrides.remove(id);
   }
 
   void _upsertTask(TaskModel task) {

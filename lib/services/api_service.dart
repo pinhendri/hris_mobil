@@ -55,7 +55,7 @@ class ApiService {
       );
     } catch (error) {
       _debugLog('GET error: $error');
-      throw Exception('Network error: $error');
+      throw _normalizeRequestError(error);
     }
   }
 
@@ -84,7 +84,7 @@ class ApiService {
       );
     } catch (error) {
       _debugLog('POST error: $error');
-      throw Exception('Network error: $error');
+      throw _normalizeRequestError(error);
     }
   }
 
@@ -113,7 +113,7 @@ class ApiService {
       );
     } catch (error) {
       _debugLog('PUT error: $error');
-      throw Exception('Network error: $error');
+      throw _normalizeRequestError(error);
     }
   }
 
@@ -148,7 +148,7 @@ class ApiService {
       );
     } catch (error) {
       _debugLog('PATCH error: $error');
-      throw Exception('Network error: $error');
+      throw _normalizeRequestError(error);
     }
   }
 
@@ -176,7 +176,7 @@ class ApiService {
       );
     } catch (error) {
       _debugLog('DELETE error: $error');
-      throw Exception('Network error: $error');
+      throw _normalizeRequestError(error);
     }
   }
 
@@ -201,6 +201,15 @@ class ApiService {
     }
 
     return '${normalized.substring(0, _maxLoggedBodyLength)}...';
+  }
+
+  Exception _normalizeRequestError(Object error) {
+    final raw = error.toString();
+    if (RegExp(r'HTTP\s+\d{3}').hasMatch(raw)) {
+      return Exception(raw.replaceFirst(RegExp(r'^Exception:\s*'), ''));
+    }
+
+    return Exception('Network error: $raw');
   }
 }
 

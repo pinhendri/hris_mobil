@@ -13,8 +13,6 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  static const String _demoEmail = 'superadmin@system.local';
-  static const String _demoPassword = 'password';
   static const double _maxContentWidth = 430;
 
   final TextEditingController _emailController = TextEditingController();
@@ -126,10 +124,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     if (success) {
       if (_rememberMe) {
-        await SessionStorage.saveRememberedCredentials(
-          email: email,
-          password: password,
-        );
+        await SessionStorage.saveRememberedEmail(email);
       } else {
         await SessionStorage.clearRememberedCredentials();
       }
@@ -158,15 +153,6 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() {
       _rememberMe = rememberMeEnabled;
       _emailController.text = rememberedCredentials['email'] ?? '';
-      _passwordController.text = rememberedCredentials['password'] ?? '';
-    });
-  }
-
-  void _applyDemoCredentials() {
-    setState(() {
-      _emailController.text = _demoEmail;
-      _passwordController.text = _demoPassword;
-      _rememberMe = true;
     });
   }
 
@@ -285,8 +271,6 @@ class _LoginScreenState extends State<LoginScreen>
                           _buildHeroSection(),
                           const SizedBox(height: 16),
                           _buildLoginCard(isLoading),
-                          const SizedBox(height: 14),
-                          _buildDemoCredentialsCard(isLoading),
                           const SizedBox(height: 14),
                           Center(
                             child: Text(
@@ -728,141 +712,6 @@ class _LoginScreenState extends State<LoginScreen>
       filled: true,
       fillColor: _surfaceMutedColor,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-    );
-  }
-
-  Widget _buildDemoCredentialsCard(bool isLoading) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: _isDarkMode ? const Color(0xFF0B1120) : const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: _isDarkMode ? 0.10 : 0.06),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.14),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.info_outline_rounded,
-                  size: 18,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Demo Credentials',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      'Use these sample credentials for quick access.',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.72),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-            ),
-            child: Column(
-              children: [
-                _buildCredentialRow('Email', _demoEmail),
-                const SizedBox(height: 10),
-                _buildCredentialRow('Password', _demoPassword),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: !isLoading ? _applyDemoCredentials : null,
-              icon: const Icon(Icons.content_paste_rounded, size: 16),
-              label: Text(
-                'Auto-fill credentials',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCredentialRow(String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 72,
-          padding: const EdgeInsets.only(top: 2),
-          child: Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Colors.white.withValues(alpha: 0.68),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ],
     );
   }
 

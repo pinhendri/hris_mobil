@@ -42,6 +42,39 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
   String _statusMessage = 'Initializing...';
   String _address = '-';
 
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+  Color get _screenBackgroundColor =>
+      _isDarkMode ? const Color(0xFF0F1115) : const Color(0xFFF6F7FB);
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF1B1D20) : Colors.white;
+  Color get _mutedSurfaceColor =>
+      _isDarkMode ? const Color(0xFF25272B) : const Color(0xFFF3F4F6);
+  Color get _borderColor =>
+      _isDarkMode ? const Color(0xFF2F3338) : const Color(0xFFE5E7EB);
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF5F7FA) : const Color(0xFF111827);
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFA8ADB7) : const Color(0xFF64748B);
+  Color get _accentColor =>
+      _isDarkMode ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
+
+  BoxDecoration _cardDecoration({Color? color, Color? borderColor}) {
+    return BoxDecoration(
+      color: color ?? _surfaceColor,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: borderColor ?? _borderColor),
+      boxShadow: _isDarkMode
+          ? const []
+          : [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -342,63 +375,70 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
     final currentLatLng = _currentLatLng;
 
     return Scaffold(
+      backgroundColor: _screenBackgroundColor,
       appBar: AppBar(
         title: Text(
           'Lokasi Saya',
-          style: GoogleFonts.poppins(color: Colors.black),
+          style: GoogleFonts.poppins(
+            color: _primaryTextColor,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _screenBackgroundColor,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: _primaryTextColor),
       ),
       body: Stack(
         children: [
           Positioned.fill(
-            child: FlutterMap(
-              key: ValueKey(_mapReloadToken),
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: currentLatLng,
-                initialZoom: 16,
-                onMapReady: () {
-                  _isMapReady = true;
-                  if (_currentPosition != null) {
-                    _mapController.move(_currentLatLng, 16);
-                  }
-                },
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: _tileUrlTemplate,
-                  fallbackUrl: _tileFallbackUrlTemplate,
-                  userAgentPackageName: 'com.example.hris_mobile',
-                  evictErrorTileStrategy: EvictErrorTileStrategy.none,
-                  errorTileCallback: (tile, error, stackTrace) {
-                    _handleMapTileError(error);
-                  },
-                ),
-                if (_currentPosition != null)
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        width: 50,
-                        height: 50,
-                        point: currentLatLng,
-                        child: const Icon(
-                          Icons.location_on,
-                          size: 40,
-                          color: Colors.red,
+            child: _hasMapLoadIssue
+                ? _buildMapFallback(currentLatLng)
+                : FlutterMap(
+                    key: ValueKey(_mapReloadToken),
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: currentLatLng,
+                      initialZoom: 16,
+                      onMapReady: () {
+                        _isMapReady = true;
+                        if (_currentPosition != null) {
+                          _mapController.move(_currentLatLng, 16);
+                        }
+                      },
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: _tileUrlTemplate,
+                        fallbackUrl: _tileFallbackUrlTemplate,
+                        userAgentPackageName: 'com.example.hris_mobile',
+                        evictErrorTileStrategy: EvictErrorTileStrategy.none,
+                        errorTileCallback: (tile, error, stackTrace) {
+                          _handleMapTileError(error);
+                        },
+                      ),
+                      if (_currentPosition != null)
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              width: 50,
+                              height: 50,
+                              point: currentLatLng,
+                              child: const Icon(
+                                Icons.location_on,
+                                size: 40,
+                                color: Colors.red,
+                              ),
+                            ),
+                          ],
                         ),
+                      RichAttributionWidget(
+                        attributions: const [
+                          TextSourceAttribution('OpenStreetMap contributors'),
+                        ],
                       ),
                     ],
                   ),
-                RichAttributionWidget(
-                  attributions: const [
-                    TextSourceAttribution('OpenStreetMap contributors'),
-                  ],
-                ),
-              ],
-            ),
           ),
           Positioned(top: 16, left: 16, right: 16, child: _buildInfoCard()),
           if (_hasMapLoadIssue)
@@ -406,16 +446,21 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
               top: 92,
               left: 16,
               right: 16,
-              child: Card(
-                color: Colors.orange.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    'Tile utama bermasalah. Jika peta masih blank, tekan "Retry Map".',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.orange.shade900,
-                    ),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: _cardDecoration(
+                  color: _isDarkMode
+                      ? const Color(0xFF3A2508)
+                      : Colors.orange.shade50,
+                  borderColor: Colors.orange.withValues(alpha: 0.28),
+                ),
+                child: Text(
+                  'Tile utama bermasalah. Jika peta masih blank, tekan "Retry Map".',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: _isDarkMode
+                        ? const Color(0xFFFCD34D)
+                        : Colors.orange.shade900,
                   ),
                 ),
               ),
@@ -425,18 +470,23 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
               top: _hasMapLoadIssue ? 164 : 92,
               left: 16,
               right: 16,
-              child: Card(
-                color: Colors.blue.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    _shouldUseAttendanceLocationHint
-                        ? 'Emulator mengirim lokasi default Android. Peta disesuaikan ke lokasi absensi agar pengujian tetap relevan.'
-                        : 'Emulator mengirim lokasi default Android. Peta diarahkan ke fallback sampai lokasi emulator diatur manual.',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.blue.shade900,
-                    ),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: _cardDecoration(
+                  color: _isDarkMode
+                      ? const Color(0xFF0B2542)
+                      : Colors.blue.shade50,
+                  borderColor: _accentColor.withValues(alpha: 0.28),
+                ),
+                child: Text(
+                  _shouldUseAttendanceLocationHint
+                      ? 'Emulator mengirim lokasi default Android. Peta disesuaikan ke lokasi absensi agar pengujian tetap relevan.'
+                      : 'Emulator mengirim lokasi default Android. Peta diarahkan ke fallback sampai lokasi emulator diatur manual.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: _isDarkMode
+                        ? const Color(0xFFBFDBFE)
+                        : Colors.blue.shade900,
                   ),
                 ),
               ),
@@ -452,24 +502,30 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
             right: 16,
             child: FloatingActionButton(
               onPressed: _isLoading ? null : _getCurrentLocation,
-              backgroundColor: Colors.white,
+              backgroundColor: _surfaceColor,
+              foregroundColor: _primaryTextColor,
               child: _isLoading
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _accentColor,
+                      ),
                     )
-                  : const Icon(Icons.my_location, color: Colors.black),
+                  : Icon(Icons.my_location, color: _primaryTextColor),
             ),
           ),
-          if (_isLoading) const Center(child: CircularProgressIndicator()),
+          if (_isLoading)
+            Center(child: CircularProgressIndicator(color: _accentColor)),
         ],
       ),
     );
   }
 
   Widget _buildInfoCard() {
-    return Card(
+    return Container(
+      decoration: _cardDecoration(),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -478,12 +534,18 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
           children: [
             Text(
               _currentPosition != null ? _address : _statusMessage,
-              style: GoogleFonts.poppins(fontSize: 13),
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: _primaryTextColor,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
               'Koordinat: $_coordinateLabel',
-              style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[700]),
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: _secondaryTextColor,
+              ),
             ),
           ],
         ),
@@ -492,9 +554,8 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
   }
 
   Widget _buildBottomCard() {
-    return Card(
-      elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return Container(
+      decoration: _cardDecoration(),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -506,16 +567,29 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
+                color: _primaryTextColor,
               ),
             ),
             const SizedBox(height: 8),
-            Text(_statusMessage, style: GoogleFonts.poppins(fontSize: 13)),
+            Text(
+              _statusMessage,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: _secondaryTextColor,
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _getCurrentLocation,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _accentColor,
+                      side: BorderSide(
+                        color: _accentColor.withValues(alpha: 0.7),
+                      ),
+                    ),
                     icon: const Icon(Icons.refresh),
                     label: const Text('Refresh'),
                   ),
@@ -531,6 +605,10 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
                         _mapReloadToken++;
                       });
                     },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accentColor,
+                      foregroundColor: Colors.white,
+                    ),
                     icon: const Icon(Icons.map_outlined),
                     label: const Text('Retry Map'),
                   ),
@@ -545,7 +623,7 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
 
   Widget _buildMapFallback(LatLng latLng) {
     return Container(
-      color: const Color(0xFFF3F4F6),
+      color: _mutedSurfaceColor,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -555,8 +633,9 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: _surfaceColor,
                   borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: _borderColor),
                 ),
                 child: const Icon(
                   Icons.location_searching,
@@ -571,6 +650,7 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
+                  color: _primaryTextColor,
                 ),
               ),
               const SizedBox(height: 8),
@@ -579,7 +659,7 @@ class _MyLocationScreenState extends State<MyLocationScreen> {
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
                   fontSize: 13,
-                  color: Colors.grey[700],
+                  color: _secondaryTextColor,
                 ),
               ),
             ],

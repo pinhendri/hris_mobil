@@ -12,6 +12,9 @@ class BroadcastProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isSending = false;
   bool _companyRequired = false;
+  bool _employeeDirectoryRestricted = false;
+  bool _departmentDirectoryRestricted = false;
+  bool _historyRestricted = false;
   String? _error;
 
   List<BroadcastDepartmentOption> get departments => _departments;
@@ -20,11 +23,17 @@ class BroadcastProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isSending => _isSending;
   bool get companyRequired => _companyRequired;
+  bool get employeeDirectoryRestricted => _employeeDirectoryRestricted;
+  bool get departmentDirectoryRestricted => _departmentDirectoryRestricted;
+  bool get historyRestricted => _historyRestricted;
   String? get error => _error;
 
   Future<void> initialize({bool showLoading = true}) async {
     _error = null;
     _companyRequired = false;
+    _employeeDirectoryRestricted = false;
+    _departmentDirectoryRestricted = false;
+    _historyRestricted = false;
 
     if (showLoading) {
       _isLoading = true;
@@ -34,19 +43,27 @@ class BroadcastProvider extends ChangeNotifier {
     String? firstError;
 
     await Future.wait<void>([
-      _loadDepartments().catchError((Object error) {
-        firstError ??= _normalizeError(error);
-      }),
-      _loadEmployees().catchError((Object error) {
+      _loadRecipients().catchError((Object error) {
         final message = _normalizeError(error);
-        if (_looksLikeCompanyRequired(message)) {
+        if (_looksLikePermissionDenied(message)) {
+          _departments = const [];
+          _employees = const [];
+          _departmentDirectoryRestricted = true;
+          _employeeDirectoryRestricted = true;
+        } else if (_looksLikeCompanyRequired(message)) {
           _companyRequired = true;
         } else {
           firstError ??= message;
         }
       }),
       _loadHistory().catchError((Object error) {
-        firstError ??= _normalizeError(error);
+        final message = _normalizeError(error);
+        if (_looksLikePermissionDenied(message)) {
+          _history = const [];
+          _historyRestricted = true;
+        } else {
+          firstError ??= message;
+        }
       }),
     ]);
 
@@ -77,6 +94,10 @@ class BroadcastProvider extends ChangeNotifier {
     required List<int> employeeIds,
     required String priority,
     required int recipientCount,
+    bool isCalendarEvent = false,
+    DateTime? eventStartsAt,
+    DateTime? eventEndsAt,
+    String eventLocation = '',
   }) async {
     _isSending = true;
     _error = null;
@@ -91,6 +112,13 @@ class BroadcastProvider extends ChangeNotifier {
         'employee_ids': employeeIds,
         'priority': priority,
         'recipient_count': recipientCount,
+        'is_calendar_event': isCalendarEvent,
+        if (isCalendarEvent)
+          'event_starts_at': eventStartsAt?.toIso8601String(),
+        if (isCalendarEvent && eventEndsAt != null)
+          'event_ends_at': eventEndsAt.toIso8601String(),
+        if (isCalendarEvent && eventLocation.trim().isNotEmpty)
+          'event_location': eventLocation.trim(),
       });
 
       if (response is Map<String, dynamic> && response['success'] == false) {
@@ -116,14 +144,19 @@ class BroadcastProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _loadDepartments() async {
-    final response = await _apiService.get('/departments');
-    final items = _extractList(
+  Future<void> _loadRecipients() async {
+    final response = await _apiService.get('/broadcast/recipients');
+    final departments = _extractList(
       response,
       preferredKeys: const ['departments', 'data'],
     );
 
-    _departments = items
+    final employees = _extractList(
+      response,
+      preferredKeys: const ['employees', 'data'],
+    );
+
+    _departments = departments
         .whereType<Map>()
         .map(
           (item) => BroadcastDepartmentOption.fromJson(
@@ -132,16 +165,8 @@ class BroadcastProvider extends ChangeNotifier {
         )
         .where((department) => department.id > 0 && department.name.isNotEmpty)
         .toList(growable: false);
-  }
 
-  Future<void> _loadEmployees() async {
-    final response = await _apiService.get('/employees');
-    final items = _extractList(
-      response,
-      preferredKeys: const ['employees', 'data'],
-    );
-
-    _employees = items
+    _employees = employees
         .whereType<Map>()
         .map(
           (item) =>
@@ -181,6 +206,14 @@ class BroadcastProvider extends ChangeNotifier {
     return normalized.contains('select a company') ||
         normalized.contains('company first') ||
         normalized.contains('company required');
+  }
+
+  bool _looksLikePermissionDenied(String message) {
+    final normalized = message.toLowerCase();
+    return normalized.contains('http 403') ||
+        normalized.contains('unauthorized') ||
+        normalized.contains('permission denied') ||
+        normalized.contains('forbidden');
   }
 
   String _normalizeError(Object error) {

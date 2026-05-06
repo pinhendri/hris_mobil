@@ -74,6 +74,9 @@ class NotificationItem {
   }
 
   String? get leaveRequestId => data?['leave_request_id']?.toString();
+  String? get taskId => data?['task_id']?.toString();
+  String? get claimId => data?['claim_id']?.toString();
+  String? get overtimeRequestId => data?['overtime_request_id']?.toString();
   int? get employeeId => data?['employee_id'];
   String? get startDate => data?['start_date'];
   String? get endDate => data?['end_date'];
@@ -89,6 +92,14 @@ class NotificationItem {
         return 'Approved: $message';
       case 'leave_rejected':
         return 'Rejected: $message';
+      case 'task_assigned':
+      case 'task_completed':
+      case 'task_status_update':
+      case 'claim_request':
+      case 'claim_status_update':
+      case 'overtime_request':
+      case 'overtime_status_update':
+        return message;
       default:
         return message;
     }
@@ -104,6 +115,16 @@ class NotificationItem {
         return Icons.check_circle;
       case 'leave_rejected':
         return Icons.cancel;
+      case 'task_assigned':
+      case 'task_completed':
+      case 'task_status_update':
+        return Icons.task_alt_rounded;
+      case 'claim_request':
+      case 'claim_status_update':
+        return Icons.receipt_long_outlined;
+      case 'overtime_request':
+      case 'overtime_status_update':
+        return Icons.more_time_rounded;
       case 'attendance':
         return Icons.access_time;
       case 'warning':
@@ -125,6 +146,16 @@ class NotificationItem {
         return Colors.green;
       case 'leave_rejected':
         return Colors.red;
+      case 'task_assigned':
+      case 'task_completed':
+      case 'task_status_update':
+        return Colors.indigo;
+      case 'claim_request':
+      case 'claim_status_update':
+        return Colors.purple;
+      case 'overtime_request':
+      case 'overtime_status_update':
+        return Colors.deepOrange;
       case 'attendance':
         return Colors.blue;
       case 'warning':
@@ -150,6 +181,19 @@ class NotificationItem {
         return 'Cuti Disetujui';
       case 'leave_rejected':
         return 'Cuti Ditolak';
+      case 'task_assigned':
+        return 'Task Baru';
+      case 'task_completed':
+      case 'task_status_update':
+        return 'Update Task';
+      case 'claim_request':
+        return 'Klaim Biaya Baru';
+      case 'claim_status_update':
+        return 'Update Klaim Biaya';
+      case 'overtime_request':
+        return 'Request Lembur Baru';
+      case 'overtime_status_update':
+        return 'Update Lembur';
       case 'attendance':
         return 'Absensi';
       case 'warning':
@@ -159,5 +203,27 @@ class NotificationItem {
       default:
         return 'Notifikasi';
     }
+  }
+
+  String get targetModule {
+    final explicit = data?['target']?.toString().trim().toLowerCase();
+    if (explicit != null && explicit.isNotEmpty) {
+      return explicit;
+    }
+
+    final normalizedType = type.trim().toLowerCase();
+    if (normalizedType.contains('task')) {
+      return 'task';
+    }
+    if (normalizedType.contains('claim')) {
+      return 'claim';
+    }
+    if (normalizedType.contains('overtime')) {
+      return 'overtime';
+    }
+    if (normalizedType.contains('leave')) {
+      return 'leave';
+    }
+    return '';
   }
 }

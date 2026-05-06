@@ -6,12 +6,17 @@ import 'package:provider/provider.dart';
 
 import '../../core/localization/app_strings.dart';
 import '../../data/models/attendance_model.dart';
+import '../../models/calendar_event_model.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/event_provider.dart';
 import '../../providers/leave_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/payroll_provider.dart';
+import '../../providers/performance_provider.dart';
 import '../../providers/saas_provider.dart';
+import '../../utils/home_performance_loading.dart';
+import '../../utils/home_performance_summary.dart';
 import '../attendance/clock_in_screen.dart';
 import '../leave/leave_screen.dart';
 import '../notifications/notification_screen.dart';
@@ -20,7 +25,9 @@ import '../saas/saas_workspace_screen.dart';
 import 'feature_tab.dart';
 
 class DashboardTab extends StatefulWidget {
-  const DashboardTab({super.key});
+  const DashboardTab({super.key, this.onOpenFeatures});
+
+  final VoidCallback? onOpenFeatures;
 
   @override
   State<DashboardTab> createState() => _DashboardTabState();
@@ -74,8 +81,10 @@ class _DashboardTabState extends State<DashboardTab> {
   }) async {
     final auth = context.read<AuthProvider>();
     final attendance = context.read<AttendanceProvider>();
+    final events = context.read<EventProvider>();
     final leave = context.read<LeaveProvider>();
     final notifications = context.read<NotificationProvider>();
+    final performance = context.read<PerformanceProvider>();
     final saas = context.read<SaasProvider>();
     final companyCode = auth.getCompanyCode().trim();
 
@@ -89,12 +98,20 @@ class _DashboardTabState extends State<DashboardTab> {
       _runSafely(() async {
         await notifications.fetchNotifications();
       }),
+      _runSafely(() async {
+        if (shouldLoadHomePerformance(
+          canAccessPerformanceModule: auth.canAccessPerformanceModule,
+        )) {
+          await performance.loadPerformance();
+        }
+      }),
     ]);
 
     if (backgroundSecondary) {
       unawaited(
         _loadSecondaryHomeData(
           auth: auth,
+          events: events,
           leave: leave,
           saas: saas,
           companyCode: companyCode,
@@ -107,6 +124,7 @@ class _DashboardTabState extends State<DashboardTab> {
 
     await _loadSecondaryHomeData(
       auth: auth,
+      events: events,
       leave: leave,
       saas: saas,
       companyCode: companyCode,
@@ -116,6 +134,7 @@ class _DashboardTabState extends State<DashboardTab> {
 
   Future<void> _loadSecondaryHomeData({
     required AuthProvider auth,
+    required EventProvider events,
     required LeaveProvider leave,
     required SaasProvider saas,
     required String companyCode,
@@ -129,6 +148,7 @@ class _DashboardTabState extends State<DashboardTab> {
 
     final loadFuture = _performSecondaryHomeDataLoad(
       auth: auth,
+      events: events,
       leave: leave,
       saas: saas,
       companyCode: companyCode,
@@ -148,6 +168,7 @@ class _DashboardTabState extends State<DashboardTab> {
 
   Future<void> _performSecondaryHomeDataLoad({
     required AuthProvider auth,
+    required EventProvider events,
     required LeaveProvider leave,
     required SaasProvider saas,
     required String companyCode,
@@ -170,8 +191,15 @@ class _DashboardTabState extends State<DashboardTab> {
         }
       }),
       _runSafely(() async {
-        if (forceWorkspace || !saas.hasLoadedData) {
+        if (companyCode.isNotEmpty) {
+          await events.fetchUpcomingEvents();
+        }
+      }),
+      _runSafely(() async {
+        if (auth.canAccessAnySaasWorkspace &&
+            (forceWorkspace || !saas.hasLoadedData)) {
           await saas.loadWorkspace(
+            authProvider: auth,
             includeAdminOverview: auth.canAccessPlatformAdmin,
             force: forceWorkspace,
           );
@@ -192,8 +220,10 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final attendance = context.watch<AttendanceProvider>();
+    final events = context.watch<EventProvider>();
     final leave = context.watch<LeaveProvider>();
     final notifications = context.watch<NotificationProvider>();
+    final performance = context.watch<PerformanceProvider>();
     final saas = context.watch<SaasProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -210,6 +240,7 @@ class _DashboardTabState extends State<DashboardTab> {
         ? auth.user!.email.trim()
         : '-';
     final favoriteActions = _buildFavoriteActions(auth, attendance);
+    final canAccessSaasWorkspace = auth.canAccessSaasWorkspace;
 
     return Scaffold(
       backgroundColor: isDark ? _darkBackground : _lightBackground,
@@ -270,9 +301,12 @@ class _DashboardTabState extends State<DashboardTab> {
                     _buildCompanyInformation(
                       auth: auth,
                       leave: leave,
+                      events: events,
+                      performance: performance,
                       saas: saas,
                       companyName: companyName,
                       isDark: isDark,
+                      canAccessSaasWorkspace: canAccessSaasWorkspace,
                     ),
                   ],
                 ),
@@ -317,7 +351,7 @@ class _DashboardTabState extends State<DashboardTab> {
         _buildIconShell(
           icon: Icons.search_rounded,
           isDark: isDark,
-          onTap: () => _pushScreen(const FeatureTab()),
+          onTap: widget.onOpenFeatures ?? () => _pushScreen(const FeatureTab()),
         ),
       ],
     );
@@ -807,21 +841,27 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget _buildCompanyInformation({
     required AuthProvider auth,
     required LeaveProvider leave,
+    required EventProvider events,
+    required PerformanceProvider performance,
     required SaasProvider saas,
     required String companyName,
     required bool isDark,
+    required bool canAccessSaasWorkspace,
   }) {
     final currentCompany = saas.currentCompany ?? auth.selectedCompany;
     final companyCode = currentCompany?.cCode.trim().isNotEmpty == true
         ? currentCompany!.cCode.trim()
         : auth.getCompanyCode().trim();
-    final accessibleCompanies = saas.companies.isNotEmpty
-        ? saas.companies.length
-        : auth.companyAssignments.length;
     final leaveBalance = leave.leaveBalance;
     final remainingLeave = leaveBalance == null
         ? 0
         : (leaveBalance.annualTotal - leaveBalance.annualUsed).clamp(0, 999);
+    final performanceScore = performance.isLoading && !performance.hasData
+        ? '...'
+        : formatHomePerformanceScore(
+            performance.summary,
+            hasData: performance.hasData,
+          );
 
     return Column(
       children: [
@@ -885,22 +925,24 @@ class _DashboardTabState extends State<DashboardTab> {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: _openWorkspace,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _accentColor,
-                  side: const BorderSide(color: Color(0xFFFFC78C)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              if (canAccessSaasWorkspace) ...[
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: _openWorkspace,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _accentColor,
+                    side: const BorderSide(color: Color(0xFFFFC78C)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
                   ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
+                  child: Text(context.tr('saas_open_workspace')),
                 ),
-                child: Text(context.tr('saas_open_workspace')),
-              ),
+              ],
             ],
           ),
         ),
@@ -909,9 +951,9 @@ class _DashboardTabState extends State<DashboardTab> {
           children: [
             Expanded(
               child: _buildSummaryCard(
-                label: context.tr('saas_accessible_companies'),
-                value: accessibleCompanies.toString(),
-                icon: Icons.apartment_rounded,
+                label: context.tr('feature_label_performance'),
+                value: performanceScore,
+                icon: Icons.insights_rounded,
                 isDark: isDark,
               ),
             ),
@@ -926,7 +968,473 @@ class _DashboardTabState extends State<DashboardTab> {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        _buildCompanyCalendarCard(events: events, isDark: isDark),
       ],
+    );
+  }
+
+  Widget _buildCompanyCalendarCard({
+    required EventProvider events,
+    required bool isDark,
+  }) {
+    final upcomingEvents = events.upcomingEvents
+        .take(3)
+        .toList(growable: false);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1C) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFEAE7E2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.blue.withValues(alpha: 0.16)
+                      : const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.event_available_rounded,
+                  color: Color(0xFF2563EB),
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Kalender Perusahaan',
+                      style: TextStyle(
+                        color: isDark ? Colors.white : const Color(0xFF1E293B),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Info event kantor mendatang',
+                      style: TextStyle(
+                        color: isDark
+                            ? Colors.white60
+                            : const Color(0xFF667085),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (events.isLoading && upcomingEvents.isEmpty)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (events.error != null && upcomingEvents.isEmpty)
+            _buildCompanyCalendarEmpty(
+              icon: Icons.error_outline_rounded,
+              message: context.tr('dashboard_event_load_failed'),
+              isDark: isDark,
+            )
+          else if (upcomingEvents.isEmpty)
+            _buildCompanyCalendarEmpty(
+              icon: Icons.event_busy_outlined,
+              message: context.tr('dashboard_no_upcoming_events'),
+              isDark: isDark,
+            )
+          else
+            Column(
+              children: upcomingEvents
+                  .map(
+                    (event) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _buildCompanyCalendarEvent(event, isDark),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompanyCalendarEmpty({
+    required IconData icon,
+    required String message,
+    required bool isDark,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF111827) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: isDark ? Colors.white54 : const Color(0xFF94A3B8)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompanyCalendarEvent(CalendarEvent event, bool isDark) {
+    final startsAt = DateFormat(
+      'EEE, dd MMM • HH:mm',
+    ).format(event.startsAt.toLocal());
+    final scope = event.isCompanyWide
+        ? 'Company-wide'
+        : '${event.inviteCount} undangan';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showCompanyEventDetail(event),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF111827) : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.calendar_today_outlined,
+                  color: Color(0xFF2563EB),
+                  size: 17,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : const Color(0xFF1E293B),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      event.location.isNotEmpty
+                          ? '$startsAt • ${event.location}'
+                          : startsAt,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isDark
+                            ? Colors.white60
+                            : const Color(0xFF667085),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    scope,
+                    style: const TextStyle(
+                      color: Color(0xFF2563EB),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                    size: 18,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCompanyEventDetail(CalendarEvent event) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final startsAt = DateFormat(
+      'EEEE, dd MMMM yyyy • HH:mm',
+    ).format(event.startsAt.toLocal());
+    final endsAt = event.endsAt == null
+        ? null
+        : DateFormat(
+            'EEEE, dd MMMM yyyy • HH:mm',
+          ).format(event.endsAt!.toLocal());
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF111827) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              20 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white24
+                            : const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFF2563EB,
+                          ).withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          Icons.event_available_rounded,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              event.title,
+                              style: TextStyle(
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF0F172A),
+                                fontSize: 19,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              event.isCompanyWide
+                                  ? 'Company-wide event'
+                                  : '${event.inviteCount} undangan',
+                              style: const TextStyle(
+                                color: Color(0xFF2563EB),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _buildEventDetailRow(
+                    icon: Icons.schedule_rounded,
+                    label: 'Jam Mulai',
+                    value: startsAt,
+                    isDark: isDark,
+                  ),
+                  if (endsAt != null)
+                    _buildEventDetailRow(
+                      icon: Icons.timer_outlined,
+                      label: 'Jam Selesai',
+                      value: endsAt,
+                      isDark: isDark,
+                    ),
+                  _buildEventDetailRow(
+                    icon: Icons.place_outlined,
+                    label: 'Lokasi',
+                    value: event.location.isEmpty ? '-' : event.location,
+                    isDark: isDark,
+                  ),
+                  _buildEventDetailRow(
+                    icon: Icons.person_outline_rounded,
+                    label: 'Dibuat Oleh',
+                    value: event.createdByName.isEmpty
+                        ? 'System'
+                        : event.createdByName,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Content',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF0F172A)
+                          : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    child: Text(
+                      event.description.isEmpty
+                          ? 'Tidak ada content tambahan.'
+                          : event.description,
+                      style: TextStyle(
+                        color: isDark
+                            ? Colors.white70
+                            : const Color(0xFF475569),
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(sheetContext),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text('Tutup'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEventDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required bool isDark,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: const Color(0xFF2563EB), size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    fontSize: 13,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1178,15 +1686,8 @@ class _DashboardTabState extends State<DashboardTab> {
       );
     }
 
-    if (actions.isEmpty) {
+    if (actions.isEmpty && auth.canAccessAnySaasWorkspace) {
       actions.addAll([
-        _HomeShortcut(
-          label: context.tr('dashboard_record_time'),
-          icon: Icons.access_time_rounded,
-          iconColor: const Color(0xFF3698F5),
-          backgroundColor: const Color(0xFFEAF6FF),
-          onTap: () => _pushScreen(const ClockInScreen()),
-        ),
         _HomeShortcut(
           label: context.tr('dashboard_company_information'),
           icon: Icons.business_center_outlined,
@@ -1197,7 +1698,7 @@ class _DashboardTabState extends State<DashboardTab> {
       ]);
     }
 
-    while (actions.length < 3) {
+    while (actions.length < 3 && auth.canAccessAnySaasWorkspace) {
       actions.add(
         _HomeShortcut(
           label: context.tr('saas_workspace_title'),
@@ -1217,6 +1718,10 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 
   void _openWorkspace() {
+    final auth = context.read<AuthProvider>();
+    if (!auth.canAccessAnySaasWorkspace) {
+      return;
+    }
     _pushScreen(const SaasWorkspaceScreen());
   }
 

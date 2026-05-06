@@ -491,7 +491,13 @@ class AdminTab extends StatelessWidget {
       );
     }
 
-    if (authProvider.canAccessSettingsModule) {
+    if (authProvider.hasAnyPermission([
+      'view-shift',
+      'create-shift',
+      'edit-shift',
+      'delete-shift',
+      'view-settings',
+    ])) {
       actions.add(
         _AdminQuickAction(
           icon: Icons.schedule,
@@ -555,7 +561,6 @@ class AdminTab extends StatelessWidget {
     BuildContext context,
     AuthProvider authProvider,
   ) {
-    final canAccessSettings = authProvider.canAccessSettingsModule;
     final canAccessReports = authProvider.canAccessReportsModule;
 
     return [
@@ -626,9 +631,13 @@ class AdminTab extends StatelessWidget {
               },
             ),
           if (authProvider.hasAnyPermission([
+            'view-company-master',
+            'view-ptkp',
+            'view-progressive-tax-rate',
+            'view-company-assignment',
+            'assign-company',
             'view-settings',
             'assign-roles',
-            'view-roles',
           ]))
             _AdminMenuItem(
               title: context.tr('admin_common_master'),
@@ -648,9 +657,14 @@ class AdminTab extends StatelessWidget {
               },
             ),
           if (authProvider.hasAnyPermission([
+            'view-permissions',
+            'create-permissions',
+            'edit-permissions',
+            'delete-permissions',
+            'view-users',
+            'assign-user',
             'assign-roles',
             'view-roles',
-            'view-permissions',
           ]))
             _AdminMenuItem(
               title: context.tr('admin_user_management'),
@@ -669,7 +683,13 @@ class AdminTab extends StatelessWidget {
                 );
               },
             ),
-          if (canAccessSettings)
+          if (authProvider.hasAnyPermission([
+            'view-shift',
+            'create-shift',
+            'edit-shift',
+            'delete-shift',
+            'view-settings',
+          ]))
             _AdminMenuItem(
               title: context.tr('admin_master_shift'),
               subtitle: context.tr('admin_master_shift_subtitle'),
@@ -694,7 +714,13 @@ class AdminTab extends StatelessWidget {
         icon: Icons.settings_applications,
         color: const Color(0xFF8B5CF6),
         items: [
-          if (canAccessSettings)
+          if (authProvider.hasAnyPermission([
+            'view-default-location',
+            'create-default-location',
+            'edit-default-location',
+            'delete-default-location',
+            'view-settings',
+          ]))
             _AdminMenuItem(
               title: context.tr('admin_attendance_settings'),
               subtitle: context.tr('admin_attendance_settings_subtitle'),
@@ -836,23 +862,24 @@ class AdminTab extends StatelessWidget {
                 );
               },
             ),
-          _AdminMenuItem(
-            title: context.tr('admin_event_management'),
-            subtitle: context.tr('admin_event_management_subtitle'),
-            icon: Icons.event_available,
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1D976C), Color(0xFF93F9B9)],
+          if (authProvider.hasAnyPermission(['view-events', 'view-settings']))
+            _AdminMenuItem(
+              title: context.tr('admin_event_management'),
+              subtitle: context.tr('admin_event_management_subtitle'),
+              icon: Icons.event_available,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1D976C), Color(0xFF93F9B9)],
+              ),
+              badge: context.tr('admin_badge_calendar'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const EventManagementScreen(),
+                  ),
+                );
+              },
             ),
-            badge: context.tr('admin_badge_calendar'),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const EventManagementScreen(),
-                ),
-              );
-            },
-          ),
         ],
       ),
     ];

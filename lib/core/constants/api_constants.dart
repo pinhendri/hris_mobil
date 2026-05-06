@@ -3,9 +3,17 @@ class ApiConstants {
   // 🌐 BASE URL
   // ===============================
 
-  /// Android Emulator
-    // static const String baseUrl = 'http://113.11.129.46';
-   static const String baseUrl = 'http://10.0.2.2:8000' ;
+  /// Set with:
+  /// flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
+  /// flutter run --dart-define=API_BASE_URL=http://113.11.129.46
+  /// flutter build apk --dart-define=API_BASE_URL=https://api.example.com
+  static const bool _isReleaseBuild = bool.fromEnvironment('dart.vm.product');
+  static const String _configuredBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+  );
+  static const String baseUrl = _configuredBaseUrl == ''
+      ? (_isReleaseBuild ? 'https://api.example.com' : 'http://10.0.2.2:8000')
+      : _configuredBaseUrl;
 
   /// Kalau pakai HP asli:
   /// ganti dengan IP laptop kamu
@@ -113,6 +121,8 @@ class ApiConstants {
       '/api/kpi/evaluation/employee'; // + /{employeeId}/history
   static const String legacyPerformanceEvaluationHistoryEndpoint =
       '/api/kpi/evaluation/history'; // + /{employeeId}
+  static const String performanceEvaluationListEndpoint =
+      '/api/kpi/evaluation/list';
 
   // ===============================
   // 📄 DOCUMENTS

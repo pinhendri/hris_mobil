@@ -54,6 +54,7 @@ class BotAssistantProvider extends ChangeNotifier {
   bool get canAskDocs => modeOptions.contains(BotMode.askDocs);
 
   bool get docsConfigured => _capabilities?.docsConfigured ?? false;
+  String get docsEngine => _capabilities?.docsEngine ?? '';
 
   List<DiscoveryDocument> get selectedDocuments => _documents
       .where((document) => _selectedDocumentIds.contains(document.id))
@@ -148,6 +149,18 @@ class BotAssistantProvider extends ChangeNotifier {
   }
 
   void toggleDocumentSelection(int documentId) {
+    DiscoveryDocument? document;
+    for (final item in _documents) {
+      if (item.id == documentId) {
+        document = item;
+        break;
+      }
+    }
+
+    if (document == null || !document.canUseForBot) {
+      return;
+    }
+
     if (_selectedDocumentIds.contains(documentId)) {
       _selectedDocumentIds = _selectedDocumentIds
           .where((id) => id != documentId)
@@ -462,8 +475,8 @@ class BotAssistantProvider extends ChangeNotifier {
       throw Exception(
         response is Map<String, dynamic>
             ? response['message']?.toString() ??
-                  'Dokumen Discovery belum bisa dimuat.'
-            : 'Dokumen Discovery belum bisa dimuat.',
+                  'Dokumen OCR belum bisa dimuat.'
+            : 'Dokumen OCR belum bisa dimuat.',
       );
     }
 
@@ -480,7 +493,11 @@ class BotAssistantProvider extends ChangeNotifier {
     }
 
     _selectedDocumentIds = _selectedDocumentIds
-        .where((id) => _documents.any((document) => document.id == id))
+        .where(
+          (id) => _documents.any(
+            (document) => document.id == id && document.canUseForBot,
+          ),
+        )
         .toList(growable: false);
   }
 
@@ -593,11 +610,7 @@ class BotAssistantProvider extends ChangeNotifier {
   }
 
   List<int> get _defaultDocumentIds => _documents
-      .where(
-        (document) =>
-            document.discoveryEnabled &&
-            document.discoverySyncStatus.toLowerCase() != 'failed',
-      )
+      .where((document) => document.canUseForBot)
       .map((document) => document.id)
       .toList(growable: false);
 

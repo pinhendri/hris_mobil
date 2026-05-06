@@ -8,10 +8,33 @@ class AppStrings {
 
   static const Map<String, Map<String, String>> _values = {
     'id': {
+      'nav_home': 'Home',
       'nav_dashboard': 'Dashboard',
       'nav_features': 'Fitur',
       'nav_admin': 'Admin',
+      'nav_approval': 'Approval',
       'nav_profile': 'Profil',
+      'approval_subtitle': 'Persetujuan dan status notifikasi Anda',
+      'approval_notification_title': 'Notifikasi',
+      'approval_notification_unread': '{count} notifikasi belum dibaca',
+      'approval_notification_summary': '{count} notifikasi tersedia',
+      'approval_action_section': 'Status & Persetujuan',
+      'approval_empty_title': 'Belum ada akses approval',
+      'approval_empty_message':
+          'Jika Anda diberi permission approval atau transaksi, menu terkait akan muncul di sini.',
+      'approval_badge_approve': 'APPROVE',
+      'approval_badge_status': 'STATUS',
+      'approval_leave_title': 'Cuti',
+      'approval_leave_subtitle':
+          'Lihat status cuti atau proses persetujuan cuti.',
+      'approval_claims_title': 'Klaim Biaya',
+      'approval_claims_subtitle':
+          'Pantau status klaim atau proses persetujuan klaim.',
+      'approval_overtime_title': 'Lembur',
+      'approval_overtime_subtitle':
+          'Pantau pengajuan lembur dan status persetujuannya.',
+      'approval_tasks_title': 'Tugas',
+      'approval_tasks_subtitle': 'Lihat status dan progres tugas Anda.',
       'dashboard_cached_banner':
           'Dashboard sedang menampilkan data cache terakhir karena server belum bisa diakses.',
       'dashboard_stat_total_employees': 'Total Karyawan',
@@ -137,7 +160,15 @@ class AppStrings {
       'kpi_mobile_placeholder':
           'Menu ini sudah mengikuti permission akun Anda. Tampilan detail mobile untuk modul KPI sedang disiapkan.',
       'feature_label_recruitment': 'Rekrutmen',
+      'feature_label_applications': 'Lamaran',
+      'feature_label_recruitment_ops': 'Operasional Rekrutmen',
+      'feature_label_employee_one': 'Karyawan Satu',
       'feature_label_inventory': 'Inventaris',
+      'inventory_master': 'Master Inventori',
+      'inventory_request_stock': 'Permintaan Pengeluaran',
+      'inventory_receipt_stock': 'Penerimaan Stok',
+      'inventory_report_stock': 'Laporan Inventori',
+      'inventory_submenu_hint': 'Pilih menu inventori yang ingin dibuka.',
       'feature_label_training': 'Pelatihan',
       'people_development': 'Pengembangan SDM',
       'learning_lms': 'Pembelajaran & LMS',
@@ -146,10 +177,14 @@ class AppStrings {
       'people_development_submenu_hint':
           'Pilih menu pengembangan SDM yang ingin dibuka.',
       'feature_label_tasks': 'Tugas',
+      'feature_label_time_tracking': 'Pelacakan Waktu',
+      'feature_mobile_placeholder':
+          'Menu ini sudah muncul sesuai permission akun Anda. Tampilan detail mobile untuk modul ini sedang disiapkan.',
       'feature_label_event_management': 'Event Management',
       'feature_label_broadcast': 'Broadcast',
       'feature_label_documents': 'Dokumen',
       'feature_label_discovery': 'Discovery',
+      'feature_label_reports': 'Laporan',
       'feature_label_bot_assistant': 'BOT Assistant',
       'feature_label_clients': 'Klien',
       'feature_label_corrections': 'Koreksi',
@@ -161,6 +196,7 @@ class AppStrings {
       'correction_payroll': 'Koreksi Payroll',
       'correction_leave_balance': 'Koreksi Saldo Cuti',
       'feature_label_saas': 'Workspace SaaS',
+      'feature_admin_submenu_hint': 'Pilih menu konfigurasi yang ingin dibuka.',
       'admin_panel': 'Panel Admin',
       'admin_no_access_message':
           'Role Anda belum memiliki permission admin. Hubungi administrator untuk menambahkan akses yang dibutuhkan.',
@@ -190,6 +226,8 @@ class AppStrings {
           'Master permission, role, dan assignment user',
       'admin_master_shift': 'Master Shift',
       'admin_master_shift_subtitle': 'Buat dan ubah master shift',
+      'admin_master_shift_day': 'Master Shift Harian',
+      'settings_general': 'Pengaturan Umum',
       'admin_attendance_settings': 'Pengaturan Absensi',
       'admin_attendance_settings_subtitle': 'Atur radius dan lokasi absensi',
       'admin_shift_assignment': 'Shift Assignment',
@@ -349,10 +387,32 @@ class AppStrings {
       'generic_version': 'Versi 1.0.0',
     },
     'en': {
+      'nav_home': 'Home',
       'nav_dashboard': 'Dashboard',
       'nav_features': 'Features',
       'nav_admin': 'Admin',
+      'nav_approval': 'Approval',
       'nav_profile': 'Profile',
+      'approval_subtitle': 'Your approvals and notification status',
+      'approval_notification_title': 'Notifications',
+      'approval_notification_unread': '{count} unread notifications',
+      'approval_notification_summary': '{count} notifications available',
+      'approval_action_section': 'Status & Approval',
+      'approval_empty_title': 'No approval access yet',
+      'approval_empty_message':
+          'Menus will appear here when approval or transaction permissions are assigned.',
+      'approval_badge_approve': 'APPROVE',
+      'approval_badge_status': 'STATUS',
+      'approval_leave_title': 'Leave',
+      'approval_leave_subtitle': 'View leave status or process leave approval.',
+      'approval_claims_title': 'Expense Claims',
+      'approval_claims_subtitle':
+          'Track claim status or process claim approval.',
+      'approval_overtime_title': 'Overtime',
+      'approval_overtime_subtitle':
+          'Track overtime requests and approval status.',
+      'approval_tasks_title': 'Tasks',
+      'approval_tasks_subtitle': 'View your task status and progress.',
       'dashboard_cached_banner':
           'Dashboard is showing the latest cached data because the server cannot be reached right now.',
       'dashboard_stat_total_employees': 'Total Employees',
@@ -475,7 +535,15 @@ class AppStrings {
       'kpi_mobile_placeholder':
           'This menu already follows your account permissions. The detailed mobile view for the KPI module is being prepared.',
       'feature_label_recruitment': 'Recruitment',
+      'feature_label_applications': 'Applications',
+      'feature_label_recruitment_ops': 'Recruitment Ops',
+      'feature_label_employee_one': 'Employees One',
       'feature_label_inventory': 'Inventory',
+      'inventory_master': 'Inventory Master',
+      'inventory_request_stock': 'Request For Issued',
+      'inventory_receipt_stock': 'Receipt Stock',
+      'inventory_report_stock': 'Inventory Report',
+      'inventory_submenu_hint': 'Choose the inventory menu you want to open.',
       'feature_label_training': 'Training',
       'people_development': 'People Development',
       'learning_lms': 'Learning & LMS',
@@ -484,10 +552,14 @@ class AppStrings {
       'people_development_submenu_hint':
           'Choose the people development menu to open.',
       'feature_label_tasks': 'Tasks',
+      'feature_label_time_tracking': 'Time Tracking',
+      'feature_mobile_placeholder':
+          'This menu is visible according to your account permissions. The mobile detail screen for this module is being prepared.',
       'feature_label_event_management': 'Event Management',
       'feature_label_broadcast': 'Broadcast',
       'feature_label_documents': 'Documents',
       'feature_label_discovery': 'Discovery',
+      'feature_label_reports': 'Reports',
       'feature_label_bot_assistant': 'BOT Assistant',
       'feature_label_clients': 'Clients',
       'feature_label_corrections': 'Correction',
@@ -499,6 +571,8 @@ class AppStrings {
       'correction_payroll': 'Payroll Correction',
       'correction_leave_balance': 'Leave Balance Correction',
       'feature_label_saas': 'SaaS Workspace',
+      'feature_admin_submenu_hint':
+          'Choose the configuration menu you want to open.',
       'admin_panel': 'Admin Panel',
       'admin_no_access_message':
           'Your role does not have admin permission yet. Contact an administrator to add the required access.',
@@ -529,6 +603,8 @@ class AppStrings {
           'Permission, role, and user assignment masters',
       'admin_master_shift': 'Master Shift',
       'admin_master_shift_subtitle': 'Create and update shift master data',
+      'admin_master_shift_day': 'Day Shift Master File',
+      'settings_general': 'General Setting',
       'admin_attendance_settings': 'Attendance Settings',
       'admin_attendance_settings_subtitle':
           'Configure radius and attendance locations',

@@ -25,7 +25,7 @@ extension BotModeX on BotMode {
       case BotMode.askSystem:
         return 'Profil, claim, cuti, dan data HR pribadi.';
       case BotMode.askDocs:
-        return 'Cari jawaban dari knowledge base Discovery.';
+        return 'Cari jawaban dari dokumen OCR perusahaan.';
       case BotMode.takeAction:
         return 'Siapkan draft claim, lembur, dan cuti.';
     }
@@ -73,6 +73,7 @@ class BotCapabilities {
     required this.tools,
     required this.permissions,
     required this.docsConfigured,
+    required this.docsEngine,
   });
 
   final List<BotMode> modes;
@@ -80,9 +81,12 @@ class BotCapabilities {
   final List<String> tools;
   final List<String> permissions;
   final bool docsConfigured;
+  final String docsEngine;
 
   factory BotCapabilities.fromJson(Map<String, dynamic> json) {
-    final ai = json['ai'];
+    final ai = json['ai'] is Map
+        ? Map<String, dynamic>.from(json['ai'] as Map)
+        : <String, dynamic>{};
 
     final parsedModes = (json['modes'] as List? ?? const [])
         .map(botModeFromRaw)
@@ -100,9 +104,8 @@ class BotCapabilities {
           .toList(growable: false),
       tools: _parseStringList(json['tools']),
       permissions: _parseStringList(json['permissions']),
-      docsConfigured: ai is Map<String, dynamic>
-          ? ai['docs_configured'] == true
-          : false,
+      docsConfigured: ai['docs_configured'] == true,
+      docsEngine: ai['docs_engine']?.toString() ?? '',
     );
   }
 }

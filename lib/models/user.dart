@@ -1,14 +1,19 @@
+String _stringFromAccessValue(dynamic value) {
+  if (value is Map) {
+    for (final key in const ['name', 'permission', 'slug', 'code', 'key']) {
+      final item = value[key]?.toString().trim() ?? '';
+      if (item.isNotEmpty) return item;
+    }
+    return '';
+  }
+
+  return value?.toString().trim() ?? '';
+}
+
 List<String> _stringListFromDynamic(dynamic value) {
   if (value is List) {
     final items = value
-        .map((item) {
-          if (item is Map<String, dynamic>) {
-            return item['name']?.toString() ?? '';
-          }
-
-          return item?.toString() ?? '';
-        })
-        .map((item) => item.trim())
+        .map(_stringFromAccessValue)
         .where((item) => item.isNotEmpty)
         .toSet()
         .toList(growable: false);
@@ -28,6 +33,32 @@ List<String> _stringListFromDynamic(dynamic value) {
   return const [];
 }
 
+List<String> _permissionListFromMap(Map<String, dynamic> map) {
+  final values = <String>{
+    ..._stringListFromDynamic(map['permissions']),
+    ..._stringListFromDynamic(map['permission_names']),
+    ..._stringListFromDynamic(map['direct_permissions']),
+  };
+
+  void collectRolePermissions(dynamic roles) {
+    if (roles is! List) return;
+
+    for (final role in roles) {
+      if (role is! Map) continue;
+      final roleMap = Map<String, dynamic>.from(role);
+      values.addAll(_stringListFromDynamic(roleMap['permissions']));
+      values.addAll(_stringListFromDynamic(roleMap['permission_names']));
+    }
+  }
+
+  collectRolePermissions(map['roles']);
+  collectRolePermissions(map['groups']);
+  collectRolePermissions(map['group_roles']);
+
+  values.removeWhere((item) => item.trim().isEmpty);
+  return values.toList(growable: false);
+}
+
 // lib/models/user.dart
 class User {
   final int id;
@@ -35,6 +66,7 @@ class User {
   final String email;
   final String uuid;
   final String? employeeUuid;
+  final String? employeeRecordId;
   final String position;
   final String role;
   final List<String> roles;
@@ -47,6 +79,7 @@ class User {
     required this.email,
     required this.uuid,
     this.employeeUuid,
+    this.employeeRecordId,
     required this.position,
     this.role = '',
     this.roles = const [],
@@ -69,7 +102,12 @@ class User {
         employeeMap?['employee_uuid']?.toString().trim() ??
         map['employee_uuid']?.toString().trim() ??
         map['employeeUuid']?.toString().trim() ??
-        map['uuid']?.toString().trim() ??
+        '';
+    final resolvedEmployeeRecordId =
+        employeeMap?['id']?.toString().trim() ??
+        employeeMap?['employee_id']?.toString().trim() ??
+        map['employee_id']?.toString().trim() ??
+        map['employeeId']?.toString().trim() ??
         '';
 
     return User(
@@ -80,11 +118,14 @@ class User {
       employeeUuid: resolvedEmployeeUuid.isNotEmpty
           ? resolvedEmployeeUuid
           : null,
+      employeeRecordId: resolvedEmployeeRecordId.isNotEmpty
+          ? resolvedEmployeeRecordId
+          : null,
       position: map['position'] ?? '',
       role: primaryRole,
       roles: normalizedRoles,
       selectedCCode: map['selectedCCode'] ?? map['selected_c_code'] ?? '',
-      permissions: _stringListFromDynamic(map['permissions']),
+      permissions: _permissionListFromMap(map),
     );
   }
 
@@ -95,6 +136,7 @@ class User {
       'email': email,
       'uuid': uuid,
       'employee_uuid': employeeUuid,
+      'employee_id': employeeRecordId,
       'position': position,
       'role': role,
       'roles': roles,

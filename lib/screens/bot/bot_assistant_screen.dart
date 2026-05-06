@@ -309,6 +309,12 @@ class _BotAssistantScreenState extends State<BotAssistantScreen> {
                   label: '${provider.selectedDocumentIds.length} dokumen aktif',
                   color: Colors.teal,
                 ),
+              if (provider.botMode == BotMode.askDocs &&
+                  provider.docsEngine.isNotEmpty)
+                _buildMetaChip(
+                  label: provider.docsEngine,
+                  color: Colors.deepPurple,
+                ),
               ...lastAssistant?.capabilitiesUsed.map((capability) {
                     return _buildMetaChip(
                       label: capability,
@@ -658,7 +664,7 @@ class _BotAssistantScreenState extends State<BotAssistantScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Pilih dokumen Discovery yang akan dipakai BOT saat mode Tanya Dokumen.',
+            'Pilih dokumen OCR yang akan dipakai BOT saat mode Tanya Dokumen.',
             style: GoogleFonts.poppins(
               fontSize: 12.5,
               color: _secondaryTextColor,
@@ -703,7 +709,7 @@ class _BotAssistantScreenState extends State<BotAssistantScreen> {
           const SizedBox(height: 14),
           if (filteredDocuments.isEmpty)
             Text(
-              'Belum ada dokumen Discovery aktif untuk dipilih.',
+              'Belum ada dokumen OCR aktif untuk dipilih.',
               style: GoogleFonts.poppins(
                 fontSize: 12.5,
                 color: _secondaryTextColor,
@@ -721,9 +727,12 @@ class _BotAssistantScreenState extends State<BotAssistantScreen> {
                   final selected = provider.selectedDocumentIds.contains(
                     document.id,
                   );
+                  final canUseForBot = document.canUseForBot;
 
                   return InkWell(
-                    onTap: () => provider.toggleDocumentSelection(document.id),
+                    onTap: canUseForBot
+                        ? () => provider.toggleDocumentSelection(document.id)
+                        : null,
                     borderRadius: BorderRadius.circular(14),
                     child: Ink(
                       padding: const EdgeInsets.all(14),
@@ -782,17 +791,15 @@ class _BotAssistantScreenState extends State<BotAssistantScreen> {
                                       color: Colors.teal,
                                     ),
                                     _buildMetaChip(
-                                      label: document.discoverySyncStatus,
-                                      color: document.isReady
-                                          ? Colors.green
-                                          : Colors.orange,
+                                      label: document.ocrStatusLabel,
+                                      color: _ocrStatusColor(document),
                                     ),
                                   ],
                                 ),
-                                if (document.discoveryLastError.isNotEmpty) ...[
+                                if (document.ocrLastError.isNotEmpty) ...[
                                   const SizedBox(height: 8),
                                   Text(
-                                    document.discoveryLastError,
+                                    document.ocrLastError,
                                     style: GoogleFonts.poppins(
                                       fontSize: 11.5,
                                       color: _bannerTextColor(Colors.red),
@@ -806,8 +813,11 @@ class _BotAssistantScreenState extends State<BotAssistantScreen> {
                             value: selected,
                             activeColor: AppColors.primary,
                             side: BorderSide(color: _surfaceBorderColor),
-                            onChanged: (_) =>
-                                provider.toggleDocumentSelection(document.id),
+                            onChanged: canUseForBot
+                                ? (_) => provider.toggleDocumentSelection(
+                                    document.id,
+                                  )
+                                : null,
                           ),
                         ],
                       ),
@@ -1230,7 +1240,7 @@ class _BotAssistantScreenState extends State<BotAssistantScreen> {
       BotMode.askSystem:
           'Contoh: status claim saya, sisa cuti saya, atau tampilkan profil saya...',
       BotMode.askDocs:
-          'Contoh: jelaskan SOP onboarding, atau kebijakan reimbursement apa yang berlaku...',
+          'Contoh: jelaskan isi SOP dari dokumen OCR yang dipilih...',
       BotMode.takeAction:
           'Contoh: bantu saya buat draft claim, draft lembur, atau draft cuti...',
     }[provider.botMode];
@@ -1347,7 +1357,7 @@ class _BotAssistantScreenState extends State<BotAssistantScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Mode tanya dokumen belum aktif penuh. Backend BOT tersedia, tetapi Discovery masih menunggu konfigurasi AI di server.',
+              'Mode tanya dokumen belum aktif penuh. Backend BOT tersedia, tetapi OCR/Ollama lokal belum aktif di server.',
               style: GoogleFonts.poppins(
                 fontSize: 12.5,
                 color: _bannerTextColor(Colors.orange),
@@ -1724,6 +1734,20 @@ class _BotAssistantScreenState extends State<BotAssistantScreen> {
     }
 
     return Colors.grey.shade700;
+  }
+
+  Color _ocrStatusColor(DiscoveryDocument document) {
+    switch (document.ocrStatus.toLowerCase()) {
+      case 'ready':
+        return Colors.green;
+      case 'processing':
+        return Colors.blue;
+      case 'failed':
+        return Colors.red;
+      case 'pending':
+      default:
+        return Colors.orange;
+    }
   }
 }
 

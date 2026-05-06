@@ -1,80 +1,121 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { Star, TrendingUp, Target, Award } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Award, Star, Target, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import api_laravel from "@/lib/utils"; // axios helper
+import api_laravel from "@/lib/utils";
 
-interface Employee {
+interface Evaluation {
   id: number;
-  employee: string;
-  avatar: string;
-  position: string;
-  department: string;
-  overallScore: number;
-  goals: { completed: number; total: number };
-  lastReview: string | null;
-  nextReview: string | null;
-  strengths: string[];
-  improvements: string[];
- 
+  employee_id: number;
+  employee_name: string;
+  period: string;
+  final_score: number;
+  grade: string;
+  is_locked: number;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
-interface Department {
-  id: number;
-  name: string;
-  description?: string;
+interface Assignment {
+  employee_kpi_id?: number;
+  master_kpi_detail_id?: number;
+  id?: number;
 }
 
-interface Position {
-  id: number;
-  name: string;
-  nama_jabatan?: string;
+interface History {
+  period: string;
+  final_score: number;
+  grade: string;
+  is_locked: number;
+}
+
+interface EmployeePerformance {
+  employeeId: number;
+  employeeName: string;
+  latestEvaluation: Evaluation;
+  assignments: Assignment[];
+  history: History[];
 }
 
 export default function Performance() {
-  const [performanceData, setPerformanceData] = useState<Employee[]>([]);
-
-  const formatDate = (dateString: string | null) => {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(date);
-};
-
-
+  const [performanceData, setPerformanceData] = useState<EmployeePerformance[]>(
+    [],
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api_laravel.get("api/employee-goals").then((res) => {
-      if (res.data?.data) {
-        const mapped: Employee[] = res.data.data.map((item: any) => ({
-        id: item.id,
-        employee: item.employee?.name ?? "-",
-        avatar: item.employee?.avatar ?? "-",
-        position: item.employee?.position?.nama_jabatan ?? "-", // ✅ ambil deskripsi jabatan
-        department: item.department_goal?.department_id 
-                      ? `Dept ID: ${item.department_goal.department_id}` 
-                      : "-", // sementara tampilkan id saja
-        overallScore: item.progress ?? 0,
-        goals: {
-          completed: item.achieved_value ? 1 : 0,
-          total: 1,
-        },
-        lastReview: item.created_at ?? null,
-        nextReview: item.due_date ?? null,
-        strengths: ["Teamwork", "Discipline"],
-        improvements: ["Time Management"],
-      }));
-        setPerformanceData(mapped);
-      }
-    });
+    loadPerformance();
   }, []);
+
+  const loadPerformance = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const evaluationResponse = await api_laravel.get(
+        "/api/kpi/evaluation/list",
+      );
+      const evaluations = extractList(evaluationResponse.data, [
+        "evaluations",
+        "data",
+        "items",
+      ])
+        .map(normalizeEvaluation)
+        .filter((item): item is Evaluation => item !== null);
+
+      const latestByEmployee = latestEvaluationsByEmployee(evaluations);
+      const enriched = await Promise.all(
+        latestByEmployee.map(async (evaluation) => {
+          const [assignments, history] = await Promise.all([
+            loadAssignments(evaluation.employee_id),
+            loadHistory(evaluation.employee_id),
+          ]);
+
+          return {
+            employeeId: evaluation.employee_id,
+            employeeName: evaluation.employee_name,
+            latestEvaluation: evaluation,
+            assignments,
+            history,
+          };
+        }),
+      );
+
+      setPerformanceData(enriched);
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Gagal memuat data performa KPI.",
+      );
+      setPerformanceData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const overview = useMemo(() => {
+    const totalEmployees = performanceData.length;
+    const scores = performanceData.map(
+      (item) => item.latestEvaluation.final_score,
+    );
+    const averageScore =
+      scores.length === 0
+        ? 0
+        : scores.reduce((sum, score) => sum + score, 0) / scores.length;
+    const lockedCount = performanceData.filter(
+      (item) => item.latestEvaluation.is_locked === 1,
+    ).length;
+    const totalAssignments = performanceData.reduce(
+      (sum, item) => sum + item.assignments.length,
+      0,
+    );
+
+    return { totalEmployees, averageScore, lockedCount, totalAssignments };
+  }, [performanceData]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -82,171 +123,350 @@ export default function Performance() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Performance</h1>
           <p className="text-muted-foreground">
-            Track employee performance and manage reviews.
+            Track KPI assignments, evaluation scores, and review history.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={loadPerformance}
+          className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+        >
+          Refresh
+        </button>
       </div>
 
-      {/* Performance Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="card-metric">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Average Score</p>
-                <p className="text-3xl font-bold text-foreground">91.7%</p>
-                <p className="text-sm text-success flex items-center mt-1">
-                  <span className="mr-1">↗</span>
-                  +3.2% from last quarter
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-primary-light">
-                <Star className="h-6 w-6 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="card-metric">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Goals Completed</p>
-                <p className="text-3xl font-bold text-foreground">86%</p>
-                <p className="text-sm text-success flex items-center mt-1">
-                  <span className="mr-1">↗</span>
-                  24/28 this quarter
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-success-light">
-                <Target className="h-6 w-6 text-success" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="card-metric">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Reviews Due</p>
-                <p className="text-3xl font-bold text-foreground">7</p>
-                <p className="text-sm text-warning flex items-center mt-1">
-                  <span className="mr-1">⏰</span>
-                  Next 30 days
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-warning-light">
-                <TrendingUp className="h-6 w-6 text-warning" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="card-metric bg-gradient-primary text-white">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-white/80">Top Performers</p>
-                <p className="text-3xl font-bold text-white">12</p>
-                <p className="text-sm text-white/90 flex items-center mt-1">
-                  <span className="mr-1">🏆</span>
-                  Score 90%+
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-white/20">
-                <Award className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+        <MetricCard
+          title="Average Score"
+          value={formatScore(overview.averageScore)}
+          helper="From latest KPI evaluations"
+          icon={<Star className="h-6 w-6 text-primary" />}
+        />
+        <MetricCard
+          title="Evaluated Employees"
+          value={overview.totalEmployees.toString()}
+          helper="Employees with KPI history"
+          icon={<TrendingUp className="h-6 w-6 text-primary" />}
+        />
+        <MetricCard
+          title="Assigned KPIs"
+          value={overview.totalAssignments.toString()}
+          helper="Current assignment records"
+          icon={<Target className="h-6 w-6 text-primary" />}
+        />
+        <MetricCard
+          title="Locked Reviews"
+          value={overview.lockedCount.toString()}
+          helper="Finalized evaluations"
+          icon={<Award className="h-6 w-6 text-primary" />}
+        />
       </div>
 
-      {/* Employee Performance Cards */}
+      {loading && (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            Loading KPI performance data...
+          </CardContent>
+        </Card>
+      )}
+
+      {!loading && error && (
+        <Card>
+          <CardContent className="p-6 text-sm text-destructive">
+            {error}
+          </CardContent>
+        </Card>
+      )}
+
+      {!loading && !error && performanceData.length === 0 && (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            No KPI evaluations found.
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6">
-        {performanceData.map((employee, index) => (
-          <Card key={index} className="card-dashboard">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-4">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={employee.avatar} alt={employee.employee} />
-                    <AvatarFallback>
-                      {employee.employee
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="text-lg font-semibold">{employee.employee}</h3>
-                   <p className="text-sm text-muted-foreground">
-  {employee.position.nama_jabatan}
-</p>
+        {performanceData.map((employee) => {
+          const evaluation = employee.latestEvaluation;
+          const totalKpis = employee.assignments.length;
+          const historyCount = employee.history.length;
+          const score = evaluation.final_score;
+
+          return (
+            <Card key={employee.employeeId} className="card-dashboard">
+              <CardContent className="p-6">
+                <div className="mb-6 flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <Avatar className="h-12 w-12">
+                      <AvatarFallback>
+                        {initials(employee.employeeName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h3 className="text-lg font-semibold">
+                        {employee.employeeName}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Employee ID {employee.employeeId}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Latest period {evaluation.period || "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-primary">
+                      {formatScore(score)}
+                    </div>
                     <p className="text-xs text-muted-foreground">
-  Department {employee.department.description}
-</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-primary">
-                    {employee.overallScore}%
-                  </div>
-                  <p className="text-xs text-muted-foreground">Overall Score</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Goals Progress */}
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-sm">Goals Progress</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Completed</span>
-                      <span>
-                        {employee.goals.completed}/{employee.goals.total}
-                      </span>
-                    </div>
-                    <Progress
-                      value={(employee.goals.completed / employee.goals.total) * 100}
-                      className="h-2"
-                    />
+                      KPI Final Score
+                    </p>
                   </div>
                 </div>
 
-                {/* Review Timeline */}
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-sm">Review Timeline</h4>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Last Review</span>
-                     <span>{formatDate(employee.lastReview)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Next Review</span>
-                    <span>{formatDate(employee.lastReview)}</span>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold">KPI Assignment</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Assigned KPI</span>
+                        <span>{totalKpis}</span>
+                      </div>
+                      <Progress
+                        value={totalKpis > 0 ? 100 : 0}
+                        className="h-2"
+                      />
                     </div>
                   </div>
-                </div>
 
-                {/* Performance Indicators */}
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-sm">Performance Level</h4>
-                  <div className="flex items-center space-x-2">
-                    {employee.overallScore >= 90 ? (
-                      <Badge className="status-active">Excellent</Badge>
-                    ) : employee.overallScore >= 80 ? (
-                      <Badge className="status-pending">Good</Badge>
-                    ) : (
-                      <Badge className="status-inactive">Needs Improvement</Badge>
-                    )}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold">
+                      Evaluation History
+                    </h4>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Reviews</span>
+                        <span>{historyCount}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Updated</span>
+                        <span>{formatDate(evaluation.updated_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold">Performance Level</h4>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={badgeClass(score)}>
+                        Grade {evaluation.grade || gradeForScore(score)}
+                      </Badge>
+                      <Badge variant="outline">
+                        {evaluation.is_locked === 1 ? "Locked" : "Draft"}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
+}
+
+function MetricCard({
+  title,
+  value,
+  helper,
+  icon,
+}: {
+  title: string;
+  value: string;
+  helper: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <Card className="card-metric">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            <p className="text-3xl font-bold text-foreground">{value}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{helper}</p>
+          </div>
+          <div className="rounded-lg bg-primary-light p-3">{icon}</div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+async function loadAssignments(employeeId: number): Promise<Assignment[]> {
+  try {
+    const response = await api_laravel.get(
+      `/api/kpi/evaluation/employee/${employeeId}/kpi`,
+    );
+    const items = extractList(response.data, ["data", "items", "kpis"]);
+    if (items.length > 0) return items as Assignment[];
+  } catch {
+    // The legacy endpoint below covers older deployments.
+  }
+
+  try {
+    const response = await api_laravel.get(`/api/kpi/employee-kpi/${employeeId}`);
+    return extractList(response.data, ["data", "items", "kpis"]) as Assignment[];
+  } catch {
+    return [];
+  }
+}
+
+async function loadHistory(employeeId: number): Promise<History[]> {
+  try {
+    const response = await api_laravel.get(
+      `/api/kpi/evaluation/history/${employeeId}`,
+    );
+    return extractList(response.data, [
+      "history",
+      "data",
+      "evaluations",
+      "items",
+    ]).map(normalizeHistory);
+  } catch {
+    return [];
+  }
+}
+
+function latestEvaluationsByEmployee(evaluations: Evaluation[]): Evaluation[] {
+  const byEmployee = new Map<number, Evaluation>();
+
+  for (const evaluation of evaluations) {
+    const current = byEmployee.get(evaluation.employee_id);
+    if (!current || compareEvaluationRecency(evaluation, current) > 0) {
+      byEmployee.set(evaluation.employee_id, evaluation);
+    }
+  }
+
+  return Array.from(byEmployee.values()).sort((left, right) =>
+    left.employee_name.localeCompare(right.employee_name),
+  );
+}
+
+function compareEvaluationRecency(left: Evaluation, right: Evaluation) {
+  const periodComparison = left.period.localeCompare(right.period);
+  if (periodComparison !== 0) return periodComparison;
+
+  return timestamp(left.updated_at || left.created_at) -
+    timestamp(right.updated_at || right.created_at);
+}
+
+function extractList(payload: unknown, keys: string[]): Record<string, unknown>[] {
+  if (Array.isArray(payload)) {
+    return payload.filter(isRecord);
+  }
+
+  if (!isRecord(payload)) {
+    return [];
+  }
+
+  for (const key of keys) {
+    const value = payload[key];
+    if (Array.isArray(value)) {
+      return value.filter(isRecord);
+    }
+
+    if (isRecord(value) && Array.isArray(value.data)) {
+      return value.data.filter(isRecord);
+    }
+  }
+
+  return [];
+}
+
+function normalizeEvaluation(item: Record<string, unknown>): Evaluation | null {
+  const employeeId = toNumber(item.employee_id);
+  if (employeeId <= 0) return null;
+
+  return {
+    id: toNumber(item.id || item.evaluation_id),
+    employee_id: employeeId,
+    employee_name: toText(item.employee_name || item.name || item.employee),
+    period: toText(item.period),
+    final_score: toNumber(item.final_score),
+    grade: toText(item.grade),
+    is_locked: toNumber(item.is_locked),
+    created_at: nullableText(item.created_at),
+    updated_at: nullableText(item.updated_at),
+  };
+}
+
+function normalizeHistory(item: Record<string, unknown>): History {
+  return {
+    period: toText(item.period),
+    final_score: toNumber(item.final_score),
+    grade: toText(item.grade),
+    is_locked: toNumber(item.is_locked),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return Number(value) || 0;
+  return 0;
+}
+
+function toText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return value.toString();
+  if (isRecord(value) && typeof value.name === "string") return value.name;
+  return "";
+}
+
+function nullableText(value: unknown): string | null {
+  const text = toText(value);
+  return text.length > 0 ? text : null;
+}
+
+function timestamp(value: string | null): number {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatScore(value: number) {
+  return value.toFixed(2);
+}
+
+function gradeForScore(score: number) {
+  if (score >= 90) return "A";
+  if (score >= 75) return "B";
+  return "C";
+}
+
+function badgeClass(score: number) {
+  if (score >= 90) return "status-active";
+  if (score >= 75) return "status-pending";
+  return "status-inactive";
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "HR";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }

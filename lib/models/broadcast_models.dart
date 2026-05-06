@@ -63,6 +63,10 @@ class BroadcastHistoryItem {
   final String title;
   final String message;
   final DateTime? sentAt;
+  final int calendarEventId;
+  final DateTime? eventStartsAt;
+  final DateTime? eventEndsAt;
+  final String eventLocation;
   final String sentBy;
   final int recipientCount;
   final String type;
@@ -74,6 +78,10 @@ class BroadcastHistoryItem {
     required this.title,
     required this.message,
     required this.sentAt,
+    required this.calendarEventId,
+    required this.eventStartsAt,
+    required this.eventEndsAt,
+    required this.eventLocation,
     required this.sentBy,
     required this.recipientCount,
     required this.type,
@@ -89,6 +97,10 @@ class BroadcastHistoryItem {
       sentAt: _parseDate(
         json['sent_at'] ?? json['created_at'] ?? json['updated_at'],
       ),
+      calendarEventId: _parseInt(json['calendar_event_id']),
+      eventStartsAt: _parseDate(json['event_starts_at']),
+      eventEndsAt: _parseDate(json['event_ends_at']),
+      eventLocation: _parseString(json['event_location']),
       sentBy: _parseString(
         json['sent_by'] ?? json['sender_name'] ?? json['created_by'],
       ),
@@ -98,6 +110,8 @@ class BroadcastHistoryItem {
       priority: _parseString(json['priority'], fallback: 'medium'),
     );
   }
+
+  bool get isCalendarEvent => calendarEventId > 0 || eventStartsAt != null;
 }
 
 int _parseInt(dynamic value) {

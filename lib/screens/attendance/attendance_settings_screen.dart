@@ -265,6 +265,12 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final canCreateLocation = authProvider.hasAnyPermission([
+      'create-default-location',
+      'create-settings',
+    ]);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -281,10 +287,11 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_location_alt, color: Colors.black),
-            onPressed: _isSaving ? null : () => _openEntityForm(),
-          ),
+          if (canCreateLocation)
+            IconButton(
+              icon: const Icon(Icons.add_location_alt, color: Colors.black),
+              onPressed: _isSaving ? null : () => _openEntityForm(),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.black),
             onPressed: () {
@@ -395,11 +402,15 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _isSaving ? null : () => _openEntityForm(),
-                      icon: const Icon(Icons.add_location_alt),
-                      label: const Text('Add New Location'),
-                    ),
+                    child: canCreateLocation
+                        ? ElevatedButton.icon(
+                            onPressed: _isSaving
+                                ? null
+                                : () => _openEntityForm(),
+                            icon: const Icon(Icons.add_location_alt),
+                            label: const Text('Add New Location'),
+                          )
+                        : const SizedBox.shrink(),
                   ),
                   const SizedBox(height: 12),
                   if (allEntities.isEmpty)
@@ -771,6 +782,15 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
         : _readDouble(entityMap, 'longitude', fallback: 0);
     final bool isActive = _isEntityActive(entityMap);
     final double radius = _readDouble(entityMap, 'radius', fallback: 100);
+    final authProvider = context.read<AuthProvider>();
+    final canEditLocation = authProvider.hasAnyPermission([
+      'edit-default-location',
+      'edit-settings',
+    ]);
+    final canDeleteLocation = authProvider.hasAnyPermission([
+      'delete-default-location',
+      'delete-settings',
+    ]);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -883,36 +903,47 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isSaving
-                        ? null
-                        : () => _openEntityForm(entityMap),
-                    icon: const Icon(Icons.edit, size: 16),
-                    label: const Text('Edit'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isSaving
-                        ? null
-                        : () => _toggleEntityActive(entityMap),
-                    icon: Icon(isActive ? Icons.close : Icons.check, size: 16),
-                    label: Text(isActive ? 'Nonaktif' : 'Aktifkan'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: _isSaving ? null : () => _deleteEntity(entityMap),
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  tooltip: 'Delete',
-                ),
-              ],
-            ),
+            if (canEditLocation || canDeleteLocation) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (canEditLocation) ...[
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isSaving
+                            ? null
+                            : () => _openEntityForm(entityMap),
+                        icon: const Icon(Icons.edit, size: 16),
+                        label: const Text('Edit'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isSaving
+                            ? null
+                            : () => _toggleEntityActive(entityMap),
+                        icon: Icon(
+                          isActive ? Icons.close : Icons.check,
+                          size: 16,
+                        ),
+                        label: Text(isActive ? 'Nonaktif' : 'Aktifkan'),
+                      ),
+                    ),
+                  ],
+                  if (canDeleteLocation) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _isSaving
+                          ? null
+                          : () => _deleteEntity(entityMap),
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      tooltip: 'Delete',
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ],
         ),
       ),

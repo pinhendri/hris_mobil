@@ -10,12 +10,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:hris_mobile/main.dart';
 import 'package:hris_mobile/providers/language_provider.dart';
+import 'package:hris_mobile/providers/theme_provider.dart';
 
 void main() {
   testWidgets('App boots MaterialApp shell', (WidgetTester tester) async {
     final languageProvider = LanguageProvider(loadOnInit: false);
+    final themeProvider = ThemeProvider(loadOnInit: false);
 
-    await tester.pumpWidget(MyApp(languageProvider: languageProvider));
+    await tester.pumpWidget(
+      MyApp(languageProvider: languageProvider, themeProvider: themeProvider),
+    );
 
     expect(find.byType(MaterialApp), findsOneWidget);
   });

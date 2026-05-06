@@ -60,10 +60,18 @@ class AuthProvider with ChangeNotifier {
     'create-payroll',
     'edit-payroll',
     'edit-payroll-settings',
+    'view-payroll-settings',
+    'view-payslip',
+    'process-payroll',
     'view-reports',
     'view-roles',
     'assign-roles',
+    'assign-user',
     'view-permissions',
+    'create-permissions',
+    'edit-permissions',
+    'delete-permissions',
+    'view-users',
     'view-recruitment',
     'create-recruitment',
     'edit-recruitment',
@@ -73,18 +81,50 @@ class AuthProvider with ChangeNotifier {
     'delete-client',
     'view-kpi',
     'edit-kpi',
+    'view-default-location',
+    'create-default-location',
+    'edit-default-location',
+    'delete-default-location',
+    'view-my-location',
+    'view-shift',
+    'create-shift',
+    'edit-shift',
+    'delete-shift',
+    'view-shift-day',
+    'create-shift-day',
+    'edit-shift-day',
+    'delete-shift-day',
+    'view-shift-assignment',
+    'assign-shift',
+    'view-company-master',
+    'view-ptkp',
+    'view-progressive-tax-rate',
+    'view-company-assignment',
+    'assign-company',
+    'view-tasks',
+    'view-events',
+    'view-correction-attendance',
+    'view-correction-allowance',
+    'view-correction-payroll',
+    'view-correction-leave-balance',
   };
 
   static const Set<String> _adminRoles = {
     'super-admin',
+    'superadmin',
+    'platform-admin',
+    'platform_admin',
     'admin',
     'administrator',
+    'hrd',
     'hr',
     'hr-admin',
   };
 
-  AuthProvider() {
-    unawaited(_bootstrapOfflineProfileSync());
+  AuthProvider({bool bootstrapOfflineProfileSync = true}) {
+    if (bootstrapOfflineProfileSync) {
+      unawaited(_bootstrapOfflineProfileSync());
+    }
   }
 
   Future<void> _bootstrapOfflineProfileSync() async {
@@ -675,12 +715,12 @@ class AuthProvider with ChangeNotifier {
 
   // ===== HELPER: GET EMPLOYEE ID =====
   int getEmployeeId() {
-    return _user?.id ?? 0;
+    return int.tryParse(_user?.employeeRecordId ?? '') ?? _user?.id ?? 0;
   }
 
   // ===== HELPER: GET EMPLOYEE UUID =====
   String getEmployeeUuid() {
-    return _user?.employeeUuid ?? _user?.uuid ?? '';
+    return _user?.employeeUuid ?? '';
   }
 
   bool hasPermission(String permission) {
@@ -694,7 +734,83 @@ class AuthProvider with ChangeNotifier {
       return true;
     }
 
+    final roleSet = {
+      ..._normalizedAccessSet(roles),
+      _normalizeAccessKey(_user?.role ?? ''),
+    }..removeWhere((value) => value.isEmpty);
+    if (_hasPlatformFullAccessRole(roleSet)) {
+      return true;
+    }
+
     return permissionSet.contains(normalized);
+  }
+
+  bool hasGrantedPermission(String permission) {
+    final normalized = _normalizeAccessKey(permission);
+    if (normalized.isEmpty) {
+      return true;
+    }
+
+    final permissionSet = _normalizedAccessSet(permissions);
+    return _hasFullAccess(permissionSet) || permissionSet.contains(normalized);
+  }
+
+  bool hasExplicitPermission(String permission) {
+    final normalized = _normalizeAccessKey(permission);
+    if (normalized.isEmpty) {
+      return true;
+    }
+
+    final permissionSet = _normalizedAccessSet(permissions);
+    return permissionSet.contains(normalized);
+  }
+
+  bool hasAnyGrantedPermission(Iterable<String> requiredPermissions) {
+    final normalizedPermissions = requiredPermissions
+        .map(_normalizeAccessKey)
+        .where((permission) => permission.isNotEmpty);
+
+    for (final permission in normalizedPermissions) {
+      if (hasGrantedPermission(permission)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool hasAnyExplicitPermission(Iterable<String> requiredPermissions) {
+    final normalizedPermissions = requiredPermissions
+        .map(_normalizeAccessKey)
+        .where((permission) => permission.isNotEmpty);
+
+    for (final permission in normalizedPermissions) {
+      if (hasExplicitPermission(permission)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool get canAccessSaasWorkspace {
+    return hasExplicitPermission('view-saas-workspace');
+  }
+
+  bool get canAccessSaasBilling {
+    return hasExplicitPermission('view-saas-billing');
+  }
+
+  bool get canAccessSaasInvitations {
+    return hasExplicitPermission('view-saas-invitations');
+  }
+
+  bool get canAccessAnySaasWorkspace {
+    return hasAnyExplicitPermission(const [
+      'view-saas-workspace',
+      'view-saas-billing',
+      'view-saas-invitations',
+    ]);
   }
 
   bool hasAnyPermission(Iterable<String> requiredPermissions) {
@@ -747,8 +863,28 @@ class AuthProvider with ChangeNotifier {
     return false;
   }
 
+  bool get hasAdminHrRole {
+    final normalizedRoles = {
+      ..._normalizedAccessSet(roles),
+      _normalizeAccessKey(_user?.role ?? ''),
+    }..removeWhere((role) => role.isEmpty);
+
+    for (final role in normalizedRoles) {
+      if (_adminRoles.contains(role) ||
+          role.contains('hrd') ||
+          role == 'hr' ||
+          role.startsWith('hr-') ||
+          role.endsWith('-hr')) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   bool get canAccessAdminPanel {
-    return hasAnyPermission(_adminPermissions) || hasAnyRole(_adminRoles);
+    return hasAdminHrRole &&
+        (hasAnyPermission(_adminPermissions) || hasAnyRole(_adminRoles));
   }
 
   bool get canAccessPlatformAdmin {
@@ -770,22 +906,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   bool get canViewAllEmployeeData {
-    final normalizedRoles = {
-      ..._normalizedAccessSet(roles),
-      _normalizeAccessKey(_user?.role ?? ''),
-    }..removeWhere((role) => role.isEmpty);
-
-    for (final role in normalizedRoles) {
-      if (role == 'super-admin' ||
-          role == 'administrator' ||
-          role == 'admin' ||
-          role.contains('hrd') ||
-          role.contains('hr')) {
-        return true;
-      }
-    }
-
-    return false;
+    return hasAdminHrRole;
   }
 
   bool get shouldUseSelfEmployeeScope {
@@ -831,11 +952,19 @@ class AuthProvider with ChangeNotifier {
       'create-payroll',
       'edit-payroll',
       'edit-payroll-settings',
+      'view-payroll-settings',
+      'view-payslip',
+      'process-payroll',
     ]);
   }
 
   bool get canAccessClaimsModule {
-    return canAccessPayrollModule || hasPermission('view-reports');
+    return hasAnyPermission([
+      'view-claims',
+      'create-claims',
+      'edit-claims',
+      'approve-claims',
+    ]);
   }
 
   bool get canAccessPerformanceModule {
@@ -887,19 +1016,48 @@ class AuthProvider with ChangeNotifier {
       'view-settings',
       'create-settings',
       'edit-settings',
+      'view-default-location',
+      'create-default-location',
+      'edit-default-location',
+      'delete-default-location',
+      'view-shift',
+      'create-shift',
+      'edit-shift',
+      'delete-shift',
+      'view-shift-day',
+      'create-shift-day',
+      'edit-shift-day',
+      'delete-shift-day',
     ]);
   }
 
   bool get canManageSettingsModule {
-    return hasAnyPermission(['create-settings', 'edit-settings']);
+    return hasAnyPermission([
+      'create-settings',
+      'edit-settings',
+      'create-default-location',
+      'edit-default-location',
+      'delete-default-location',
+      'create-shift',
+      'edit-shift',
+      'delete-shift',
+      'create-shift-day',
+      'edit-shift-day',
+      'delete-shift-day',
+    ]);
   }
 
   bool get canAccessShiftAssignmentModule {
-    return canManageSettingsModule;
+    return hasAnyPermission([
+      'view-shift-assignment',
+      'assign-shift',
+      'edit-shift-assignment',
+      'delete-shift-assignment',
+    ]);
   }
 
   bool get canAccessReportsModule {
-    return hasAnyPermission(['view-reports', 'view-payroll']);
+    return hasPermission('view-reports');
   }
 
   bool get canAccessBroadcastModule {
@@ -913,11 +1071,16 @@ class AuthProvider with ChangeNotifier {
   }
 
   bool get canAccessCorrectionsModule {
-    return canAccessAttendanceModule;
+    return hasAnyPermission([
+      'view-correction-attendance',
+      'view-correction-allowance',
+      'view-correction-payroll',
+      'view-correction-leave-balance',
+    ]);
   }
 
   bool get canAccessLocationModule {
-    return canAccessAttendanceModule;
+    return hasPermission('view-my-location');
   }
 
   Future<void> _queueProfileUpdate(
@@ -1102,8 +1265,22 @@ class AuthProvider with ChangeNotifier {
         values.contains('admin');
   }
 
+  bool _hasPlatformFullAccessRole(Set<String> values) {
+    return values.contains('super-admin') ||
+        values.contains('superadmin') ||
+        values.contains('platform-admin');
+  }
+
   String _normalizeAccessKey(String value) {
-    return value.trim().toLowerCase();
+    return value
+        .trim()
+        .replaceAllMapped(
+          RegExp(r'([a-z0-9])([A-Z])'),
+          (match) => '${match.group(1)}-${match.group(2)}',
+        )
+        .replaceAll(RegExp(r'[\s_]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .toLowerCase();
   }
 }
 

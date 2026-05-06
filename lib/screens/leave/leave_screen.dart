@@ -6,6 +6,7 @@ import '../../providers/leave_provider.dart';
 import '../../models/leave_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../core/utils/image_helper.dart';
+import '../../utils/leave_approval_utils.dart';
 
 class LeaveScreen extends StatefulWidget {
   const LeaveScreen({super.key});
@@ -24,10 +25,44 @@ class _LeaveScreenState extends State<LeaveScreen>
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now();
   bool _isSubmitting = false;
+  bool _showOnlyPendingApprovals = false;
 
   String? _employeeName;
   String? _companyCode;
   Map<String, dynamic>? _userBalance;
+
+  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+  Color get _screenBackgroundColor =>
+      _isDarkMode ? const Color(0xFF0F1115) : AppColors.background;
+  Color get _surfaceColor =>
+      _isDarkMode ? const Color(0xFF1B1D20) : Colors.white;
+  Color get _mutedSurfaceColor =>
+      _isDarkMode ? const Color(0xFF25272B) : Colors.grey.shade50;
+  Color get _borderColor =>
+      _isDarkMode ? const Color(0xFF2F3338) : AppColors.border;
+  Color get _primaryTextColor =>
+      _isDarkMode ? const Color(0xFFF5F7FA) : AppColors.textPrimary;
+  Color get _secondaryTextColor =>
+      _isDarkMode ? const Color(0xFFA8ADB7) : AppColors.textSecondary;
+  Color get _accentColor =>
+      _isDarkMode ? const Color(0xFF60A5FA) : AppColors.primary;
+
+  BoxDecoration _fieldDecoration() {
+    return BoxDecoration(
+      color: _surfaceColor,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: _borderColor),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: _secondaryTextColor),
+      border: InputBorder.none,
+      contentPadding: const EdgeInsets.all(16),
+    );
+  }
 
   Future<void> _selectDate(BuildContext context, bool isStart) async {
     final DateTime? picked = await showDatePicker(
@@ -35,6 +70,22 @@ class _LeaveScreenState extends State<LeaveScreen>
       initialDate: isStart ? _startDate : _endDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        final baseTheme = Theme.of(context);
+        return Theme(
+          data: baseTheme.copyWith(
+            colorScheme: _isDarkMode
+                ? const ColorScheme.dark(
+                    primary: Color(0xFF60A5FA),
+                    surface: Color(0xFF1B1D20),
+                    onSurface: Color(0xFFF5F7FA),
+                  )
+                : baseTheme.colorScheme.copyWith(primary: AppColors.primary),
+            dialogTheme: DialogThemeData(backgroundColor: _surfaceColor),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) {
       setState(() {
@@ -141,6 +192,11 @@ class _LeaveScreenState extends State<LeaveScreen>
         color = Colors.orange;
         icon = Icons.hourglass_empty;
         break;
+      case 'waiting your approval':
+        color = _accentColor;
+        icon = Icons.verified_user_outlined;
+        displayStatus = 'Waiting Your Approval';
+        break;
       default:
         color = Colors.grey;
         icon = Icons.info;
@@ -150,8 +206,9 @@ class _LeaveScreenState extends State<LeaveScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: _isDarkMode ? 0.16 : 0.10),
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -200,27 +257,29 @@ class _LeaveScreenState extends State<LeaveScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: _screenBackgroundColor,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Leave Management',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: _primaryTextColor,
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _screenBackgroundColor,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
           onPressed: () => Navigator.pop(context),
         ),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.primary,
+          labelColor: _accentColor,
+          unselectedLabelColor: _secondaryTextColor,
+          indicatorColor: _accentColor,
+          dividerColor: _borderColor,
           tabs: const [
             Tab(text: 'Requests'),
             Tab(text: 'Apply'),
@@ -231,7 +290,9 @@ class _LeaveScreenState extends State<LeaveScreen>
       body: Consumer<LeaveProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(
+              child: CircularProgressIndicator(color: _accentColor),
+            );
           }
 
           if (provider.error != null) {
@@ -277,45 +338,85 @@ class _LeaveScreenState extends State<LeaveScreen>
     final currentUser = authProvider.user;
 
     if (currentUser == null) {
-      return const Center(child: Text('User not logged in'));
+      return Center(
+        child: Text(
+          'User not logged in',
+          style: TextStyle(color: _secondaryTextColor),
+        ),
+      );
     }
 
     if (requests.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.inbox, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
+            Icon(Icons.inbox, size: 64, color: _secondaryTextColor),
+            const SizedBox(height: 16),
             Text(
               'No leave requests found',
-              style: TextStyle(color: Colors.grey, fontSize: 16),
+              style: TextStyle(color: _secondaryTextColor, fontSize: 16),
             ),
           ],
         ),
       );
     }
 
+    final pendingApprovals = pendingLeaveApprovalsForUser(
+      requests,
+      currentUser,
+    );
+    final visibleRequests = _showOnlyPendingApprovals
+        ? pendingApprovals
+        : requests;
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: requests.length,
+      itemCount: visibleRequests.isEmpty ? 2 : visibleRequests.length + 1,
       itemBuilder: (context, index) {
-        final request = requests[index];
+        if (index == 0) {
+          return _buildApprovalSummaryCard(
+            totalRequests: requests.length,
+            pendingApprovalCount: pendingApprovals.length,
+            showingPendingOnly: _showOnlyPendingApprovals,
+          );
+        }
 
-        final bool isMyRequest =
-            request.uuid == (currentUser.employeeUuid ?? currentUser.uuid);
-        final bool isImmediateSupervisor =
-            currentUser.uuid == request.immediateSupervisor;
+        if (visibleRequests.isEmpty) {
+          return _buildNoPendingApprovalCard();
+        }
 
-        final bool showApproveRejectButtons =
-            request.status.toLowerCase() == 'pending' &&
-            !isMyRequest &&
-            !request.isCompanyLeave;
+        final request = visibleRequests[index - 1];
+
+        final bool isMyRequest = leaveRequestBelongsToUser(
+          request,
+          currentUser,
+        );
+        final bool needsMyApproval = leaveRequestNeedsCurrentUserApproval(
+          request,
+          currentUser,
+        );
+
+        final bool showApproveRejectButtons = needsMyApproval;
 
         return Card(
+          color: needsMyApproval
+              ? (_isDarkMode
+                    ? const Color(0xFF172334)
+                    : const Color(0xFFF3F8FF))
+              : _surfaceColor,
+          surfaceTintColor: Colors.transparent,
           margin: const EdgeInsets.only(bottom: 16),
-          elevation: 2,
+          elevation: needsMyApproval
+              ? (_isDarkMode ? 0 : 4)
+              : (_isDarkMode ? 0 : 2),
           shape: RoundedRectangleBorder(
+            side: BorderSide(
+              color: needsMyApproval
+                  ? _accentColor.withValues(alpha: _isDarkMode ? 0.50 : 0.34)
+                  : _borderColor,
+              width: needsMyApproval ? 1.4 : 1,
+            ),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Padding(
@@ -360,9 +461,10 @@ class _LeaveScreenState extends State<LeaveScreen>
                                   request.employeeName.isNotEmpty
                                       ? request.employeeName
                                       : 'Unknown Employee',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
+                                    color: _primaryTextColor,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -370,7 +472,7 @@ class _LeaveScreenState extends State<LeaveScreen>
                                   request.type,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey[600],
+                                    color: _secondaryTextColor,
                                   ),
                                 ),
                                 if (request.isCompanyLeave)
@@ -413,9 +515,7 @@ class _LeaveScreenState extends State<LeaveScreen>
                                       ),
                                     ),
                                   ),
-                                if (isImmediateSupervisor &&
-                                    !isMyRequest &&
-                                    request.status.toLowerCase() == 'pending')
+                                if (needsMyApproval)
                                   Container(
                                     margin: const EdgeInsets.only(top: 4),
                                     padding: const EdgeInsets.symmetric(
@@ -423,14 +523,16 @@ class _LeaveScreenState extends State<LeaveScreen>
                                       vertical: 2,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.green.withOpacity(0.1),
+                                      color: _accentColor.withValues(
+                                        alpha: _isDarkMode ? 0.18 : 0.10,
+                                      ),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: const Text(
+                                    child: Text(
                                       'Need Your Approval',
                                       style: TextStyle(
                                         fontSize: 10,
-                                        color: Colors.green,
+                                        color: _accentColor,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
@@ -441,7 +543,11 @@ class _LeaveScreenState extends State<LeaveScreen>
                         ],
                       ),
                     ),
-                    _buildStatusBadge(request.status),
+                    _buildStatusBadge(
+                      needsMyApproval
+                          ? 'Waiting Your Approval'
+                          : request.status,
+                    ),
                   ],
                 ),
 
@@ -477,17 +583,18 @@ class _LeaveScreenState extends State<LeaveScreen>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey[50],
+                    color: _mutedSurfaceColor,
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _borderColor),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Reason',
                         style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: _secondaryTextColor,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -497,13 +604,22 @@ class _LeaveScreenState extends State<LeaveScreen>
                             : (request.isCompanyLeave
                                   ? 'Company leave assigned by HR/Admin.'
                                   : '-'),
-                        style: const TextStyle(fontSize: 14),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _primaryTextColor,
+                        ),
                       ),
                     ],
                   ),
                 ),
 
                 // 🔴 BUTTON APPROVE/REJECT - HANYA UNTUK ATASAN (immediateSupervisor)
+                if (needsMyApproval)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: _buildApprovalInfoBanner(),
+                  ),
+
                 if (showApproveRejectButtons) ...[
                   const SizedBox(height: 16),
                   Row(
@@ -652,6 +768,248 @@ class _LeaveScreenState extends State<LeaveScreen>
   }
 
   // 🔴 METHOD UNTUK HANDLE APPROVE/REJECT
+  Widget _buildApprovalSummaryCard({
+    required int totalRequests,
+    required int pendingApprovalCount,
+    required bool showingPendingOnly,
+  }) {
+    final hasPending = pendingApprovalCount > 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: hasPending
+            ? (_isDarkMode ? const Color(0xFF172334) : const Color(0xFFF3F8FF))
+            : _surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hasPending
+              ? _accentColor.withValues(alpha: _isDarkMode ? 0.42 : 0.24)
+              : _borderColor,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _accentColor.withValues(
+                    alpha: _isDarkMode ? 0.18 : 0.10,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.verified_user_outlined,
+                  color: _accentColor,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Approval Status',
+                      style: TextStyle(
+                        color: _primaryTextColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      hasPending
+                          ? '$pendingApprovalCount request waiting for your approval'
+                          : 'No leave request is waiting for your approval',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _secondaryTextColor,
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                constraints: const BoxConstraints(minWidth: 38),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: hasPending ? _accentColor : _mutedSurfaceColor,
+                  borderRadius: BorderRadius.circular(999),
+                  border: hasPending ? null : Border.all(color: _borderColor),
+                ),
+                child: Text(
+                  pendingApprovalCount > 99 ? '99+' : '$pendingApprovalCount',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: hasPending ? Colors.white : _secondaryTextColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _buildRequestFilterChip(
+                  label: 'All Requests',
+                  count: totalRequests,
+                  selected: !showingPendingOnly,
+                  onTap: () {
+                    if (_showOnlyPendingApprovals) {
+                      setState(() => _showOnlyPendingApprovals = false);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildRequestFilterChip(
+                  label: 'Need Approval',
+                  count: pendingApprovalCount,
+                  selected: showingPendingOnly,
+                  onTap: () {
+                    if (!_showOnlyPendingApprovals) {
+                      setState(() => _showOnlyPendingApprovals = true);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRequestFilterChip({
+    required String label,
+    required int count,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+          decoration: BoxDecoration(
+            color: selected
+                ? _accentColor.withValues(alpha: _isDarkMode ? 0.22 : 0.12)
+                : _mutedSurfaceColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected
+                  ? _accentColor.withValues(alpha: 0.38)
+                  : _borderColor,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selected ? _accentColor : _secondaryTextColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '$count',
+                style: TextStyle(
+                  color: selected ? _accentColor : _secondaryTextColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoPendingApprovalCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+      decoration: BoxDecoration(
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.task_alt_rounded, color: _secondaryTextColor, size: 42),
+          const SizedBox(height: 12),
+          Text(
+            'No pending approval',
+            style: TextStyle(
+              color: _primaryTextColor,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Leave requests that need your decision will appear here.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _secondaryTextColor, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildApprovalInfoBanner() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _accentColor.withValues(alpha: _isDarkMode ? 0.14 : 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _accentColor.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.priority_high_rounded, color: _accentColor, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'This request is waiting for your approval.',
+              style: TextStyle(
+                color: _isDarkMode ? const Color(0xFFD7E8FF) : _accentColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleApproveReject(
     BuildContext context,
     LeaveRequest request,
@@ -692,11 +1050,15 @@ class _LeaveScreenState extends State<LeaveScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        Text(label, style: TextStyle(fontSize: 12, color: _secondaryTextColor)),
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+          style: TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
+            color: _primaryTextColor,
+          ),
         ),
       ],
     );
@@ -715,9 +1077,9 @@ class _LeaveScreenState extends State<LeaveScreen>
           children: [
             const Icon(Icons.error_outline, color: Colors.orange, size: 48),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'User not logged in',
-              style: TextStyle(fontSize: 16, color: AppColors.textPrimary),
+              style: TextStyle(fontSize: 16, color: _primaryTextColor),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
@@ -749,14 +1111,14 @@ class _LeaveScreenState extends State<LeaveScreen>
             children: [
               const Icon(Icons.error_outline, color: Colors.orange, size: 48),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'Company code not found',
-                style: TextStyle(fontSize: 16, color: AppColors.textPrimary),
+                style: TextStyle(fontSize: 16, color: _primaryTextColor),
               ),
               const SizedBox(height: 8),
               Text(
                 'Please contact HR or try again later',
-                style: TextStyle(color: Colors.grey[600]),
+                style: TextStyle(color: _secondaryTextColor),
               ),
               const SizedBox(height: 16),
               ElevatedButton(
@@ -779,8 +1141,11 @@ class _LeaveScreenState extends State<LeaveScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Card(
-              elevation: 2,
+              color: _surfaceColor,
+              surfaceTintColor: Colors.transparent,
+              elevation: _isDarkMode ? 0 : 2,
               shape: RoundedRectangleBorder(
+                side: BorderSide(color: _borderColor),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Padding(
@@ -788,23 +1153,29 @@ class _LeaveScreenState extends State<LeaveScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Request Leave',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        color: _primaryTextColor,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Employee: $_employeeName',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _secondaryTextColor,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Company: $_companyCode',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _secondaryTextColor,
+                      ),
                     ),
                   ],
                 ),
@@ -814,18 +1185,16 @@ class _LeaveScreenState extends State<LeaveScreen>
 
             // Leave Type Dropdown
             Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[300]!),
-              ),
+              decoration: _fieldDecoration(),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    labelText: 'Leave Type',
-                  ),
+                  dropdownColor: _surfaceColor,
+                  style: TextStyle(color: _primaryTextColor),
+                  iconEnabledColor: _secondaryTextColor,
+                  decoration: _inputDecoration(
+                    'Leave Type',
+                  ).copyWith(contentPadding: EdgeInsets.zero),
                   value: _selectedType,
                   items: ['Annual Leave', 'Sick Leave', 'Personal Leave'].map((
                     type,
@@ -833,7 +1202,10 @@ class _LeaveScreenState extends State<LeaveScreen>
                     final remaining = _getRemainingDays(type) ?? 0;
                     return DropdownMenuItem(
                       value: type,
-                      child: Text('$type ($remaining days left)'),
+                      child: Text(
+                        '$type ($remaining days left)',
+                        style: TextStyle(color: _primaryTextColor),
+                      ),
                     );
                   }).toList(),
                   onChanged: (value) {
@@ -848,11 +1220,7 @@ class _LeaveScreenState extends State<LeaveScreen>
 
             // Start Date
             Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[300]!),
-              ),
+              decoration: _fieldDecoration(),
               child: InkWell(
                 onTap: () => _selectDate(context, true),
                 child: Padding(
@@ -863,15 +1231,25 @@ class _LeaveScreenState extends State<LeaveScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Start Date'),
+                      Text(
+                        'Start Date',
+                        style: TextStyle(color: _primaryTextColor),
+                      ),
                       Row(
                         children: [
                           Text(
                             DateFormat('dd MMM yyyy').format(_startDate),
-                            style: const TextStyle(fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: _primaryTextColor,
+                            ),
                           ),
                           const SizedBox(width: 8),
-                          const Icon(Icons.calendar_today, size: 18),
+                          Icon(
+                            Icons.calendar_today,
+                            size: 18,
+                            color: _secondaryTextColor,
+                          ),
                         ],
                       ),
                     ],
@@ -883,11 +1261,7 @@ class _LeaveScreenState extends State<LeaveScreen>
 
             // End Date
             Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[300]!),
-              ),
+              decoration: _fieldDecoration(),
               child: InkWell(
                 onTap: () => _selectDate(context, false),
                 child: Padding(
@@ -898,15 +1272,25 @@ class _LeaveScreenState extends State<LeaveScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('End Date'),
+                      Text(
+                        'End Date',
+                        style: TextStyle(color: _primaryTextColor),
+                      ),
                       Row(
                         children: [
                           Text(
                             DateFormat('dd MMM yyyy').format(_endDate),
-                            style: const TextStyle(fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: _primaryTextColor,
+                            ),
                           ),
                           const SizedBox(width: 8),
-                          const Icon(Icons.calendar_today, size: 18),
+                          Icon(
+                            Icons.calendar_today,
+                            size: 18,
+                            color: _secondaryTextColor,
+                          ),
                         ],
                       ),
                     ],
@@ -922,19 +1306,23 @@ class _LeaveScreenState extends State<LeaveScreen>
               decoration: BoxDecoration(
                 color: Colors.blue.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _accentColor.withOpacity(0.25)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'Duration:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _primaryTextColor,
+                    ),
                   ),
                   Text(
                     '${_calculateDays(_startDate, _endDate)} days',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
+                      color: _accentColor,
                       fontSize: 16,
                     ),
                   ),
@@ -945,18 +1333,14 @@ class _LeaveScreenState extends State<LeaveScreen>
 
             // Reason Field
             Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[300]!),
-              ),
+              decoration: _fieldDecoration(),
               child: TextFormField(
                 controller: _reasonController,
-                decoration: const InputDecoration(
-                  labelText: 'Reason',
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.all(16),
-                ),
+                style: TextStyle(color: _primaryTextColor),
+                cursorColor: _accentColor,
+                decoration: _inputDecoration(
+                  'Reason',
+                ).copyWith(alignLabelWithHint: true),
                 maxLines: 3,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
@@ -975,16 +1359,17 @@ class _LeaveScreenState extends State<LeaveScreen>
                 decoration: BoxDecoration(
                   color: Colors.blue.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                  border: Border.all(color: _accentColor.withOpacity(0.25)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Your Leave Balance:',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
+                        color: _primaryTextColor,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1068,11 +1453,15 @@ class _LeaveScreenState extends State<LeaveScreen>
   Widget _buildBalanceInfo(String label, int days) {
     return Column(
       children: [
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        Text(label, style: TextStyle(fontSize: 12, color: _secondaryTextColor)),
         const SizedBox(height: 4),
         Text(
           '$days days',
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: _primaryTextColor,
+          ),
         ),
       ],
     );
@@ -1252,7 +1641,12 @@ class _LeaveScreenState extends State<LeaveScreen>
 
   Widget _buildBalanceView() {
     if (_userBalance == null) {
-      return const Center(child: Text('No balance data available'));
+      return Center(
+        child: Text(
+          'No balance data available',
+          style: TextStyle(color: _secondaryTextColor),
+        ),
+      );
     }
 
     return SingleChildScrollView(
@@ -1292,8 +1686,13 @@ class _LeaveScreenState extends State<LeaveScreen>
     }
 
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: _surfaceColor,
+      surfaceTintColor: Colors.transparent,
+      elevation: _isDarkMode ? 0 : 2,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: _borderColor),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -1304,10 +1703,10 @@ class _LeaveScreenState extends State<LeaveScreen>
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: _primaryTextColor,
                   ),
                 ),
                 Container(
@@ -1344,17 +1743,11 @@ class _LeaveScreenState extends State<LeaveScreen>
               children: [
                 Text(
                   'Used: $used days',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: _secondaryTextColor, fontSize: 12),
                 ),
                 Text(
                   'Total: $total days',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: _secondaryTextColor, fontSize: 12),
                 ),
               ],
             ),

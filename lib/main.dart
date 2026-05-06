@@ -18,6 +18,7 @@ import 'providers/correction_provider.dart';
 import 'package:hris_mobile/providers/shift_provider.dart';
 import 'package:hris_mobile/providers/recruitment_provider.dart';
 import 'package:hris_mobile/providers/saas_provider.dart';
+import 'providers/performance_provider.dart';
 
 // CORE & SCREENS
 import 'core/theme/app_theme.dart';
@@ -76,6 +77,10 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CorrectionProvider()),
         ChangeNotifierProvider(create: (_) => RecruitmentProvider()),
         ChangeNotifierProvider(create: (_) => SaasProvider()),
+        ChangeNotifierProvider(
+          create: (context) =>
+              PerformanceProvider(context.read<AuthProvider>()),
+        ),
 
         // LeaveProvider butuh AuthProvider, jadi harus dibuat setelah AuthProvider tersedia
         ChangeNotifierProvider(

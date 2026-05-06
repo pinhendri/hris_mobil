@@ -4,11 +4,38 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../models/employee_model.dart';
 import '../../models/task_model.dart';
+import '../../models/user.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/employee_provider.dart';
 import '../../providers/task_provider.dart';
+import '../../utils/task_visibility_utils.dart';
 
-class TasksScreen extends StatelessWidget {
+class TasksScreen extends StatefulWidget {
   const TasksScreen({super.key});
+
+  @override
+  State<TasksScreen> createState() => _TasksScreenState();
+}
+
+class _TasksScreenState extends State<TasksScreen> {
+  String _scopeFilter = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      final employeeProvider = context.read<EmployeeProvider>();
+      if (employeeProvider.employees.isEmpty && !employeeProvider.isLoading) {
+        employeeProvider.fetchAllEmployees();
+      }
+    });
+  }
 
   Future<bool> _confirmToggleStatus(
     BuildContext context,
@@ -92,7 +119,9 @@ class TasksScreen extends StatelessWidget {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: isDark ? const Color(0xFF101214) : const Color(0xFFF6F8FC),
+        backgroundColor: isDark
+            ? const Color(0xFF101214)
+            : const Color(0xFFF6F8FC),
         appBar: AppBar(
           title: Text(
             'My Tasks',
@@ -135,22 +164,304 @@ class TasksScreen extends StatelessWidget {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final pendingTasks = provider.tasks
+            final currentUser = context.read<AuthProvider>().user;
+            final employeeProvider = context.watch<EmployeeProvider>();
+            final subordinateAssigneeIds = employeeProvider.employees.isEmpty
+                ? null
+                : _subordinateAssigneeIds(
+                    employeeProvider.employees,
+                    currentUser,
+                  );
+            final visibleTasks = _filterTasksByScope(
+              provider.tasks,
+              currentUser,
+              subordinateAssigneeIds,
+            );
+            final pendingTasks = visibleTasks
                 .where((task) => !task.isCompleted)
                 .toList();
-            final completedTasks = provider.tasks
+            final completedTasks = visibleTasks
                 .where((task) => task.isCompleted)
                 .toList();
 
-            return TabBarView(
+            return Column(
               children: [
-                _buildTaskList(context, provider, pendingTasks),
-                _buildTaskList(context, provider, completedTasks),
+                _buildOverview(
+                  context,
+                  provider.tasks,
+                  currentUser,
+                  subordinateAssigneeIds,
+                ),
+                _buildScopeFilter(
+                  context,
+                  provider.tasks,
+                  currentUser,
+                  subordinateAssigneeIds,
+                ),
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      _buildTaskList(context, provider, pendingTasks),
+                      _buildTaskList(context, provider, completedTasks),
+                    ],
+                  ),
+                ),
               ],
             );
           },
         ),
       ),
+    );
+  }
+
+  List<TaskModel> _filterTasksByScope(
+    List<TaskModel> tasks,
+    User? user,
+    Set<String>? subordinateAssigneeIds,
+  ) {
+    if (_scopeFilter == 'self') {
+      return tasks.where((task) => taskBelongsToSelfView(task, user)).toList();
+    }
+    if (_scopeFilter == 'subordinate') {
+      return tasks
+          .where(
+            (task) => taskBelongsToSubordinateView(
+              task,
+              user,
+              subordinateAssigneeIds: subordinateAssigneeIds,
+            ),
+          )
+          .toList();
+    }
+    return tasksForMyTaskCards(
+      tasks,
+      user,
+      subordinateAssigneeIds: subordinateAssigneeIds,
+    );
+  }
+
+  Widget _buildOverview(
+    BuildContext context,
+    List<TaskModel> tasks,
+    User? user,
+    Set<String>? subordinateAssigneeIds,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF151B23) : Colors.white;
+    final borderColor = isDark
+        ? const Color(0xFF293241)
+        : const Color(0xFFE2E8F0);
+    final primaryTextColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final secondaryTextColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF64748B);
+    final visibleTasks = tasksForMyTaskCards(
+      tasks,
+      user,
+      subordinateAssigneeIds: subordinateAssigneeIds,
+    );
+    final pending = visibleTasks.where((task) => !task.isCompleted).length;
+    final subordinate = tasks
+        .where(
+          (task) => taskBelongsToSubordinateView(
+            task,
+            user,
+            subordinateAssigneeIds: subordinateAssigneeIds,
+          ),
+        )
+        .length;
+    final overdue = visibleTasks.where((task) {
+      return task.dueDate != null &&
+          task.dueDate!.isBefore(DateTime.now()) &&
+          !task.isCompleted;
+    }).length;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.assignment_turned_in_rounded,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Task Workspace',
+                      style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: primaryTextColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Kelola task pribadi dan follow-up bawahan.',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: secondaryTextColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _TaskMetric(
+                label: 'Pending',
+                value: pending.toString(),
+                color: const Color(0xFF2563EB),
+                isDark: isDark,
+              ),
+              const SizedBox(width: 10),
+              _TaskMetric(
+                label: 'Bawahan',
+                value: subordinate.toString(),
+                color: const Color(0xFF7C3AED),
+                isDark: isDark,
+              ),
+              const SizedBox(width: 10),
+              _TaskMetric(
+                label: 'Overdue',
+                value: overdue.toString(),
+                color: const Color(0xFFEF4444),
+                isDark: isDark,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScopeFilter(
+    BuildContext context,
+    List<TaskModel> tasks,
+    User? user,
+    Set<String>? subordinateAssigneeIds,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0);
+    final labels = <String, String>{
+      'all': 'Semua',
+      'self': 'Saya',
+      'subordinate': 'Bawahan',
+    };
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: labels.entries.map((entry) {
+          final selected = _scopeFilter == entry.key;
+          final count = _filterCount(
+            tasks,
+            entry.key,
+            user,
+            subordinateAssigneeIds,
+          );
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              selected: selected,
+              label: Text('${entry.value} ($count)'),
+              labelStyle: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: selected
+                    ? Colors.white
+                    : (isDark
+                          ? const Color(0xFFE2E8F0)
+                          : const Color(0xFF475569)),
+              ),
+              selectedColor: AppColors.primary,
+              backgroundColor: isDark ? const Color(0xFF1B1F24) : Colors.white,
+              side: BorderSide(
+                color: selected ? AppColors.primary : borderColor,
+              ),
+              onSelected: (_) {
+                setState(() {
+                  _scopeFilter = entry.key;
+                });
+              },
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  int _filterCount(
+    List<TaskModel> tasks,
+    String scope,
+    User? user,
+    Set<String>? subordinateAssigneeIds,
+  ) {
+    if (scope == 'self') {
+      return tasks.where((task) => taskBelongsToSelfView(task, user)).length;
+    }
+    if (scope == 'subordinate') {
+      return tasks
+          .where(
+            (task) => taskBelongsToSubordinateView(
+              task,
+              user,
+              subordinateAssigneeIds: subordinateAssigneeIds,
+            ),
+          )
+          .length;
+    }
+    return tasksForMyTaskCards(
+      tasks,
+      user,
+      subordinateAssigneeIds: subordinateAssigneeIds,
+    ).length;
+  }
+
+  Set<String> _subordinateAssigneeIds(List<Employee> employees, User? user) {
+    if (user == null) {
+      return const {};
+    }
+
+    final subordinates = EmployeeProvider.filterSubordinateTree(
+      employees: employees,
+      managerEmployeeId: user.employeeId,
+    );
+
+    return normalizeTaskIdentityValues(
+      subordinates.expand((employee) => [employee.uuid, employee.id]),
     );
   }
 
@@ -160,8 +471,12 @@ class TasksScreen extends StatelessWidget {
     List<TaskModel> tasks,
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryTextColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF111827);
-    final secondaryTextColor = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+    final primaryTextColor = isDark
+        ? const Color(0xFFF8FAFC)
+        : const Color(0xFF111827);
+    final secondaryTextColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF64748B);
 
     if (provider.error != null && provider.tasks.isEmpty) {
       return Center(
@@ -250,12 +565,34 @@ class TasksScreen extends StatelessWidget {
         task.dueDate!.isBefore(DateTime.now()) &&
         !task.isCompleted;
     final cardColor = isDark ? const Color(0xFF1B1F24) : Colors.white;
-    final borderColor = isDark ? const Color(0xFF2F3844) : const Color(0xFFE2E8F0);
-    final primaryTextColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF1F2937);
-    final secondaryTextColor = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF6B7280);
-    final mutedTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF6B7280);
-    final chipColor = isDark ? const Color(0xFF27303B) : const Color(0xFFF3F4F6);
-    final checkboxBorderColor = isDark ? const Color(0xFF93C5FD) : AppColors.primary;
+    final borderColor = isDark
+        ? const Color(0xFF2F3844)
+        : const Color(0xFFE2E8F0);
+    final primaryTextColor = isDark
+        ? const Color(0xFFF8FAFC)
+        : const Color(0xFF1F2937);
+    final secondaryTextColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF6B7280);
+    final mutedTextColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF6B7280);
+    final chipColor = isDark
+        ? const Color(0xFF27303B)
+        : const Color(0xFFF3F4F6);
+    final checkboxBorderColor = isDark
+        ? const Color(0xFF93C5FD)
+        : AppColors.primary;
+    final currentUser = context.read<AuthProvider>().user;
+    final employeeProvider = context.watch<EmployeeProvider>();
+    final subordinateAssigneeIds = employeeProvider.employees.isEmpty
+        ? null
+        : _subordinateAssigneeIds(employeeProvider.employees, currentUser);
+    final isSubordinateForCurrentUser = taskBelongsToSubordinateView(
+      task,
+      currentUser,
+      subordinateAssigneeIds: subordinateAssigneeIds,
+    );
 
     Color priorityColor;
     switch (task.priority) {
@@ -302,7 +639,10 @@ class TasksScreen extends StatelessWidget {
                         value: task.isCompleted,
                         activeColor: AppColors.primary,
                         checkColor: Colors.white,
-                        side: BorderSide(color: checkboxBorderColor, width: 1.8),
+                        side: BorderSide(
+                          color: checkboxBorderColor,
+                          width: 1.8,
+                        ),
                         fillColor: WidgetStateProperty.resolveWith((states) {
                           if (states.contains(WidgetState.selected)) {
                             return AppColors.primary;
@@ -462,9 +802,7 @@ class TasksScreen extends StatelessWidget {
                                 : 'No due date',
                             style: GoogleFonts.poppins(
                               fontSize: 12,
-                              color: isOverdue
-                                  ? Colors.red
-                                  : mutedTextColor,
+                              color: isOverdue ? Colors.red : mutedTextColor,
                               fontWeight: isOverdue
                                   ? FontWeight.w600
                                   : FontWeight.normal,
@@ -491,6 +829,70 @@ class TasksScreen extends StatelessWidget {
                           ),
                         ),
                       ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSubordinateForCurrentUser
+                              ? const Color(0xFF7C3AED).withValues(alpha: 0.10)
+                              : AppColors.primary.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSubordinateForCurrentUser
+                                ? const Color(
+                                    0xFF7C3AED,
+                                  ).withValues(alpha: 0.24)
+                                : AppColors.primary.withValues(alpha: 0.24),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isSubordinateForCurrentUser
+                                  ? Icons.groups_rounded
+                                  : Icons.person_rounded,
+                              size: 12,
+                              color: isSubordinateForCurrentUser
+                                  ? const Color(0xFF7C3AED)
+                                  : AppColors.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isSubordinateForCurrentUser ? 'Bawahan' : 'Saya',
+                              style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: isSubordinateForCurrentUser
+                                    ? const Color(0xFF7C3AED)
+                                    : AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if ((task.assigneeName ?? '').isNotEmpty)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.account_circle_outlined,
+                              size: 14,
+                              color: mutedTextColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              task.assigneeName!,
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: mutedTextColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                       if (isBusy)
                         const SizedBox(
                           width: 14,
@@ -503,6 +905,60 @@ class TasksScreen extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskMetric extends StatelessWidget {
+  const _TaskMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.isDark,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: isDark ? 0.18 : 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.20)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : color,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isDark
+                    ? const Color(0xFFCBD5E1)
+                    : const Color(0xFF475569),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -802,6 +1258,8 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
   late final TextEditingController _descriptionController;
   late String _priority;
   late String _type;
+  late String _assignmentScope;
+  String? _selectedAssigneeEmployeeId;
   DateTime? _dueDate;
   bool _isSubmitting = false;
 
@@ -816,7 +1274,20 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
     );
     _priority = widget.task?.priority ?? 'medium';
     _type = widget.task?.type ?? 'regular';
+    _assignmentScope = widget.task?.assignmentScope ?? 'self';
+    _selectedAssigneeEmployeeId = widget.task?.assigneeEmployeeId;
     _dueDate = widget.task?.dueDate;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      final employeeProvider = context.read<EmployeeProvider>();
+      if (employeeProvider.employees.isEmpty && !employeeProvider.isLoading) {
+        employeeProvider.fetchAllEmployees();
+      }
+    });
   }
 
   @override
@@ -872,11 +1343,19 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
   Future<void> _submit() async {
     final provider = context.read<TaskProvider>();
     final title = _titleController.text.trim();
+    final selectedAssignee = _selectedAssignee();
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Title wajib diisi')));
+      return;
+    }
+
+    if (_assignmentScope == 'subordinate' && selectedAssignee == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih bawahan penerima task')),
+      );
       return;
     }
 
@@ -894,6 +1373,16 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             dueDate: _dueDate,
             priority: _priority,
             type: _type,
+            assigneeEmployeeId: _assignmentScope == 'subordinate'
+                ? _employeeValue(selectedAssignee!)
+                : null,
+            assigneeName: _assignmentScope == 'subordinate'
+                ? selectedAssignee!.name
+                : null,
+            assigneeEmployeeRecordId: _assignmentScope == 'subordinate'
+                ? selectedAssignee!.id
+                : null,
+            assignmentScope: _assignmentScope,
           )
         : await provider.createTask(
             title: title,
@@ -901,6 +1390,16 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             dueDate: _dueDate,
             priority: _priority,
             type: _type,
+            assigneeEmployeeId: _assignmentScope == 'subordinate'
+                ? _employeeValue(selectedAssignee!)
+                : null,
+            assigneeName: _assignmentScope == 'subordinate'
+                ? selectedAssignee!.name
+                : null,
+            assigneeEmployeeRecordId: _assignmentScope == 'subordinate'
+                ? selectedAssignee!.id
+                : null,
+            assignmentScope: _assignmentScope,
           );
 
     if (!mounted) {
@@ -933,7 +1432,9 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
     required Color fieldColor,
     required Color borderColor,
   }) {
-    final labelColor = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569);
+    final labelColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF475569);
 
     return InputDecoration(
       filled: true,
@@ -964,16 +1465,242 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
     );
   }
 
+  Widget _buildAssignmentSection({
+    required bool isDark,
+    required Color fieldColor,
+    required Color borderColor,
+    required Color primaryTextColor,
+    required Color secondaryTextColor,
+    required InputDecoration inputDecoration,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: fieldColor,
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Task Untuk',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: primaryTextColor,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                selected: _assignmentScope == 'self',
+                label: const Text('Diri Sendiri'),
+                avatar: Icon(
+                  Icons.person_rounded,
+                  size: 18,
+                  color: _assignmentScope == 'self'
+                      ? Colors.white
+                      : AppColors.primary,
+                ),
+                selectedColor: AppColors.primary,
+                backgroundColor: isDark
+                    ? const Color(0xFF111827)
+                    : Colors.white,
+                labelStyle: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: _assignmentScope == 'self'
+                      ? Colors.white
+                      : secondaryTextColor,
+                ),
+                side: BorderSide(color: borderColor),
+                onSelected: _isSubmitting
+                    ? null
+                    : (_) {
+                        setState(() {
+                          _assignmentScope = 'self';
+                          _selectedAssigneeEmployeeId = null;
+                        });
+                      },
+              ),
+              ChoiceChip(
+                selected: _assignmentScope == 'subordinate',
+                label: const Text('Bawahan'),
+                avatar: Icon(
+                  Icons.groups_rounded,
+                  size: 18,
+                  color: _assignmentScope == 'subordinate'
+                      ? Colors.white
+                      : const Color(0xFF7C3AED),
+                ),
+                selectedColor: const Color(0xFF7C3AED),
+                backgroundColor: isDark
+                    ? const Color(0xFF111827)
+                    : Colors.white,
+                labelStyle: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: _assignmentScope == 'subordinate'
+                      ? Colors.white
+                      : secondaryTextColor,
+                ),
+                side: BorderSide(color: borderColor),
+                onSelected: _isSubmitting
+                    ? null
+                    : (_) {
+                        setState(() {
+                          _assignmentScope = 'subordinate';
+                        });
+                      },
+              ),
+            ],
+          ),
+          if (_assignmentScope == 'subordinate') ...[
+            const SizedBox(height: 14),
+            Consumer<EmployeeProvider>(
+              builder: (context, employeeProvider, _) {
+                final authProvider = context.read<AuthProvider>();
+                final currentEmployeeId = authProvider.user?.employeeId ?? '';
+                final employees = EmployeeProvider.filterSubordinateTree(
+                  employees: employeeProvider.employees,
+                  managerEmployeeId: currentEmployeeId,
+                );
+                final values = employees.map(_employeeValue).toSet();
+                final selectedValue =
+                    values.contains(_selectedAssigneeEmployeeId)
+                    ? _selectedAssigneeEmployeeId
+                    : null;
+
+                if (employeeProvider.isLoading && employees.isEmpty) {
+                  return Row(
+                    children: [
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Memuat daftar karyawan...',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: secondaryTextColor,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                if (employees.isEmpty) {
+                  return OutlinedButton.icon(
+                    onPressed: _isSubmitting
+                        ? null
+                        : () => employeeProvider.fetchAllEmployees(),
+                    icon: const Icon(Icons.account_tree_outlined),
+                    label: const Text('Tidak ada bawahan di tree Anda'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: BorderSide(color: borderColor),
+                    ),
+                  );
+                }
+
+                return DropdownButtonFormField<String>(
+                  initialValue: selectedValue,
+                  dropdownColor: isDark
+                      ? const Color(0xFF1B1F24)
+                      : Colors.white,
+                  style: GoogleFonts.poppins(color: primaryTextColor),
+                  iconEnabledColor: secondaryTextColor,
+                  decoration: inputDecoration.copyWith(
+                    labelText: 'Penerima Task',
+                    prefixIcon: const Icon(Icons.badge_outlined),
+                  ),
+                  items: employees.map((employee) {
+                    return DropdownMenuItem<String>(
+                      value: _employeeValue(employee),
+                      child: Text(
+                        employee.name,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: _isSubmitting
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _selectedAssigneeEmployeeId = value;
+                          });
+                        },
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Saat task dibuat untuk bawahan, mobile mengirim penerima ke backend agar notifikasi bisa dikirim ke bawahan tersebut.',
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                height: 1.4,
+                color: secondaryTextColor,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _employeeValue(Employee employee) {
+    return employee.uuid.isNotEmpty ? employee.uuid : employee.id;
+  }
+
+  Employee? _selectedAssignee() {
+    final selectedValue = _selectedAssigneeEmployeeId?.trim();
+    if (selectedValue == null || selectedValue.isEmpty) {
+      return null;
+    }
+
+    final authProvider = context.read<AuthProvider>();
+    final employeeProvider = context.read<EmployeeProvider>();
+    final currentEmployeeId = authProvider.user?.employeeId ?? '';
+    final subordinates = EmployeeProvider.filterSubordinateTree(
+      employees: employeeProvider.employees,
+      managerEmployeeId: currentEmployeeId,
+    );
+
+    for (final employee in subordinates) {
+      if (_employeeValue(employee) == selectedValue ||
+          employee.id == selectedValue) {
+        return employee;
+      }
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? const Color(0xFF1B1F24) : Colors.white;
-    final fieldColor = isDark ? const Color(0xFF111827) : const Color(0xFFF8FAFC);
-    final borderColor = isDark ? const Color(0xFF334155) : const Color(0xFFD1D5DB);
-    final primaryTextColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF1F2937);
-    final secondaryTextColor = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF4B5563);
-    final mutedTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF6B7280);
+    final fieldColor = isDark
+        ? const Color(0xFF111827)
+        : const Color(0xFFF8FAFC);
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFD1D5DB);
+    final primaryTextColor = isDark
+        ? const Color(0xFFF8FAFC)
+        : const Color(0xFF1F2937);
+    final secondaryTextColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF4B5563);
+    final mutedTextColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF6B7280);
     final inputDecoration = _inputDecoration(
       isDark: isDark,
       fieldColor: fieldColor,
@@ -998,7 +1725,9 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                   width: 42,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF475569) : Colors.grey.shade300,
+                    color: isDark
+                        ? const Color(0xFF475569)
+                        : Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -1018,9 +1747,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                 textInputAction: TextInputAction.next,
                 style: GoogleFonts.poppins(color: primaryTextColor),
                 cursorColor: AppColors.primary,
-                decoration: inputDecoration.copyWith(
-                  labelText: 'Title',
-                ),
+                decoration: inputDecoration.copyWith(labelText: 'Title'),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -1029,9 +1756,16 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                 maxLines: 5,
                 style: GoogleFonts.poppins(color: primaryTextColor),
                 cursorColor: AppColors.primary,
-                decoration: inputDecoration.copyWith(
-                  labelText: 'Description',
-                ),
+                decoration: inputDecoration.copyWith(labelText: 'Description'),
+              ),
+              const SizedBox(height: 16),
+              _buildAssignmentSection(
+                isDark: isDark,
+                fieldColor: fieldColor,
+                borderColor: borderColor,
+                primaryTextColor: primaryTextColor,
+                secondaryTextColor: secondaryTextColor,
+                inputDecoration: inputDecoration,
               ),
               const SizedBox(height: 16),
               Row(
@@ -1073,9 +1807,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                       dropdownColor: surfaceColor,
                       style: GoogleFonts.poppins(color: primaryTextColor),
                       iconEnabledColor: secondaryTextColor,
-                      decoration: inputDecoration.copyWith(
-                        labelText: 'Type',
-                      ),
+                      decoration: inputDecoration.copyWith(labelText: 'Type'),
                       items: const [
                         DropdownMenuItem(
                           value: 'regular',

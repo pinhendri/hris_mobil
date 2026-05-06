@@ -173,7 +173,7 @@ class LeaveProvider with ChangeNotifier {
       await _refreshPendingSyncState(notify: false);
 
       if (!loadedFromCache && _leaveRequests.isEmpty) {
-        _error = 'Connection error: ${OfflineSupport.normalizeMessage(error)}';
+        _error = _friendlyErrorMessage(error);
       } else {
         _error = null;
         _isUsingCachedData = true;
@@ -280,7 +280,7 @@ class LeaveProvider with ChangeNotifier {
         return true;
       }
     } catch (error) {
-      _error = 'Error: ${OfflineSupport.normalizeMessage(error)}';
+      _error = _friendlyErrorMessage(error);
       return false;
     } finally {
       _isLoading = false;
@@ -394,7 +394,7 @@ class LeaveProvider with ChangeNotifier {
           : 'Failed to create company leave batch';
       return false;
     } catch (error) {
-      _error = 'Error: ${OfflineSupport.normalizeMessage(error)}';
+      _error = _friendlyErrorMessage(error);
       return false;
     } finally {
       _isSubmittingCompanyLeaveBatch = false;
@@ -664,4 +664,22 @@ class LeaveProvider with ChangeNotifier {
 
   String get _cacheKey =>
       'leave::${_currentEmployeeUuid.isEmpty ? 'self' : _currentEmployeeUuid}';
+
+  String _friendlyErrorMessage(Object error) {
+    final raw = OfflineSupport.normalizeMessage(error)
+        .replaceFirst(RegExp(r'^Network error:\s*'), '')
+        .replaceFirst(RegExp(r'^Exception:\s*'), '')
+        .trim();
+    final normalized = raw.toLowerCase();
+
+    if (normalized.contains('employee does not have access to this company')) {
+      return 'Employee Anda belum terhubung ke company yang sedang dipilih. Pilih company lain atau assign employee ke company ini di frontend.';
+    }
+
+    if (normalized.contains('http 403')) {
+      return 'Akses company ditolak. Pastikan user dan data employee terdaftar pada company yang dipilih.';
+    }
+
+    return raw.isEmpty ? 'Gagal memuat data cuti.' : raw;
+  }
 }
