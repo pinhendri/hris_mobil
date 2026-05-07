@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/localization/app_strings.dart';
 import '../../models/calendar_event_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/employee_provider.dart';
@@ -39,16 +40,20 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Event'),
-        content: Text('Hapus event "${event.title}"?'),
+        title: Text(context.tr('meeting_delete_title')),
+        content: Text(
+          context
+              .tr('meeting_delete_message')
+              .replaceAll('{title}', event.title),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(context.tr('meeting_cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: Text(context.tr('meeting_delete')),
           ),
         ],
       ),
@@ -69,8 +74,8 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
       SnackBar(
         content: Text(
           success
-              ? 'Event berhasil dihapus.'
-              : (provider.error ?? 'Gagal menghapus event.'),
+              ? context.tr('meeting_delete_success')
+              : (provider.error ?? context.tr('meeting_delete_failed')),
         ),
       ),
     );
@@ -79,11 +84,11 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Event Management')),
+      appBar: AppBar(title: Text(context.tr('meeting_page_title'))),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(),
         icon: const Icon(Icons.add),
-        label: const Text('Create'),
+        label: Text(context.tr('meeting_create')),
       ),
       body: Consumer<EventProvider>(
         builder: (context, provider, child) {
@@ -108,7 +113,7 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
                     const SizedBox(height: 12),
                     ElevatedButton(
                       onPressed: provider.fetchManagedEvents,
-                      child: const Text('Retry'),
+                      child: Text(context.tr('meeting_retry')),
                     ),
                   ],
                 ),
@@ -117,9 +122,7 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
           }
 
           if (provider.managedEvents.isEmpty) {
-            return const Center(
-              child: Text('Belum ada event. Buat event pertama Anda.'),
-            );
+            return Center(child: Text(context.tr('meeting_empty')));
           }
 
           return RefreshIndicator(
@@ -127,7 +130,7 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: provider.managedEvents.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final event = provider.managedEvents[index];
                 return _EventCard(
@@ -166,7 +169,7 @@ class _EventCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -194,9 +197,15 @@ class _EventCard extends StatelessWidget {
                     onDelete();
                   }
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'edit', child: Text('Edit')),
-                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Text(context.tr('meeting_edit')),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text(context.tr('meeting_delete')),
+                  ),
                 ],
               ),
             ],
@@ -214,8 +223,10 @@ class _EventCard extends StatelessWidget {
               _Badge(
                 icon: event.isCompanyWide ? Icons.groups : Icons.mail_outline,
                 label: event.isCompanyWide
-                    ? 'Company-wide'
-                    : '${event.inviteCount} invitee(s)',
+                    ? context.tr('meeting_company_wide')
+                    : context
+                          .tr('meeting_invitee_count')
+                          .replaceAll('{count}', event.inviteCount.toString()),
                 color: event.isCompanyWide ? Colors.green : Colors.orange,
               ),
             ],
@@ -239,7 +250,9 @@ class _EventCard extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           Text(
-            'Created by ${event.createdByName}',
+            context
+                .tr('meeting_created_by')
+                .replaceAll('{name}', event.createdByName),
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
         ],
@@ -260,7 +273,7 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(

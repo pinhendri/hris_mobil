@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/localization/app_strings.dart';
 import '../../models/calendar_event_model.dart';
 import '../../models/employee_model.dart';
 import '../../providers/auth_provider.dart';
@@ -188,9 +189,7 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
 
     if (!_isCompanyWide && _selectedInvitees.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Pilih minimal satu karyawan untuk diundang.'),
-        ),
+        SnackBar(content: Text(context.tr('meeting_invitee_required'))),
       );
       return;
     }
@@ -234,7 +233,9 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(provider.error ?? 'Gagal menyimpan event.')),
+      SnackBar(
+        content: Text(provider.error ?? context.tr('meeting_save_failed')),
+      ),
     );
   }
 
@@ -256,14 +257,18 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
     return Scaffold(
       backgroundColor: _pageColor,
       appBar: AppBar(
-        title: Text(widget.event == null ? 'Create Event' : 'Edit Event'),
+        title: Text(
+          widget.event == null
+              ? context.tr('meeting_form_create_title')
+              : context.tr('meeting_form_edit_title'),
+        ),
         backgroundColor: _surfaceColor,
         surfaceTintColor: _surfaceColor,
         foregroundColor: _primaryTextColor,
         actions: [
           TextButton(
             onPressed: eventProvider.isSubmitting ? null : _save,
-            child: const Text('Save'),
+            child: Text(context.tr('meeting_save')),
           ),
         ],
       ),
@@ -277,10 +282,10 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
               TextFormField(
                 controller: _titleController,
                 style: TextStyle(color: _primaryTextColor),
-                decoration: _inputDecoration('Event Title'),
+                decoration: _inputDecoration(context.tr('meeting_title_label')),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Judul event wajib diisi.';
+                    return context.tr('meeting_title_required');
                   }
                   return null;
                 },
@@ -289,7 +294,10 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
               TextFormField(
                 controller: _locationController,
                 style: TextStyle(color: _primaryTextColor),
-                decoration: _inputDecoration('Location'),
+                decoration: _inputDecoration(
+                  context.tr('meeting_location_label'),
+                  hint: context.tr('meeting_location_hint'),
+                ),
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -297,26 +305,34 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
                 minLines: 3,
                 maxLines: 5,
                 style: TextStyle(color: _primaryTextColor),
-                decoration: _inputDecoration('Description'),
+                decoration: _inputDecoration(
+                  context.tr('meeting_description_label'),
+                  hint: context.tr('meeting_description_hint'),
+                ),
               ),
               const SizedBox(height: 16),
               _DateTimeTile(
-                label: 'Start',
+                label: context.tr('meeting_start_label'),
                 value: _formatDateTime(_startsAt),
                 surfaceColor: _surfaceColor,
                 borderColor: _borderColor,
                 primaryTextColor: _primaryTextColor,
                 secondaryTextColor: _secondaryTextColor,
+                pickTooltip: context.tr('meeting_pick_date'),
                 onTap: () => _pickDateTime(isStart: true),
               ),
               const SizedBox(height: 12),
               _DateTimeTile(
-                label: 'End',
-                value: _endsAt == null ? 'Optional' : _formatDateTime(_endsAt!),
+                label: context.tr('meeting_end_label'),
+                value: _endsAt == null
+                    ? context.tr('meeting_optional')
+                    : _formatDateTime(_endsAt!),
                 surfaceColor: _surfaceColor,
                 borderColor: _borderColor,
                 primaryTextColor: _primaryTextColor,
                 secondaryTextColor: _secondaryTextColor,
+                clearTooltip: context.tr('meeting_clear_date'),
+                pickTooltip: context.tr('meeting_pick_date'),
                 onTap: () => _pickDateTime(isStart: false),
                 onClear: _endsAt == null
                     ? null
@@ -331,11 +347,11 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
                 value: _isCompanyWide,
                 contentPadding: EdgeInsets.zero,
                 title: Text(
-                  'Company-wide event',
+                  context.tr('meeting_company_wide_title'),
                   style: TextStyle(color: _primaryTextColor),
                 ),
                 subtitle: Text(
-                  'Jika aktif, semua karyawan di company ini bisa melihat event.',
+                  context.tr('meeting_company_wide_subtitle'),
                   style: TextStyle(color: _secondaryTextColor),
                 ),
                 onChanged: (value) {
@@ -351,13 +367,18 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
                   onChanged: (_) => setState(() {}),
                   style: TextStyle(color: _primaryTextColor),
                   decoration: _inputDecoration(
-                    'Cari karyawan untuk diundang',
+                    context.tr('meeting_search_invitees'),
                     icon: Icons.search,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Invitees (${_selectedInvitees.length})',
+                  context
+                      .tr('meeting_invitees_title')
+                      .replaceAll(
+                        '{count}',
+                        _selectedInvitees.length.toString(),
+                      ),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: _primaryTextColor,
                     fontWeight: FontWeight.w700,
@@ -382,7 +403,7 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
                       ? Padding(
                           padding: const EdgeInsets.all(16),
                           child: Text(
-                            'Tidak ada karyawan yang bisa dipilih.',
+                            context.tr('meeting_no_invitees'),
                             style: TextStyle(color: _secondaryTextColor),
                           ),
                         )
@@ -406,7 +427,7 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
                               subtitle: Text(
                                 employee.position.isEmpty
                                     ? employee.department
-                                    : '${employee.position} • ${employee.department}',
+                                    : '${employee.position} - ${employee.department}',
                                 style: TextStyle(color: _secondaryTextColor),
                               ),
                               onChanged: (value) {
@@ -436,8 +457,8 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
                         )
                       : Text(
                           widget.event == null
-                              ? 'Create Event'
-                              : 'Update Event',
+                              ? context.tr('meeting_create')
+                              : context.tr('meeting_update'),
                         ),
                 ),
               ),
@@ -484,6 +505,8 @@ class _DateTimeTile extends StatelessWidget {
   final Color borderColor;
   final Color primaryTextColor;
   final Color secondaryTextColor;
+  final String pickTooltip;
+  final String? clearTooltip;
   final VoidCallback onTap;
   final VoidCallback? onClear;
 
@@ -494,6 +517,8 @@ class _DateTimeTile extends StatelessWidget {
     required this.borderColor,
     required this.primaryTextColor,
     required this.secondaryTextColor,
+    required this.pickTooltip,
+    this.clearTooltip,
     required this.onTap,
     this.onClear,
   });
@@ -513,8 +538,16 @@ class _DateTimeTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (onClear != null)
-            IconButton(onPressed: onClear, icon: const Icon(Icons.clear)),
-          IconButton(onPressed: onTap, icon: const Icon(Icons.edit_calendar)),
+            IconButton(
+              tooltip: clearTooltip,
+              onPressed: onClear,
+              icon: const Icon(Icons.clear),
+            ),
+          IconButton(
+            tooltip: pickTooltip,
+            onPressed: onTap,
+            icon: const Icon(Icons.edit_calendar),
+          ),
         ],
       ),
       onTap: onTap,

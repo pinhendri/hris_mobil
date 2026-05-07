@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:hris_mobile/providers/auth_provider.dart';
+import 'package:hris_mobile/providers/language_provider.dart';
 import 'package:hris_mobile/screens/tabs/approval_tab.dart';
 import 'package:hris_mobile/screens/claims/claims_screen.dart';
 import 'package:hris_mobile/screens/tasks/tasks_screen.dart';
@@ -11,7 +12,17 @@ void main() {
   testWidgets('approval task entry provides TaskProvider to TasksScreen', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: ApprovalTasksScreen()));
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ChangeNotifierProvider(
+            create: (_) => LanguageProvider(loadOnInit: false),
+          ),
+        ],
+        child: const MaterialApp(home: ApprovalTasksScreen()),
+      ),
+    );
 
     expect(find.byType(TasksScreen), findsOneWidget);
   });

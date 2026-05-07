@@ -8,6 +8,8 @@ import 'auth_provider.dart';
 class BotAssistantProvider extends ChangeNotifier {
   BotAssistantProvider(this._authProvider);
 
+  static const Duration _messageTimeout = Duration(minutes: 5);
+
   final AuthProvider _authProvider;
   final ApiService _apiService = ApiService();
 
@@ -257,6 +259,7 @@ class BotAssistantProvider extends ChangeNotifier {
               'quick_action': quickActionId,
           },
         },
+        timeout: _messageTimeout,
       );
 
       if (response is! Map<String, dynamic> || response['success'] != true) {

@@ -446,11 +446,16 @@ const Map<String, List<BotActionFieldConfig>> botActionFieldConfigs = {
   ],
   'create-leave-draft': [
     BotActionFieldConfig(
-      name: 'leave_type',
+      name: 'type',
       label: 'Jenis cuti',
-      type: BotActionFieldType.text,
+      type: BotActionFieldType.select,
       required: true,
-      placeholder: 'Contoh: annual',
+      defaultValue: 'Annual',
+      options: [
+        BotActionFieldOption(value: 'Annual', label: 'Annual'),
+        BotActionFieldOption(value: 'Sick', label: 'Sick'),
+        BotActionFieldOption(value: 'Personal', label: 'Personal'),
+      ],
     ),
     BotActionFieldConfig(
       name: 'start_date',
@@ -466,14 +471,7 @@ const Map<String, List<BotActionFieldConfig>> botActionFieldConfigs = {
     ),
     BotActionFieldConfig(
       name: 'reason',
-      label: 'Alasan cuti',
-      type: BotActionFieldType.textarea,
-      required: true,
-      placeholder: 'Jelaskan kebutuhan cuti',
-    ),
-    BotActionFieldConfig(
-      name: 'notes',
-      label: 'Catatan',
+      label: 'Alasan',
       type: BotActionFieldType.textarea,
       placeholder: 'Opsional',
     ),

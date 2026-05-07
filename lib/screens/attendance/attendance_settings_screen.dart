@@ -274,7 +274,7 @@ class _AttendanceSettingsScreenState extends State<AttendanceSettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Konfigurasi Absensi',
+          'Pengaturan Absensi',
           style: GoogleFonts.poppins(
             color: Colors.black,
             fontWeight: FontWeight.bold,

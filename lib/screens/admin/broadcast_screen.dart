@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/localization/app_strings.dart';
 import '../../core/widgets/access_denied_state.dart';
 import '../../models/broadcast_models.dart';
 import '../../providers/auth_provider.dart';
@@ -129,6 +130,20 @@ class _BroadcastScreenState extends State<BroadcastScreen>
     );
   }
 
+  String _tr(String key) => context.tr(key);
+
+  String _trf(String key, Map<String, String> values) {
+    var text = context.tr(key);
+    for (final entry in values.entries) {
+      text = text.replaceAll('{${entry.key}}', entry.value);
+    }
+    return text;
+  }
+
+  String _count(String key, int count) {
+    return _trf(key, {'count': count.toString()});
+  }
+
   @override
   void initState() {
     super.initState();
@@ -197,7 +212,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
   PreferredSizeWidget _buildAppBar({required bool showTabs}) {
     return AppBar(
       title: Text(
-        'Broadcast',
+        _tr('broadcast_page_title'),
         style: TextStyle(color: _primaryTextColor, fontWeight: FontWeight.w700),
       ),
       backgroundColor: _surfaceColor,
@@ -219,9 +234,9 @@ class _BroadcastScreenState extends State<BroadcastScreen>
               indicatorColor: AppColors.primary,
               labelColor: AppColors.primary,
               unselectedLabelColor: _secondaryTextColor,
-              tabs: const [
-                Tab(text: 'Compose'),
-                Tab(text: 'History'),
+              tabs: [
+                Tab(text: _tr('broadcast_compose_tab')),
+                Tab(text: _tr('broadcast_history_tab')),
               ],
             )
           : null,
@@ -254,7 +269,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
               ),
               const SizedBox(height: 18),
               Text(
-                'Pilih company terlebih dahulu',
+                _tr('broadcast_company_required_title'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: _primaryTextColor,
@@ -264,7 +279,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
               ),
               const SizedBox(height: 10),
               Text(
-                'Broadcast membutuhkan company aktif agar data karyawan dan riwayat dapat dimuat dengan benar.',
+                _tr('broadcast_company_required_message'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: _secondaryTextColor,
@@ -295,20 +310,27 @@ class _BroadcastScreenState extends State<BroadcastScreen>
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
           _buildHeroCard(
-            title: 'Broadcast Message',
-            subtitle:
-                'Kirim pengumuman dan notifikasi ke karyawan sesuai role.',
-            badgeLabel: companyCode.isEmpty ? null : 'Company $companyCode',
+            title: _tr('broadcast_message_title'),
+            subtitle: _tr('broadcast_message_subtitle'),
+            badgeLabel: companyCode.isEmpty
+                ? null
+                : _trf('broadcast_company_badge', {'code': companyCode}),
             metricLabels: [
               provider.employeeDirectoryRestricted
-                  ? 'karyawan dibatasi'
-                  : '${provider.employees.length} karyawan',
+                  ? _tr('broadcast_employee_restricted')
+                  : _count(
+                      'broadcast_employee_count',
+                      provider.employees.length,
+                    ),
               provider.departmentDirectoryRestricted
-                  ? 'department dibatasi'
-                  : '${provider.departments.length} department',
+                  ? _tr('broadcast_department_restricted')
+                  : _count(
+                      'broadcast_department_count',
+                      provider.departments.length,
+                    ),
               provider.historyRestricted
-                  ? 'riwayat dibatasi'
-                  : '${provider.history.length} riwayat',
+                  ? _tr('broadcast_history_restricted')
+                  : _count('broadcast_history_count', provider.history.length),
             ],
           ),
           if (provider.error != null) ...[
@@ -325,14 +347,13 @@ class _BroadcastScreenState extends State<BroadcastScreen>
             _buildBanner(
               color: AppColors.warning,
               icon: Icons.lock_outline_rounded,
-              message:
-                  'Broadcast bisa dibuka, tetapi daftar penerima dibatasi oleh permission data karyawan/departemen.',
+              message: _tr('broadcast_recipients_restricted'),
             ),
           ],
           const SizedBox(height: 16),
           _buildSurfaceSection(
-            title: 'Compose Message',
-            subtitle: 'Tulis judul, isi pesan, dan prioritas broadcast.',
+            title: _tr('broadcast_compose_title'),
+            subtitle: _tr('broadcast_compose_subtitle'),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -340,7 +361,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                   controller: _titleController,
                   style: TextStyle(color: _primaryTextColor),
                   decoration: _inputDecoration(
-                    hint: 'Masukkan judul broadcast',
+                    hint: _tr('broadcast_title_hint'),
                     prefixIcon: Icons.title_rounded,
                   ),
                 ),
@@ -350,10 +371,12 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                   maxLines: 7,
                   style: TextStyle(color: _primaryTextColor),
                   decoration: _inputDecoration(
-                    hint: 'Tulis pesan yang ingin dikirim...',
+                    hint: _tr('broadcast_message_hint'),
                     prefixIcon: Icons.message_outlined,
-                    helperText:
-                        '${_messageController.text.trim().characters.length} karakter',
+                    helperText: _count(
+                      'broadcast_character_count',
+                      _messageController.text.trim().characters.length,
+                    ),
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
@@ -362,19 +385,22 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                   initialValue: _priority,
                   dropdownColor: _surfaceColor,
                   decoration: _inputDecoration(
-                    hint: 'Pilih prioritas',
+                    hint: _tr('broadcast_priority_hint'),
                     prefixIcon: Icons.flag_outlined,
                   ),
                   style: TextStyle(color: _primaryTextColor),
-                  items: const [
-                    DropdownMenuItem(value: 'low', child: Text('Low Priority')),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'low',
+                      child: Text(_tr('broadcast_priority_low_full')),
+                    ),
                     DropdownMenuItem(
                       value: 'medium',
-                      child: Text('Medium Priority'),
+                      child: Text(_tr('broadcast_priority_medium_full')),
                     ),
                     DropdownMenuItem(
                       value: 'high',
-                      child: Text('High Priority'),
+                      child: Text(_tr('broadcast_priority_high_full')),
                     ),
                   ],
                   onChanged: (value) {
@@ -385,7 +411,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Prioritas tinggi akan lebih mudah terlihat oleh penerima.',
+                  _tr('broadcast_priority_help'),
                   style: TextStyle(
                     color: _secondaryTextColor,
                     fontSize: 12,
@@ -399,19 +425,21 @@ class _BroadcastScreenState extends State<BroadcastScreen>
           ),
           const SizedBox(height: 16),
           _buildSurfaceSection(
-            title: 'Select Recipients',
-            subtitle: 'Tentukan siapa yang akan menerima broadcast ini.',
+            title: _tr('broadcast_select_recipients_title'),
+            subtitle: _tr('broadcast_select_recipients_subtitle'),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _AudienceOptionTile(
                   icon: Icons.groups_rounded,
-                  title: 'All Employees',
-                  subtitle:
-                      'Kirim ke semua karyawan aktif yang tersedia di company.',
+                  title: _tr('broadcast_all_employees'),
+                  subtitle: _tr('broadcast_all_employees_subtitle'),
                   badgeLabel: provider.employeeDirectoryRestricted
-                      ? 'akses dibatasi'
-                      : '${provider.employees.length} penerima',
+                      ? _tr('broadcast_access_limited')
+                      : _count(
+                          'broadcast_recipient_count',
+                          provider.employees.length,
+                        ),
                   selected: _recipientType == _BroadcastRecipientType.all,
                   isDarkMode: _isDarkMode,
                   onTap: () {
@@ -425,9 +453,12 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                 const SizedBox(height: 12),
                 _AudienceOptionTile(
                   icon: Icons.apartment_rounded,
-                  title: 'Specific Departments',
-                  subtitle: 'Pilih satu atau beberapa department tertentu.',
-                  badgeLabel: '${_selectedDepartmentIds.length} dipilih',
+                  title: _tr('broadcast_specific_departments'),
+                  subtitle: _tr('broadcast_specific_departments_subtitle'),
+                  badgeLabel: _count(
+                    'broadcast_selected_count',
+                    _selectedDepartmentIds.length,
+                  ),
                   selected:
                       _recipientType == _BroadcastRecipientType.department,
                   isDarkMode: _isDarkMode,
@@ -445,7 +476,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                         ? null
                         : () => _openDepartmentSelector(provider),
                     icon: const Icon(Icons.checklist_rounded),
-                    label: const Text('Pilih Department'),
+                    label: Text(_tr('broadcast_choose_departments')),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _primaryTextColor,
                       side: BorderSide(color: _surfaceBorderColor),
@@ -459,7 +490,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                   if (selectedDepartments.isEmpty)
                     _buildEmptyInlineState(
                       icon: Icons.domain_disabled_outlined,
-                      message: 'Belum ada department yang dipilih.',
+                      message: _tr('broadcast_no_departments_selected'),
                     )
                   else
                     Wrap(
@@ -478,9 +509,12 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                 const SizedBox(height: 12),
                 _AudienceOptionTile(
                   icon: Icons.person_search_rounded,
-                  title: 'Specific Employees',
-                  subtitle: 'Pilih karyawan satu per satu untuk broadcast.',
-                  badgeLabel: '${_selectedEmployeeIds.length} dipilih',
+                  title: _tr('broadcast_specific_employees'),
+                  subtitle: _tr('broadcast_specific_employees_subtitle'),
+                  badgeLabel: _count(
+                    'broadcast_selected_count',
+                    _selectedEmployeeIds.length,
+                  ),
                   selected: _recipientType == _BroadcastRecipientType.custom,
                   isDarkMode: _isDarkMode,
                   onTap: () {
@@ -497,7 +531,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                         ? null
                         : () => _openEmployeeSelector(provider),
                     icon: const Icon(Icons.manage_accounts_outlined),
-                    label: const Text('Pilih Karyawan'),
+                    label: Text(_tr('broadcast_choose_employees')),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _primaryTextColor,
                       side: BorderSide(color: _surfaceBorderColor),
@@ -511,7 +545,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                   if (selectedEmployees.isEmpty)
                     _buildEmptyInlineState(
                       icon: Icons.person_off_outlined,
-                      message: 'Belum ada karyawan yang dipilih.',
+                      message: _tr('broadcast_no_employees_selected'),
                     )
                   else
                     Wrap(
@@ -533,8 +567,8 @@ class _BroadcastScreenState extends State<BroadcastScreen>
           ),
           const SizedBox(height: 16),
           _buildSurfaceSection(
-            title: 'Recipient Summary',
-            subtitle: 'Ringkasan penerima sebelum broadcast dikirim.',
+            title: _tr('broadcast_summary_title'),
+            subtitle: _tr('broadcast_summary_subtitle'),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -542,7 +576,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                   children: [
                     Expanded(
                       child: _buildSummaryMetric(
-                        label: 'Audience',
+                        label: _tr('broadcast_audience'),
                         value: _audienceLabel(_recipientType),
                         color: const Color(0xFF0EA5E9),
                       ),
@@ -550,7 +584,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildSummaryMetric(
-                        label: 'Priority',
+                        label: _tr('broadcast_priority'),
                         value: _priorityLabel(_priority),
                         color: _priorityColor(_priority),
                       ),
@@ -559,7 +593,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                 ),
                 const SizedBox(height: 12),
                 _buildSummaryMetric(
-                  label: 'Total Recipients',
+                  label: _tr('broadcast_total_recipients'),
                   value: recipientCount.toString(),
                   color: const Color(0xFF2F9D78),
                   fullWidth: true,
@@ -574,7 +608,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                 child: OutlinedButton.icon(
                   onPressed: recipientCount == 0 ? null : _showPreviewDialog,
                   icon: const Icon(Icons.visibility_outlined),
-                  label: const Text('Preview'),
+                  label: Text(_tr('broadcast_preview')),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: _primaryTextColor,
                     side: BorderSide(color: _surfaceBorderColor),
@@ -596,7 +630,9 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                         )
                       : const Icon(Icons.send_rounded),
                   label: Text(
-                    provider.isSending ? 'Sending...' : 'Send Broadcast',
+                    provider.isSending
+                        ? _tr('broadcast_sending')
+                        : _tr('broadcast_send'),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
@@ -623,15 +659,28 @@ class _BroadcastScreenState extends State<BroadcastScreen>
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
           _buildHeroCard(
-            title: 'Broadcast History',
-            subtitle: 'Pantau pesan yang sudah pernah dikirim ke karyawan.',
+            title: _tr('broadcast_history_title'),
+            subtitle: _tr('broadcast_history_subtitle'),
             badgeLabel: provider.history.isEmpty
                 ? null
-                : '${provider.history.length} entries',
+                : _count('broadcast_entry_count', provider.history.length),
             metricLabels: [
-              '${provider.history.where((item) => item.status == 'sent').length} sent',
-              '${provider.history.where((item) => item.status == 'pending').length} pending',
-              '${provider.history.where((item) => item.status == 'failed').length} failed',
+              _count(
+                'broadcast_sent_count',
+                provider.history.where((item) => item.status == 'sent').length,
+              ),
+              _count(
+                'broadcast_pending_count',
+                provider.history
+                    .where((item) => item.status == 'pending')
+                    .length,
+              ),
+              _count(
+                'broadcast_failed_count',
+                provider.history
+                    .where((item) => item.status == 'failed')
+                    .length,
+              ),
             ],
           ),
           if (provider.error != null) ...[
@@ -647,18 +696,17 @@ class _BroadcastScreenState extends State<BroadcastScreen>
             _buildBanner(
               color: AppColors.warning,
               icon: Icons.lock_outline_rounded,
-              message:
-                  'Riwayat broadcast tidak dimuat karena permission riwayat belum tersedia.',
+              message: _tr('broadcast_history_permission_message'),
             ),
           ],
           const SizedBox(height: 16),
           if (provider.history.isEmpty)
             _buildSurfaceSection(
-              title: 'Belum ada riwayat',
-              subtitle: 'Broadcast yang berhasil dikirim akan muncul di sini.',
+              title: _tr('broadcast_no_history_title'),
+              subtitle: _tr('broadcast_no_history_subtitle'),
               child: _buildEmptyInlineState(
                 icon: Icons.notifications_none_rounded,
-                message: 'Belum ada broadcast yang tercatat.',
+                message: _tr('broadcast_no_history_message'),
               ),
             )
           else
@@ -680,7 +728,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Broadcast Type',
+            _tr('broadcast_type_title'),
             style: TextStyle(
               color: _primaryTextColor,
               fontWeight: FontWeight.w700,
@@ -688,7 +736,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            'Pilih Event jika pengumuman juga harus masuk kalender kantor.',
+            _tr('broadcast_type_subtitle'),
             style: TextStyle(color: _secondaryTextColor, fontSize: 12),
           ),
           const SizedBox(height: 12),
@@ -697,7 +745,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
               Expanded(
                 child: _ModeButton(
                   icon: Icons.notifications_active_outlined,
-                  label: 'Message',
+                  label: _tr('broadcast_type_message'),
                   selected: !_isCalendarEvent,
                   onTap: () {
                     setState(() {
@@ -710,7 +758,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
               Expanded(
                 child: _ModeButton(
                   icon: Icons.event_available_outlined,
-                  label: 'Event',
+                  label: _tr('broadcast_type_event'),
                   selected: _isCalendarEvent,
                   onTap: () {
                     setState(() {
@@ -727,8 +775,9 @@ class _BroadcastScreenState extends State<BroadcastScreen>
               children: [
                 Expanded(
                   child: _DateTimeTile(
-                    label: 'Mulai',
+                    label: _tr('broadcast_event_start'),
                     value: _eventStartsAt,
+                    emptyLabel: _tr('broadcast_pick_time'),
                     isDarkMode: _isDarkMode,
                     onTap: () async {
                       final picked = await _pickDateTime(_eventStartsAt);
@@ -741,8 +790,9 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                 const SizedBox(width: 10),
                 Expanded(
                   child: _DateTimeTile(
-                    label: 'Selesai',
+                    label: _tr('broadcast_event_end'),
                     value: _eventEndsAt,
+                    emptyLabel: _tr('broadcast_pick_time'),
                     isDarkMode: _isDarkMode,
                     onTap: () async {
                       final picked = await _pickDateTime(
@@ -764,7 +814,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
               controller: _eventLocationController,
               style: TextStyle(color: _primaryTextColor),
               decoration: _inputDecoration(
-                hint: 'Lokasi atau link meeting',
+                hint: _tr('broadcast_event_location_hint'),
                 prefixIcon: Icons.place_outlined,
               ),
             ),
@@ -1042,7 +1092,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                 color: _priorityColor(item.priority),
               ),
               _buildTag(
-                label: item.status.toUpperCase(),
+                label: _statusLabel(item.status),
                 color: _statusColor(item.status),
               ),
             ],
@@ -1062,7 +1112,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
             runSpacing: 8,
             children: [
               _buildTag(
-                label: '${item.recipientCount} recipients',
+                label: _count('broadcast_recipients', item.recipientCount),
                 color: const Color(0xFF0EA5E9),
               ),
               _buildTag(
@@ -1071,7 +1121,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
               ),
               if (item.isCalendarEvent)
                 _buildTag(
-                  label: 'Calendar Event',
+                  label: _tr('broadcast_calendar_event'),
                   color: const Color(0xFF2563EB),
                 ),
               if (item.eventStartsAt != null)
@@ -1128,17 +1178,17 @@ class _BroadcastScreenState extends State<BroadcastScreen>
     final recipientCount = _getRecipientCount(provider);
 
     if (title.isEmpty || message.isEmpty) {
-      _showSnackBar('Judul dan pesan broadcast wajib diisi.', isError: true);
+      _showSnackBar(_tr('broadcast_title_message_required'), isError: true);
       return;
     }
 
     if (recipientCount == 0) {
-      _showSnackBar('Pilih minimal satu penerima broadcast.', isError: true);
+      _showSnackBar(_tr('broadcast_recipient_required'), isError: true);
       return;
     }
 
     if (_isCalendarEvent && _eventStartsAt == null) {
-      _showSnackBar('Tanggal dan jam mulai event wajib diisi.', isError: true);
+      _showSnackBar(_tr('broadcast_event_start_required'), isError: true);
       return;
     }
 
@@ -1163,7 +1213,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
 
     if (!success) {
       _showSnackBar(
-        provider.error ?? 'Broadcast gagal dikirim.',
+        provider.error ?? _tr('broadcast_send_failed'),
         isError: true,
       );
       return;
@@ -1189,8 +1239,8 @@ class _BroadcastScreenState extends State<BroadcastScreen>
     _tabController.animateTo(1);
     _showSnackBar(
       wasCalendarEvent
-          ? 'Broadcast event berhasil dikirim dan masuk kalender.'
-          : 'Broadcast berhasil dikirim.',
+          ? _tr('broadcast_calendar_success')
+          : _tr('broadcast_success'),
     );
   }
 
@@ -1198,10 +1248,10 @@ class _BroadcastScreenState extends State<BroadcastScreen>
     final provider = context.read<BroadcastProvider>();
     final recipientCount = _getRecipientCount(provider);
     final previewTitle = _titleController.text.trim().isEmpty
-        ? '(Tanpa judul)'
+        ? _tr('broadcast_preview_no_title')
         : _titleController.text.trim();
     final previewMessage = _messageController.text.trim().isEmpty
-        ? '(Pesan masih kosong)'
+        ? _tr('broadcast_preview_empty_message')
         : _messageController.text.trim();
     final audienceLabel = _audienceLabel(_recipientType);
     final priorityLabel = _priorityLabel(_priority);
@@ -1213,7 +1263,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
         return AlertDialog(
           backgroundColor: _surfaceColor,
           title: Text(
-            'Preview Broadcast',
+            _tr('broadcast_preview_title'),
             style: TextStyle(color: _primaryTextColor),
           ),
           content: SingleChildScrollView(
@@ -1245,11 +1295,13 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                     ),
                     _buildTag(label: priorityLabel, color: priorityColor),
                     _buildTag(
-                      label: '$recipientCount recipients',
+                      label: _count('broadcast_recipients', recipientCount),
                       color: const Color(0xFF2F9D78),
                     ),
                     _buildTag(
-                      label: _isCalendarEvent ? 'Calendar Event' : 'Message',
+                      label: _isCalendarEvent
+                          ? _tr('broadcast_calendar_event')
+                          : _tr('broadcast_type_message'),
                       color: _isCalendarEvent
                           ? const Color(0xFF2563EB)
                           : const Color(0xFF64748B),
@@ -1269,7 +1321,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Tutup'),
+              child: Text(_tr('broadcast_close')),
             ),
           ],
         );
@@ -1314,7 +1366,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Select Departments',
+                      _tr('broadcast_select_departments_title'),
                       style: TextStyle(
                         color: _primaryTextColor,
                         fontSize: 18,
@@ -1323,7 +1375,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Pilih department yang akan menerima broadcast.',
+                      _tr('broadcast_select_departments_subtitle'),
                       style: TextStyle(color: _secondaryTextColor),
                     ),
                     const SizedBox(height: 14),
@@ -1339,18 +1391,21 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                                 );
                             });
                           },
-                          child: const Text('Select All'),
+                          child: Text(_tr('broadcast_select_all')),
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton(
                           onPressed: () {
                             setModalState(tempSelected.clear);
                           },
-                          child: const Text('Clear'),
+                          child: Text(_tr('broadcast_clear')),
                         ),
                         const Spacer(),
                         Text(
-                          '${tempSelected.length} dipilih',
+                          _count(
+                            'broadcast_selected_count',
+                            tempSelected.length,
+                          ),
                           style: TextStyle(color: _secondaryTextColor),
                         ),
                       ],
@@ -1360,7 +1415,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                       child: provider.departments.isEmpty
                           ? _buildEmptyInlineState(
                               icon: Icons.domain_disabled_outlined,
-                              message: 'Data department belum tersedia.',
+                              message: _tr('broadcast_no_department_data'),
                             )
                           : ListView.separated(
                               itemCount: provider.departments.length,
@@ -1381,8 +1436,12 @@ class _BroadcastScreenState extends State<BroadcastScreen>
 
                                 return _SelectorTile(
                                   title: department.name,
-                                  subtitle:
-                                      '${employeeCount > 0 ? employeeCount : department.employeeCount} karyawan',
+                                  subtitle: _count(
+                                    'broadcast_employee_suffix',
+                                    employeeCount > 0
+                                        ? employeeCount
+                                        : department.employeeCount,
+                                  ),
                                   selected: selected,
                                   isDarkMode: _isDarkMode,
                                   onTap: () {
@@ -1410,7 +1469,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
-                        child: const Text('Terapkan Pilihan'),
+                        child: Text(_tr('broadcast_apply_selection')),
                       ),
                     ),
                   ],
@@ -1493,7 +1552,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Select Employees',
+                      _tr('broadcast_select_employees_title'),
                       style: TextStyle(
                         color: _primaryTextColor,
                         fontSize: 18,
@@ -1502,14 +1561,14 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Cari dan pilih karyawan tertentu untuk menerima broadcast.',
+                      _tr('broadcast_select_employees_subtitle'),
                       style: TextStyle(color: _secondaryTextColor),
                     ),
                     const SizedBox(height: 14),
                     TextField(
                       style: TextStyle(color: _primaryTextColor),
                       decoration: _inputDecoration(
-                        hint: 'Cari nama, email, NIK, atau department',
+                        hint: _tr('broadcast_employee_search_hint'),
                         prefixIcon: Icons.search_rounded,
                       ),
                       onChanged: (value) {
@@ -1531,18 +1590,21 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                                 );
                             });
                           },
-                          child: const Text('Select Result'),
+                          child: Text(_tr('broadcast_select_result')),
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton(
                           onPressed: () {
                             setModalState(tempSelected.clear);
                           },
-                          child: const Text('Clear'),
+                          child: Text(_tr('broadcast_clear')),
                         ),
                         const Spacer(),
                         Text(
-                          '${tempSelected.length} dipilih',
+                          _count(
+                            'broadcast_selected_count',
+                            tempSelected.length,
+                          ),
                           style: TextStyle(color: _secondaryTextColor),
                         ),
                       ],
@@ -1552,7 +1614,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                       child: filteredEmployees.isEmpty
                           ? _buildEmptyInlineState(
                               icon: Icons.search_off_rounded,
-                              message: 'Tidak ada karyawan yang cocok.',
+                              message: _tr('broadcast_no_employee_match'),
                             )
                           : ListView.separated(
                               itemCount: filteredEmployees.length,
@@ -1567,7 +1629,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                                 return _SelectorTile(
                                   title: employee.name,
                                   subtitle:
-                                      '${employee.employeeId.isEmpty ? '-' : employee.employeeId} • ${employee.departmentName.isEmpty ? 'Tanpa department' : employee.departmentName}',
+                                      '${employee.employeeId.isEmpty ? '-' : employee.employeeId} - ${employee.departmentName.isEmpty ? _tr('broadcast_no_department') : employee.departmentName}',
                                   selected: selected,
                                   isDarkMode: _isDarkMode,
                                   trailing: employee.email.isEmpty
@@ -1606,7 +1668,7 @@ class _BroadcastScreenState extends State<BroadcastScreen>
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
-                        child: const Text('Terapkan Pilihan'),
+                        child: Text(_tr('broadcast_apply_selection')),
                       ),
                     ),
                   ],
@@ -1650,33 +1712,44 @@ class _BroadcastScreenState extends State<BroadcastScreen>
   String _audienceLabel(_BroadcastRecipientType type) {
     switch (type) {
       case _BroadcastRecipientType.department:
-        return 'Specific Departments';
+        return _tr('broadcast_specific_departments');
       case _BroadcastRecipientType.custom:
-        return 'Specific Employees';
+        return _tr('broadcast_specific_employees');
       case _BroadcastRecipientType.all:
-        return 'All Employees';
+        return _tr('broadcast_all_employees');
     }
   }
 
   String _priorityLabel(String priority) {
     switch (priority.toLowerCase()) {
       case 'low':
-        return 'Low';
+        return _tr('broadcast_priority_low');
       case 'high':
-        return 'High';
+        return _tr('broadcast_priority_high');
       default:
-        return 'Medium';
+        return _tr('broadcast_priority_medium');
     }
   }
 
   String _historyTypeLabel(String type) {
     switch (type.toLowerCase()) {
       case 'department':
-        return 'Departments';
+        return _tr('broadcast_history_type_departments');
       case 'custom':
-        return 'Custom Employees';
+        return _tr('broadcast_history_type_custom');
       default:
-        return 'All Employees';
+        return _tr('broadcast_history_type_all');
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status.toLowerCase()) {
+      case 'failed':
+        return _tr('broadcast_status_failed');
+      case 'pending':
+        return _tr('broadcast_status_pending');
+      default:
+        return _tr('broadcast_status_sent');
     }
   }
 
@@ -1787,6 +1860,7 @@ class _ModeButton extends StatelessWidget {
 class _DateTimeTile extends StatelessWidget {
   final String label;
   final DateTime? value;
+  final String emptyLabel;
   final bool isDarkMode;
   final VoidCallback onTap;
   final VoidCallback? onClear;
@@ -1794,6 +1868,7 @@ class _DateTimeTile extends StatelessWidget {
   const _DateTimeTile({
     required this.label,
     required this.value,
+    required this.emptyLabel,
     required this.isDarkMode,
     required this.onTap,
     this.onClear,
@@ -1841,7 +1916,7 @@ class _DateTimeTile extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     value == null
-                        ? 'Pilih waktu'
+                        ? emptyLabel
                         : DateFormat('dd MMM, HH:mm').format(value!.toLocal()),
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

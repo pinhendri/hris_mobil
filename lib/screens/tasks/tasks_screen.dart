@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/localization/app_strings.dart';
 import '../../models/employee_model.dart';
 import '../../models/task_model.dart';
 import '../../models/user.dart';
@@ -79,17 +80,19 @@ class _TasksScreenState extends State<TasksScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Task'),
-        content: Text('Hapus task "${task.title}"?'),
+        title: Text(context.tr('task_delete_title')),
+        content: Text(
+          context.tr('task_delete_message').replaceAll('{title}', task.title),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.tr('task_action_cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(context.tr('task_action_delete')),
           ),
         ],
       ),
@@ -105,8 +108,8 @@ class _TasksScreenState extends State<TasksScreen> {
     }
 
     final message = success
-        ? 'Task berhasil dihapus'
-        : (provider.error ?? 'Gagal menghapus task');
+        ? context.tr('task_delete_success')
+        : (provider.error ?? context.tr('task_delete_failed'));
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
@@ -124,7 +127,7 @@ class _TasksScreenState extends State<TasksScreen> {
             : const Color(0xFFF6F8FC),
         appBar: AppBar(
           title: Text(
-            'My Tasks',
+            context.tr('task_page_title'),
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.w600,
               color: Colors.white,
@@ -136,7 +139,7 @@ class _TasksScreenState extends State<TasksScreen> {
             IconButton(
               onPressed: () => context.read<TaskProvider>().refresh(),
               icon: const Icon(Icons.refresh),
-              tooltip: 'Refresh tasks',
+              tooltip: context.tr('task_action_refresh'),
             ),
           ],
           bottom: TabBar(
@@ -145,9 +148,9 @@ class _TasksScreenState extends State<TasksScreen> {
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
             indicatorColor: Colors.white,
-            tabs: const [
-              Tab(text: 'Pending'),
-              Tab(text: 'Completed'),
+            tabs: [
+              Tab(text: context.tr('task_status_pending')),
+              Tab(text: context.tr('task_status_completed')),
             ],
           ),
         ),
@@ -156,7 +159,7 @@ class _TasksScreenState extends State<TasksScreen> {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           icon: const Icon(Icons.add),
-          label: const Text('Add Task'),
+          label: Text(context.tr('task_action_add')),
         ),
         body: Consumer<TaskProvider>(
           builder: (context, provider, child) {
@@ -314,7 +317,7 @@ class _TasksScreenState extends State<TasksScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Task Workspace',
+                      context.tr('task_page_title'),
                       style: GoogleFonts.poppins(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -323,7 +326,7 @@ class _TasksScreenState extends State<TasksScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Kelola task pribadi dan follow-up bawahan.',
+                      context.tr('task_page_subtitle'),
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         color: secondaryTextColor,
@@ -338,21 +341,21 @@ class _TasksScreenState extends State<TasksScreen> {
           Row(
             children: [
               _TaskMetric(
-                label: 'Pending',
+                label: context.tr('task_status_pending'),
                 value: pending.toString(),
                 color: const Color(0xFF2563EB),
                 isDark: isDark,
               ),
               const SizedBox(width: 10),
               _TaskMetric(
-                label: 'Bawahan',
+                label: context.tr('task_metric_subordinate'),
                 value: subordinate.toString(),
                 color: const Color(0xFF7C3AED),
                 isDark: isDark,
               ),
               const SizedBox(width: 10),
               _TaskMetric(
-                label: 'Overdue',
+                label: context.tr('task_metric_overdue'),
                 value: overdue.toString(),
                 color: const Color(0xFFEF4444),
                 isDark: isDark,
@@ -375,9 +378,9 @@ class _TasksScreenState extends State<TasksScreen> {
         ? const Color(0xFF334155)
         : const Color(0xFFE2E8F0);
     final labels = <String, String>{
-      'all': 'Semua',
-      'self': 'Saya',
-      'subordinate': 'Bawahan',
+      'all': context.tr('task_filter_all'),
+      'self': context.tr('task_filter_mine'),
+      'subordinate': context.tr('task_filter_subordinate'),
     };
 
     return SingleChildScrollView(
@@ -498,7 +501,7 @@ class _TasksScreenState extends State<TasksScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () => provider.refresh(),
-                child: const Text('Retry'),
+                child: Text(context.tr('task_action_retry')),
               ),
             ],
           ),
@@ -525,7 +528,7 @@ class _TasksScreenState extends State<TasksScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'No tasks found',
+                      context.tr('task_empty_title'),
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         color: primaryTextColor,
@@ -677,10 +680,14 @@ class _TasksScreenState extends State<TasksScreen> {
 
                                 final message = success
                                     ? (task.isCompleted
-                                          ? 'Task dipindah ke pending'
-                                          : 'Task selesai ditandai')
+                                          ? context.tr('task_status_to_pending')
+                                          : context.tr(
+                                              'task_status_to_completed',
+                                            ))
                                     : (provider.error ??
-                                          'Gagal mengubah status task');
+                                          context.tr(
+                                            'task_status_update_failed',
+                                          ));
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text(message)),
                                 );
@@ -720,7 +727,7 @@ class _TasksScreenState extends State<TasksScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  task.priority.toUpperCase(),
+                                  _taskPriorityLabel(context, task.priority),
                                   style: GoogleFonts.poppins(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
@@ -731,7 +738,7 @@ class _TasksScreenState extends State<TasksScreen> {
                               if (task.canEdit || task.canDelete) ...[
                                 const SizedBox(width: 4),
                                 PopupMenuButton<String>(
-                                  tooltip: 'Task actions',
+                                  tooltip: context.tr('task_actions_tooltip'),
                                   color: isDark
                                       ? const Color(0xFF1F2937)
                                       : Colors.white,
@@ -748,14 +755,18 @@ class _TasksScreenState extends State<TasksScreen> {
                                   },
                                   itemBuilder: (_) => [
                                     if (task.canEdit)
-                                      const PopupMenuItem<String>(
+                                      PopupMenuItem<String>(
                                         value: 'edit',
-                                        child: Text('Edit'),
+                                        child: Text(
+                                          context.tr('task_action_edit'),
+                                        ),
                                       ),
                                     if (task.canDelete)
-                                      const PopupMenuItem<String>(
+                                      PopupMenuItem<String>(
                                         value: 'delete',
-                                        child: Text('Delete'),
+                                        child: Text(
+                                          context.tr('task_action_delete'),
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -798,8 +809,8 @@ class _TasksScreenState extends State<TasksScreen> {
                           const SizedBox(width: 4),
                           Text(
                             task.dueDate != null
-                                ? 'Due: ${DateFormat('MMM dd, yyyy').format(task.dueDate!)}'
-                                : 'No due date',
+                                ? '${context.tr('task_due_prefix')}: ${_formatTaskDate(task.dueDate!, pattern: 'MMM dd, yyyy')}'
+                                : context.tr('task_no_due_date'),
                             style: GoogleFonts.poppins(
                               fontSize: 12,
                               color: isOverdue ? Colors.red : mutedTextColor,
@@ -821,7 +832,7 @@ class _TasksScreenState extends State<TasksScreen> {
                           border: Border.all(color: borderColor),
                         ),
                         child: Text(
-                          task.type.toUpperCase(),
+                          _taskTypeLabel(context, task.type),
                           style: GoogleFonts.poppins(
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
@@ -861,7 +872,9 @@ class _TasksScreenState extends State<TasksScreen> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              isSubordinateForCurrentUser ? 'Bawahan' : 'Saya',
+                              isSubordinateForCurrentUser
+                                  ? context.tr('task_filter_subordinate')
+                                  : context.tr('task_filter_mine'),
                               style: GoogleFonts.poppins(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
@@ -909,6 +922,32 @@ class _TasksScreenState extends State<TasksScreen> {
       ),
     );
   }
+}
+
+String _taskPriorityLabel(BuildContext context, String priority) {
+  switch (priority) {
+    case 'high':
+      return context.tr('task_priority_high');
+    case 'low':
+      return context.tr('task_priority_low');
+    default:
+      return context.tr('task_priority_medium');
+  }
+}
+
+String _taskTypeLabel(BuildContext context, String type) {
+  switch (type) {
+    case 'onboarding':
+      return context.tr('task_type_onboarding');
+    case 'offboarding':
+      return context.tr('task_type_offboarding');
+    default:
+      return context.tr('task_type_regular');
+  }
+}
+
+String _formatTaskDate(DateTime date, {required String pattern}) {
+  return DateFormat(pattern).format(date);
 }
 
 class _TaskMetric extends StatelessWidget {
@@ -995,13 +1034,15 @@ class _TaskStatusConfirmDialog extends StatelessWidget {
     final accentColor = isCompleting
         ? const Color(0xFF2563EB)
         : const Color(0xFFF59E0B);
-    final buttonLabel = isCompleting ? 'Ya, tandai selesai' : 'Ya, ubah status';
+    final buttonLabel = isCompleting
+        ? context.tr('task_toggle_complete_button')
+        : context.tr('task_toggle_pending_button');
     final title = isCompleting
-        ? 'Selesaikan task ini?'
-        : 'Kembalikan ke pending?';
+        ? context.tr('task_toggle_complete_title')
+        : context.tr('task_toggle_pending_title');
     final subtitle = isCompleting
-        ? 'Task akan dipindahkan ke tab Completed. Anda tetap bisa mengubahnya lagi nanti.'
-        : 'Task akan dipindahkan kembali ke tab Pending agar bisa dilanjutkan.';
+        ? context.tr('task_toggle_complete_subtitle')
+        : context.tr('task_toggle_pending_subtitle');
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -1118,13 +1159,13 @@ class _TaskStatusConfirmDialog extends StatelessWidget {
                     children: [
                       _TaskDialogChip(
                         icon: Icons.flag_rounded,
-                        label: task.priority.toUpperCase(),
+                        label: _taskPriorityLabel(context, task.priority),
                         color: _priorityColor(task.priority),
                         isDark: isDark,
                       ),
                       _TaskDialogChip(
                         icon: Icons.category_rounded,
-                        label: task.type.toUpperCase(),
+                        label: _taskTypeLabel(context, task.type),
                         color: const Color(0xFF8B5CF6),
                         isDark: isDark,
                       ),
@@ -1159,7 +1200,9 @@ class _TaskStatusConfirmDialog extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      isCompleting ? 'Belum dulu' : 'Batal',
+                      isCompleting
+                          ? context.tr('task_toggle_cancel_complete')
+                          : context.tr('task_action_cancel'),
                       style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -1346,15 +1389,15 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
     final selectedAssignee = _selectedAssignee();
 
     if (title.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Title wajib diisi')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('task_title_required'))),
+      );
       return;
     }
 
     if (_assignmentScope == 'subordinate' && selectedAssignee == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pilih bawahan penerima task')),
+        SnackBar(content: Text(context.tr('task_assignee_required'))),
       );
       return;
     }
@@ -1412,7 +1455,9 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
 
     if (!success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(provider.error ?? 'Gagal menyimpan task')),
+        SnackBar(
+          content: Text(provider.error ?? context.tr('task_save_failed')),
+        ),
       );
       return;
     }
@@ -1420,7 +1465,9 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _isEditing ? 'Task berhasil diupdate' : 'Task berhasil dibuat',
+          _isEditing
+              ? context.tr('task_update_success')
+              : context.tr('task_create_success'),
         ),
       ),
     );
@@ -1485,7 +1532,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Task Untuk',
+            context.tr('task_assignment_for'),
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w700,
@@ -1499,7 +1546,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             children: [
               ChoiceChip(
                 selected: _assignmentScope == 'self',
-                label: const Text('Diri Sendiri'),
+                label: Text(context.tr('task_assignment_self')),
                 avatar: Icon(
                   Icons.person_rounded,
                   size: 18,
@@ -1529,7 +1576,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
               ),
               ChoiceChip(
                 selected: _assignmentScope == 'subordinate',
-                label: const Text('Bawahan'),
+                label: Text(context.tr('task_filter_subordinate')),
                 avatar: Icon(
                   Icons.groups_rounded,
                   size: 18,
@@ -1584,7 +1631,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        'Memuat daftar karyawan...',
+                        context.tr('task_assignee_loading'),
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           color: secondaryTextColor,
@@ -1600,7 +1647,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                         ? null
                         : () => employeeProvider.fetchAllEmployees(),
                     icon: const Icon(Icons.account_tree_outlined),
-                    label: const Text('Tidak ada bawahan di tree Anda'),
+                    label: Text(context.tr('task_assignee_empty')),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.primary,
                       side: BorderSide(color: borderColor),
@@ -1616,7 +1663,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                   style: GoogleFonts.poppins(color: primaryTextColor),
                   iconEnabledColor: secondaryTextColor,
                   decoration: inputDecoration.copyWith(
-                    labelText: 'Penerima Task',
+                    labelText: context.tr('task_assignee_label'),
                     prefixIcon: const Icon(Icons.badge_outlined),
                   ),
                   items: employees.map((employee) {
@@ -1640,7 +1687,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Saat task dibuat untuk bawahan, mobile mengirim penerima ke backend agar notifikasi bisa dikirim ke bawahan tersebut.',
+              context.tr('task_assignee_note'),
               style: GoogleFonts.poppins(
                 fontSize: 11,
                 height: 1.4,
@@ -1734,7 +1781,9 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
               ),
               const SizedBox(height: 20),
               Text(
-                _isEditing ? 'Edit Task' : 'Create Task',
+                _isEditing
+                    ? context.tr('task_form_edit_title')
+                    : context.tr('task_form_create_title'),
                 style: GoogleFonts.poppins(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
@@ -1747,7 +1796,9 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                 textInputAction: TextInputAction.next,
                 style: GoogleFonts.poppins(color: primaryTextColor),
                 cursorColor: AppColors.primary,
-                decoration: inputDecoration.copyWith(labelText: 'Title'),
+                decoration: inputDecoration.copyWith(
+                  labelText: context.tr('task_title_label'),
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -1756,7 +1807,9 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                 maxLines: 5,
                 style: GoogleFonts.poppins(color: primaryTextColor),
                 cursorColor: AppColors.primary,
-                decoration: inputDecoration.copyWith(labelText: 'Description'),
+                decoration: inputDecoration.copyWith(
+                  labelText: context.tr('task_description_label'),
+                ),
               ),
               const SizedBox(height: 16),
               _buildAssignmentSection(
@@ -1777,15 +1830,21 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                       style: GoogleFonts.poppins(color: primaryTextColor),
                       iconEnabledColor: secondaryTextColor,
                       decoration: inputDecoration.copyWith(
-                        labelText: 'Priority',
+                        labelText: context.tr('task_priority_label'),
                       ),
-                      items: const [
-                        DropdownMenuItem(value: 'high', child: Text('High')),
+                      items: [
+                        DropdownMenuItem(
+                          value: 'high',
+                          child: Text(context.tr('task_priority_high')),
+                        ),
                         DropdownMenuItem(
                           value: 'medium',
-                          child: Text('Medium'),
+                          child: Text(context.tr('task_priority_medium')),
                         ),
-                        DropdownMenuItem(value: 'low', child: Text('Low')),
+                        DropdownMenuItem(
+                          value: 'low',
+                          child: Text(context.tr('task_priority_low')),
+                        ),
                       ],
                       onChanged: _isSubmitting
                           ? null
@@ -1807,19 +1866,21 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                       dropdownColor: surfaceColor,
                       style: GoogleFonts.poppins(color: primaryTextColor),
                       iconEnabledColor: secondaryTextColor,
-                      decoration: inputDecoration.copyWith(labelText: 'Type'),
-                      items: const [
+                      decoration: inputDecoration.copyWith(
+                        labelText: context.tr('task_type_label'),
+                      ),
+                      items: [
                         DropdownMenuItem(
                           value: 'regular',
-                          child: Text('Regular'),
+                          child: Text(context.tr('task_type_regular')),
                         ),
                         DropdownMenuItem(
                           value: 'onboarding',
-                          child: Text('Onboarding'),
+                          child: Text(context.tr('task_type_onboarding')),
                         ),
                         DropdownMenuItem(
                           value: 'offboarding',
-                          child: Text('Offboarding'),
+                          child: Text(context.tr('task_type_offboarding')),
                         ),
                       ],
                       onChanged: _isSubmitting
@@ -1850,7 +1911,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Due Date',
+                      context.tr('task_due_date_label'),
                       style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -1860,8 +1921,11 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                     const SizedBox(height: 8),
                     Text(
                       _dueDate != null
-                          ? DateFormat('EEEE, dd MMM yyyy').format(_dueDate!)
-                          : 'Belum diatur',
+                          ? _formatTaskDate(
+                              _dueDate!,
+                              pattern: 'EEEE, dd MMM yyyy',
+                            )
+                          : context.tr('task_due_not_set'),
                       style: GoogleFonts.poppins(
                         fontSize: 14,
                         color: mutedTextColor,
@@ -1881,7 +1945,9 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                             side: BorderSide(color: borderColor),
                           ),
                           label: Text(
-                            _dueDate == null ? 'Pick Date' : 'Change Date',
+                            _dueDate == null
+                                ? context.tr('task_due_pick_date')
+                                : context.tr('task_due_change_date'),
                           ),
                         ),
                         if (_dueDate != null)
@@ -1898,7 +1964,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                                   ? const Color(0xFFFCA5A5)
                                   : Colors.red.shade600,
                             ),
-                            child: const Text('Clear'),
+                            child: Text(context.tr('task_due_clear')),
                           ),
                       ],
                     ),
@@ -1917,7 +1983,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                         foregroundColor: secondaryTextColor,
                         side: BorderSide(color: borderColor),
                       ),
-                      child: const Text('Cancel'),
+                      child: Text(context.tr('task_action_cancel')),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1936,7 +2002,11 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                                 color: Colors.white,
                               ),
                             )
-                          : Text(_isEditing ? 'Save' : 'Create'),
+                          : Text(
+                              _isEditing
+                                  ? context.tr('task_action_save')
+                                  : context.tr('task_action_create'),
+                            ),
                     ),
                   ),
                 ],

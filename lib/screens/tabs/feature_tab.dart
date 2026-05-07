@@ -13,6 +13,7 @@ import '../../providers/document_provider.dart';
 import '../../providers/employee_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../providers/payroll_provider.dart';
+import '../../providers/recruitment_operations_provider.dart';
 import '../../providers/saas_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/training_provider.dart';
@@ -47,6 +48,7 @@ import '../payroll/payroll_settings_screen.dart';
 import '../payroll/payroll_process_screen.dart';
 import '../payroll/pph_report_screen.dart';
 import '../kpi/kpi_menu_screen.dart';
+import '../recruitment/recruitment_operations_screen.dart';
 import '../recruitment/recruitment_screen.dart';
 import '../saas/saas_workspace_screen.dart';
 import '../tasks/tasks_screen.dart';
@@ -1065,7 +1067,7 @@ class _FeatureTabState extends State<FeatureTab> {
           icon: Icons.badge_outlined,
           labelKey: 'feature_label_employee_one',
           gradient: const [Color(0xFFEA580C), Color(0xFFFACC15)],
-          screenBuilder: (_) => const EmployeeListScreen(),
+          screenBuilder: (_) => const EmployeeListScreen(selfOnly: true),
           categoryKey: 'feature_category_core_hr',
           isPopular: false,
         ),
@@ -1265,7 +1267,8 @@ class _FeatureTabState extends State<FeatureTab> {
           icon: Icons.assignment_ind_outlined,
           labelKey: 'feature_label_applications',
           gradient: const [Color(0xFF7C3AED), Color(0xFFEC4899)],
-          screenBuilder: (_) => const RecruitmentScreen(),
+          screenBuilder: (_) =>
+              const RecruitmentScreen(mode: RecruitmentScreenMode.applications),
           categoryKey: 'feature_category_core_hr',
           isPopular: false,
         ),
@@ -1274,7 +1277,10 @@ class _FeatureTabState extends State<FeatureTab> {
           icon: Icons.manage_search_outlined,
           labelKey: 'feature_label_recruitment_ops',
           gradient: const [Color(0xFF0F766E), Color(0xFF84CC16)],
-          screenBuilder: (_) => const RecruitmentScreen(),
+          screenBuilder: (_) => ChangeNotifierProvider(
+            create: (_) => RecruitmentOperationsProvider(),
+            child: const RecruitmentOperationsScreen(),
+          ),
           categoryKey: 'feature_category_operations',
           isPopular: false,
         ),

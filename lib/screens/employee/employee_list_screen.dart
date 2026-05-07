@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/localization/app_strings.dart';
 import '../../core/widgets/access_denied_state.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/employee_provider.dart';
@@ -11,7 +12,9 @@ import 'employee_detail_screen.dart';
 import '../../core/utils/image_helper.dart';
 
 class EmployeeListScreen extends StatefulWidget {
-  const EmployeeListScreen({super.key});
+  const EmployeeListScreen({super.key, this.selfOnly = false});
+
+  final bool selfOnly;
 
   @override
   State<EmployeeListScreen> createState() => _EmployeeListScreenState();
@@ -55,7 +58,12 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<EmployeeProvider>(context, listen: false).fetchEmployees();
+      final provider = Provider.of<EmployeeProvider>(context, listen: false);
+      if (widget.selfOnly) {
+        provider.fetchCurrentUserEmployeeProfile();
+      } else {
+        provider.fetchEmployees();
+      }
     });
   }
 
@@ -68,15 +76,22 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
-    final canViewEmployee = authProvider.canViewEmployeeScreen;
-    final canCreateEmployee = authProvider.hasPermission('create-employee');
+    final canViewEmployee = widget.selfOnly
+        ? authProvider.hasPermission('view-employee-one') ||
+              authProvider.canViewEmployeeScreen
+        : authProvider.canViewEmployeeScreen;
+    final canCreateEmployee =
+        !widget.selfOnly && authProvider.hasPermission('create-employee');
+    final title = widget.selfOnly
+        ? context.tr('feature_label_employee_one')
+        : context.tr('admin_master_employee');
 
     if (!canViewEmployee) {
       return Scaffold(
         backgroundColor: _screenBackgroundColor,
         appBar: AppBar(
           title: Text(
-            'Employees',
+            title,
             style: GoogleFonts.poppins(
               color: _primaryTextColor,
               fontWeight: FontWeight.bold,
@@ -95,7 +110,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       backgroundColor: _screenBackgroundColor,
       appBar: AppBar(
         title: Text(
-          'Employees',
+          title,
           style: GoogleFonts.poppins(
             color: _primaryTextColor,
             fontWeight: FontWeight.bold,
@@ -109,7 +124,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSearchBar(),
+          if (!widget.selfOnly) _buildSearchBar(),
           Expanded(
             child: Consumer<EmployeeProvider>(
               builder: (context, provider, child) {

@@ -7,7 +7,7 @@ import 'package:hris_mobile/screens/tabs/admin_tab.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('hides event management without event permission', (tester) async {
+  testWidgets('hides meeting menu without event permission', (tester) async {
     GoogleFonts.config.allowRuntimeFetching = false;
     final authProvider = AuthProvider();
     await authProvider.setUser({
@@ -30,6 +30,6 @@ void main() {
       ),
     );
 
-    expect(find.text('Event Management'), findsNothing);
+    expect(find.text('Rapat'), findsNothing);
   });
 }

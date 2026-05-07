@@ -8,13 +8,11 @@ import '../../models/user.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/leave_provider.dart';
-import '../../providers/saas_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/api_service.dart';
 import '../profile/change_password_screen.dart';
 import '../profile/employment_details_screen.dart';
 import '../profile/personal_info_screen.dart';
-import '../saas/saas_workspace_screen.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -58,13 +56,12 @@ class _ProfileTabState extends State<ProfileTab> {
     final leaveProvider = context.watch<LeaveProvider>();
     final themeProvider = context.watch<ThemeProvider>();
     final languageProvider = context.watch<LanguageProvider>();
-    final saasProvider = context.watch<SaasProvider>();
     final user = auth.user;
     final isDark = themeProvider.isDarkMode;
     final currentLanguageLabel = languageProvider.languageCode == 'id'
         ? context.tr('profile_language_indonesian')
         : context.tr('profile_language_english');
-    final currentCompany = saasProvider.currentCompany ?? auth.selectedCompany;
+    final currentCompany = auth.selectedCompany;
     final companyName = (currentCompany?.companyName ?? '').trim().isNotEmpty
         ? currentCompany!.companyName.trim()
         : 'Company Name';
@@ -74,70 +71,7 @@ class _ProfileTabState extends State<ProfileTab> {
       currentCompany,
       workspaceCount,
     );
-    final trialSubtitle = _buildTrialSubtitle(context, saasProvider);
     final sections = [
-      if (auth.canAccessAnySaasWorkspace)
-        _buildSection(
-          context,
-          title: context.tr('profile_saas_workspace'),
-          icon: Icons.apartment_outlined,
-          count: [
-            auth.canAccessSaasWorkspace,
-            auth.canAccessSaasBilling,
-            auth.canAccessSaasInvitations,
-          ].where((value) => value).length,
-          tone: AppColors.primary,
-          isDark: isDark,
-          children: [
-            if (auth.canAccessSaasWorkspace)
-              _buildMenuItem(
-                icon: Icons.shield_outlined,
-                title: context.tr('saas_workspace_title'),
-                subtitle: context.tr('profile_saas_workspace_subtitle'),
-                color: const Color(0xFF3478F6),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SaasWorkspaceScreen(),
-                    ),
-                  );
-                },
-                isDark: isDark,
-              ),
-            _buildMenuItem(
-              icon: Icons.apartment_outlined,
-              title: context.tr('saas_current_company'),
-              subtitle: companySubtitle,
-              color: const Color(0xFF2F9D78),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SaasWorkspaceScreen(),
-                  ),
-                );
-              },
-              isDark: isDark,
-            ),
-            if (auth.canAccessSaasBilling)
-              _buildMenuItem(
-                icon: Icons.card_membership_outlined,
-                title: context.tr('saas_trial_status'),
-                subtitle: trialSubtitle,
-                color: const Color(0xFF7C3AED),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SaasWorkspaceScreen(),
-                    ),
-                  );
-                },
-                isDark: isDark,
-              ),
-          ],
-        ),
       _buildSection(
         context,
         title: context.tr('profile_account'),
@@ -314,7 +248,6 @@ class _ProfileTabState extends State<ProfileTab> {
                       currentCompany: currentCompany,
                       companySubtitle: companySubtitle,
                       currentLanguageLabel: currentLanguageLabel,
-                      workspaceCount: workspaceCount,
                       isDark: isDark,
                     ),
                     const SizedBox(height: 16),
@@ -324,7 +257,6 @@ class _ProfileTabState extends State<ProfileTab> {
                       isLoading: _isLoadingStats,
                       leaveDays: _getLeaveDays(leaveProvider),
                       overtimeHours: _overtimeHours,
-                      workspaceCount: workspaceCount,
                     ),
                     const SizedBox(height: 16),
                     _buildSectionsGrid(sections: sections),
@@ -377,7 +309,6 @@ class _ProfileTabState extends State<ProfileTab> {
     required Company? currentCompany,
     required String companySubtitle,
     required String currentLanguageLabel,
-    required int workspaceCount,
     required bool isDark,
   }) {
     final rawUserName = (user?.name ?? '').trim();
@@ -586,26 +517,6 @@ class _ProfileTabState extends State<ProfileTab> {
                               isDark: isDark,
                             ),
                           ),
-                          SizedBox(
-                            width: factWidth,
-                            child: _buildProfileFactCard(
-                              label: context.tr('profile_language'),
-                              value: currentLanguageLabel,
-                              icon: Icons.language_rounded,
-                              tone: AppColors.primary,
-                              isDark: isDark,
-                            ),
-                          ),
-                          SizedBox(
-                            width: factWidth,
-                            child: _buildProfileFactCard(
-                              label: context.tr('profile_saas_workspace'),
-                              value: workspaceCount.toString(),
-                              icon: Icons.apartment_rounded,
-                              tone: const Color(0xFF0F766E),
-                              isDark: isDark,
-                            ),
-                          ),
                         ],
                       ),
                     ],
@@ -677,7 +588,6 @@ class _ProfileTabState extends State<ProfileTab> {
     required bool isLoading,
     required int leaveDays,
     required double overtimeHours,
-    required int workspaceCount,
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -705,17 +615,6 @@ class _ProfileTabState extends State<ProfileTab> {
                 tone: const Color(0xFF4F46E5),
                 isDark: isDark,
                 isLoading: isLoading,
-                isCompact: isCompact,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                icon: Icons.apartment_rounded,
-                value: workspaceCount.toString(),
-                label: context.tr('profile_saas_workspace'),
-                tone: const Color(0xFF2F9D78),
-                isDark: isDark,
                 isCompact: isCompact,
               ),
             ),
@@ -1550,34 +1449,6 @@ class _ProfileTabState extends State<ProfileTab> {
         : parts.join(' | ');
 
     return '$summary | $companyCount ${context.tr('profile_switch_company_count')}';
-  }
-
-  String _buildTrialSubtitle(BuildContext context, SaasProvider saasProvider) {
-    final trialStatus = saasProvider.trialStatus;
-
-    if (trialStatus == null) {
-      return context.tr('saas_trial_unavailable');
-    }
-
-    if (trialStatus.isExpired) {
-      return context.tr('saas_trial_expired');
-    }
-
-    if (trialStatus.isInGracePeriod) {
-      return context.tr('saas_grace_period');
-    }
-
-    if (trialStatus.isTrial) {
-      if (trialStatus.daysRemaining != null) {
-        return context
-            .tr('saas_trial_days_remaining')
-            .replaceAll('{count}', trialStatus.daysRemaining.toString());
-      }
-
-      return context.tr('saas_trial_active');
-    }
-
-    return context.tr('saas_active_plan');
   }
 
   Future<void> _loadProfileStats() async {

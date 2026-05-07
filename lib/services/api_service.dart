@@ -59,7 +59,11 @@ class ApiService {
     }
   }
 
-  Future<dynamic> post(String endpoint, Map<String, dynamic> data) async {
+  Future<dynamic> post(
+    String endpoint,
+    Map<String, dynamic> data, {
+    Duration? timeout,
+  }) async {
     final headers = await _getHeaders();
     final url = '$baseUrl/api$endpoint';
 
@@ -69,7 +73,7 @@ class ApiService {
     try {
       final response = await http
           .post(Uri.parse(url), headers: headers, body: jsonEncode(data))
-          .timeout(_requestTimeout);
+          .timeout(timeout ?? _requestTimeout);
 
       _debugLog(
         'POST Response (${response.statusCode}): ${_previewBody(response.body)}',

@@ -27,7 +27,10 @@ class EmployeeProvider with ChangeNotifier {
   int get lastPage => _lastPage;
   bool get isUsingCachedData => _isUsingCachedData;
 
-  final ApiService _apiService = ApiService();
+  final ApiService _apiService;
+
+  EmployeeProvider({ApiService? apiService})
+    : _apiService = apiService ?? ApiService();
 
   // Frontend parity:
   // - hanya role HR/admin tertentu yang boleh melihat semua employee
@@ -81,7 +84,7 @@ class EmployeeProvider with ChangeNotifier {
         );
       }
     } catch (e) {
-      print('Error fetching employees: $e');
+      debugPrint('Error fetching employees: $e');
       final currentUser = await _getStoredUser();
       final loadedFromCache = _shouldFetchSelfOnly(currentUser)
           ? await _loadEmployeeCache(_selfCacheKey)
@@ -110,6 +113,51 @@ class EmployeeProvider with ChangeNotifier {
       } else if (!loadedFromCache) {
         _error = e.toString();
         _employees = [];
+      }
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchCurrentUserEmployeeProfile() async {
+    _isLoading = true;
+    _error = null;
+    _isUsingCachedData = false;
+    notifyListeners();
+
+    try {
+      final currentUser = await _getCurrentUser();
+      final employee = await _fetchCurrentUserEmployee(currentUser);
+
+      _employees = employee != null ? [employee] : [];
+      _selectedEmployee = employee;
+      _currentPage = 1;
+      _lastPage = 1;
+      _totalEmployees = _employees.length;
+      _error = null;
+      await _saveEmployeeCache(_selfCacheKey, _employees);
+    } catch (e) {
+      debugPrint('Error fetching current employee profile: $e');
+      final loadedFromCache = await _loadEmployeeCache(_selfCacheKey);
+
+      if (!loadedFromCache) {
+        final employee = await _buildSelfEmployeeFromStorage();
+        if (employee != null) {
+          _employees = [employee];
+          _selectedEmployee = employee;
+          _currentPage = 1;
+          _lastPage = 1;
+          _totalEmployees = 1;
+          _isUsingCachedData = true;
+          _error = null;
+        } else {
+          _error = e.toString();
+          _employees = [];
+          _selectedEmployee = null;
+        }
+      } else {
+        _selectedEmployee = _employees.isNotEmpty ? _employees.first : null;
       }
     } finally {
       _isLoading = false;
@@ -152,7 +200,7 @@ class EmployeeProvider with ChangeNotifier {
       }
 
       final response = await _apiService.get(url);
-      print('Employees list API response: $response');
+      debugPrint('Employees list API response: $response');
 
       if (response is Map && response['success'] == true) {
         final data = response['data'];
@@ -185,7 +233,7 @@ class EmployeeProvider with ChangeNotifier {
         _employees = [];
       }
     } catch (e) {
-      print('Error fetching all employees: $e');
+      debugPrint('Error fetching all employees: $e');
       final loadedFromCache = await _loadEmployeeCache(
         _allCacheKey(
           search: search,
@@ -212,7 +260,7 @@ class EmployeeProvider with ChangeNotifier {
         return User.fromMap(meUser);
       }
     } catch (e) {
-      print('Error fetching current user from /me: $e');
+      debugPrint('Error fetching current user from /me: $e');
     }
 
     return _getStoredUser();
@@ -230,7 +278,7 @@ class EmployeeProvider with ChangeNotifier {
         return User.fromMap(decoded);
       }
     } catch (e) {
-      print('Error decoding stored user data: $e');
+      debugPrint('Error decoding stored user data: $e');
     }
 
     return null;
@@ -238,6 +286,10 @@ class EmployeeProvider with ChangeNotifier {
 
   bool _shouldFetchSelfOnly(User? user) {
     return !_canViewAllEmployees(user);
+  }
+
+  static String currentUserEmployeeUuid(User? user) {
+    return user?.employeeUuid?.trim() ?? '';
   }
 
   bool _canViewAllEmployees(User? user) {
@@ -269,27 +321,51 @@ class EmployeeProvider with ChangeNotifier {
   }
 
   Future<Employee?> _fetchCurrentUserEmployee(User? currentUser) async {
-    final employeeUuid = currentUser?.employeeUuid ?? currentUser?.uuid ?? '';
+    final employeeUuid = currentUserEmployeeUuid(currentUser);
 
     if (employeeUuid.isNotEmpty) {
-      final response = await _apiService.get('/employees/$employeeUuid');
-      print('Single employee response: $response');
-
-      final employeeData = _extractSingleEmployeePayload(response);
-      if (employeeData != null) {
-        final employee = Employee.fromJson(employeeData);
-        await OfflineSupport.saveJsonCache(
-          _detailCacheKey(
-            employee.uuid.isNotEmpty ? employee.uuid : employee.id,
-          ),
-          employee.toJson(),
-        );
+      final employee = await _fetchEmployeeDetailByUuid(employeeUuid);
+      if (employee != null) {
         return employee;
       }
     }
 
+    try {
+      final meEmployeeResponse = await _apiService.get('/me/employee');
+      debugPrint(
+        '/me/employee response for employee profile: $meEmployeeResponse',
+      );
+
+      final meEmployeeData = _extractSingleEmployeePayload(meEmployeeResponse);
+      if (meEmployeeData != null) {
+        final meEmployee = Employee.fromJson(meEmployeeData);
+        final meEmployeeUuid = meEmployee.uuid.isNotEmpty
+            ? meEmployee.uuid
+            : meEmployeeData['employee_uuid']?.toString().trim() ?? '';
+
+        if (meEmployeeUuid.isNotEmpty) {
+          final detailedEmployee = await _fetchEmployeeDetailByUuid(
+            meEmployeeUuid,
+          );
+          if (detailedEmployee != null) {
+            return detailedEmployee;
+          }
+        }
+
+        await OfflineSupport.saveJsonCache(
+          _detailCacheKey(
+            meEmployee.uuid.isNotEmpty ? meEmployee.uuid : meEmployee.id,
+          ),
+          meEmployee.toJson(),
+        );
+        return meEmployee;
+      }
+    } catch (e) {
+      debugPrint('Error fetching current employee from /me/employee: $e');
+    }
+
     final meResponse = await _apiService.get('/me');
-    print('/me response for employee fallback: $meResponse');
+    debugPrint('/me response for employee fallback: $meResponse');
 
     final userData = _extractMeUserPayload(meResponse);
     if (userData == null) {
@@ -325,6 +401,23 @@ class EmployeeProvider with ChangeNotifier {
     return employee;
   }
 
+  Future<Employee?> _fetchEmployeeDetailByUuid(String employeeUuid) async {
+    final response = await _apiService.get('/employees/$employeeUuid');
+    debugPrint('Single employee response: $response');
+
+    final employeeData = _extractSingleEmployeePayload(response);
+    if (employeeData == null) {
+      return null;
+    }
+
+    final employee = Employee.fromJson(employeeData);
+    await OfflineSupport.saveJsonCache(
+      _detailCacheKey(employee.uuid.isNotEmpty ? employee.uuid : employee.id),
+      employee.toJson(),
+    );
+    return employee;
+  }
+
   Future<_EmployeeFetchResult> _fetchEmployeesFromIndex({
     String? search,
     String? department,
@@ -342,11 +435,11 @@ class EmployeeProvider with ChangeNotifier {
     }
 
     final response = await _apiService.get(url);
-    print('Employees API response: $response');
+    debugPrint('Employees API response: $response');
 
     final result = _extractEmployeeListPayload(response);
     for (final emp in result.employees) {
-      print('Loaded employee ${emp.name}: UUID=${emp.uuid}, ID=${emp.id}');
+      debugPrint('Loaded employee ${emp.name}: UUID=${emp.uuid}, ID=${emp.id}');
     }
 
     return result;
@@ -442,7 +535,7 @@ class EmployeeProvider with ChangeNotifier {
 
   List<Employee> _mapEmployees(List<dynamic> items) {
     return items.whereType<Map>().map((json) {
-      print('Processing employee JSON: $json');
+      debugPrint('Processing employee JSON: $json');
       return Employee.fromJson(Map<String, dynamic>.from(json));
     }).toList();
   }
@@ -481,7 +574,7 @@ class EmployeeProvider with ChangeNotifier {
   Future<Employee?> fetchEmployeeDetail(String uuid) async {
     try {
       final response = await _apiService.get('/employees/$uuid');
-      print('Employee detail API response: $response');
+      debugPrint('Employee detail API response: $response');
 
       final data = _extractSingleEmployeePayload(response);
       if (data == null) {
@@ -496,7 +589,7 @@ class EmployeeProvider with ChangeNotifier {
       );
       return employee;
     } catch (e) {
-      print('Error fetching employee detail: $e');
+      debugPrint('Error fetching employee detail: $e');
       return _loadCachedEmployeeDetail(uuid);
     }
   }
@@ -515,7 +608,9 @@ class EmployeeProvider with ChangeNotifier {
         throw Exception('Employee not found');
       }
 
-      print('Updating employee department: ${employee.name} to $newDepartment');
+      debugPrint(
+        'Updating employee department: ${employee.name} to $newDepartment',
+      );
 
       final updateData = {
         'name': employee.name,
@@ -546,7 +641,7 @@ class EmployeeProvider with ChangeNotifier {
         return false;
       }
     } catch (e) {
-      print('Error updating employee department: $e');
+      debugPrint('Error updating employee department: $e');
       _error = e.toString();
       return false;
     } finally {
@@ -598,7 +693,7 @@ class EmployeeProvider with ChangeNotifier {
         return false;
       }
     } catch (e) {
-      print('Error updating employee: $e');
+      debugPrint('Error updating employee: $e');
       _error = e.toString();
       return false;
     } finally {
@@ -629,7 +724,7 @@ class EmployeeProvider with ChangeNotifier {
         return false;
       }
     } catch (e) {
-      print('Error creating employee: $e');
+      debugPrint('Error creating employee: $e');
       _error = e.toString();
       return false;
     } finally {
@@ -659,7 +754,7 @@ class EmployeeProvider with ChangeNotifier {
         return false;
       }
     } catch (e) {
-      print('Error deleting employee: $e');
+      debugPrint('Error deleting employee: $e');
       _error = e.toString();
       return false;
     } finally {

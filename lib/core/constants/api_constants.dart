@@ -12,7 +12,7 @@ class ApiConstants {
     'API_BASE_URL',
   );
   static const String baseUrl = _configuredBaseUrl == ''
-      ? (_isReleaseBuild ? 'https://api.example.com' : 'http://10.0.2.2:8000')
+      ? (_isReleaseBuild ? 'http://113.11.129.46' : 'http://10.0.2.2:8000')
       : _configuredBaseUrl;
 
   /// Kalau pakai HP asli:
