@@ -469,92 +469,208 @@ class _SelfieCameraScreenState extends State<SelfieCameraScreen> {
   }
 }
 
+class SelfieGuideGeometry {
+  const SelfieGuideGeometry();
+
+  Rect _templateFrame(Size size) {
+    final width = size.width * 0.76;
+    final height = width * (326 / 353);
+    final left = (size.width - width) / 2;
+    final top = size.height * 0.12;
+
+    return Rect.fromLTWH(left, top, width, height);
+  }
+
+  Offset _templatePoint(Rect frame, double x, double y) {
+    const sourceLeft = 267.0;
+    const sourceTop = 129.0;
+    const sourceWidth = 353.0;
+    const sourceHeight = 326.0;
+
+    return Offset(
+      frame.left + ((x - sourceLeft) / sourceWidth) * frame.width,
+      frame.top + ((y - sourceTop) / sourceHeight) * frame.height,
+    );
+  }
+
+  Rect headBounds(Size size) {
+    final frame = _templateFrame(size);
+    final left = _templatePoint(frame, 335, 129).dx;
+    final top = _templatePoint(frame, 335, 129).dy;
+    final right = _templatePoint(frame, 552, 129).dx;
+    final bottom = _templatePoint(frame, 335, 346).dy;
+
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
+
+  Rect guideBounds(Size size) {
+    final frame = _templateFrame(size);
+
+    return Rect.fromLTRB(
+      _templatePoint(frame, 267, 129).dx,
+      _templatePoint(frame, 267, 129).dy,
+      _templatePoint(frame, 620, 455).dx,
+      _templatePoint(frame, 620, 455).dy,
+    );
+  }
+
+  double neckWidth(Size size) {
+    final frame = _templateFrame(size);
+
+    return _templatePoint(frame, 500, 380).dx -
+        _templatePoint(frame, 386, 380).dx;
+  }
+
+  Path buildBustOutline(Size size) {
+    final frame = _templateFrame(size);
+    Offset p(double x, double y) => _templatePoint(frame, x, y);
+
+    return Path()
+      ..moveTo(p(267, 454).dx, p(267, 454).dy)
+      ..cubicTo(
+        p(270, 443).dx,
+        p(270, 443).dy,
+        p(326, 435).dx,
+        p(326, 435).dy,
+        p(358, 425).dx,
+        p(358, 425).dy,
+      )
+      ..cubicTo(
+        p(388, 416).dx,
+        p(388, 416).dy,
+        p(390, 407).dx,
+        p(390, 407).dy,
+        p(386, 395).dx,
+        p(386, 395).dy,
+      )
+      ..cubicTo(
+        p(383, 384).dx,
+        p(383, 384).dy,
+        p(371, 376).dx,
+        p(371, 376).dy,
+        p(366, 364).dx,
+        p(366, 364).dy,
+      )
+      ..cubicTo(
+        p(360, 349).dx,
+        p(360, 349).dy,
+        p(354, 334).dx,
+        p(354, 334).dy,
+        p(351, 326).dx,
+        p(351, 326).dy,
+      )
+      ..cubicTo(
+        p(335, 324).dx,
+        p(335, 324).dy,
+        p(327, 315).dx,
+        p(327, 315).dy,
+        p(326, 296).dx,
+        p(326, 296).dy,
+      )
+      ..cubicTo(
+        p(325, 281).dx,
+        p(325, 281).dy,
+        p(330, 270).dx,
+        p(330, 270).dy,
+        p(339, 266).dx,
+        p(339, 266).dy,
+      )
+      ..cubicTo(
+        p(333, 232).dx,
+        p(333, 232).dy,
+        p(338, 200).dx,
+        p(338, 200).dy,
+        p(384, 145).dx,
+        p(384, 145).dy,
+      )
+      ..cubicTo(
+        p(413, 130).dx,
+        p(413, 130).dy,
+        p(462, 126).dx,
+        p(462, 126).dy,
+        p(496, 139).dx,
+        p(496, 139).dy,
+      )
+      ..cubicTo(
+        p(536, 154).dx,
+        p(536, 154).dy,
+        p(557, 201).dx,
+        p(557, 201).dy,
+        p(548, 266).dx,
+        p(548, 266).dy,
+      )
+      ..cubicTo(
+        p(558, 270).dx,
+        p(558, 270).dy,
+        p(563, 285).dx,
+        p(563, 285).dy,
+        p(560, 300).dx,
+        p(560, 300).dy,
+      )
+      ..cubicTo(
+        p(557, 316).dx,
+        p(557, 316).dy,
+        p(548, 324).dx,
+        p(548, 324).dy,
+        p(533, 326).dx,
+        p(533, 326).dy,
+      )
+      ..cubicTo(
+        p(530, 341).dx,
+        p(530, 341).dy,
+        p(523, 360).dx,
+        p(523, 360).dy,
+        p(513, 374).dx,
+        p(513, 374).dy,
+      )
+      ..cubicTo(
+        p(503, 388).dx,
+        p(503, 388).dy,
+        p(497, 397).dx,
+        p(497, 397).dy,
+        p(501, 409).dx,
+        p(501, 409).dy,
+      )
+      ..cubicTo(
+        p(505, 423).dx,
+        p(505, 423).dy,
+        p(524, 429).dx,
+        p(524, 429).dy,
+        p(557, 435).dx,
+        p(557, 435).dy,
+      )
+      ..cubicTo(
+        p(587, 440).dx,
+        p(587, 440).dy,
+        p(617, 447).dx,
+        p(617, 447).dy,
+        p(620, 455).dx,
+        p(620, 455).dy,
+      );
+  }
+}
+
 class _SelfieGuidePainter extends CustomPainter {
   const _SelfieGuidePainter();
 
-  Offset _point(Size size, double x, double y) =>
-      Offset(size.width * x, size.height * y);
-
-  Path _buildCatmullRomPath(List<Offset> points) {
-    final path = Path();
-    if (points.isEmpty) {
-      return path;
-    }
-
-    path.moveTo(points.first.dx, points.first.dy);
-
-    for (var index = 0; index < points.length - 1; index++) {
-      final previous = index == 0 ? points[index] : points[index - 1];
-      final current = points[index];
-      final next = points[index + 1];
-      final nextNext = index + 2 < points.length ? points[index + 2] : next;
-
-      final controlPoint1 = Offset(
-        current.dx + (next.dx - previous.dx) / 6,
-        current.dy + (next.dy - previous.dy) / 6,
-      );
-      final controlPoint2 = Offset(
-        next.dx - (nextNext.dx - current.dx) / 6,
-        next.dy - (nextNext.dy - current.dy) / 6,
-      );
-
-      path.cubicTo(
-        controlPoint1.dx,
-        controlPoint1.dy,
-        controlPoint2.dx,
-        controlPoint2.dy,
-        next.dx,
-        next.dy,
-      );
-    }
-
-    return path;
-  }
+  static const SelfieGuideGeometry _geometry = SelfieGuideGeometry();
 
   @override
   void paint(Canvas canvas, Size size) {
-    final bustOutline = _buildCatmullRomPath([
-      _point(size, 0.02, 0.95),
-      _point(size, 0.05, 0.86),
-      _point(size, 0.12, 0.79),
-      _point(size, 0.24, 0.74),
-      _point(size, 0.36, 0.66),
-      _point(size, 0.38, 0.57),
-      _point(size, 0.29, 0.48),
-      _point(size, 0.31, 0.38),
-      _point(size, 0.34, 0.24),
-      _point(size, 0.40, 0.12),
-      _point(size, 0.46, 0.08),
-      _point(size, 0.50, 0.07),
-      _point(size, 0.54, 0.08),
-      _point(size, 0.60, 0.12),
-      _point(size, 0.66, 0.24),
-      _point(size, 0.69, 0.38),
-      _point(size, 0.71, 0.48),
-      _point(size, 0.62, 0.57),
-      _point(size, 0.64, 0.66),
-      _point(size, 0.76, 0.74),
-      _point(size, 0.88, 0.79),
-      _point(size, 0.95, 0.86),
-      _point(size, 0.98, 0.95),
-    ]);
+    final bustOutline = _geometry.buildBustOutline(size);
 
     final glowPaint = Paint()
-      ..color = const Color(0xFFFFEEF7).withValues(alpha: 0.28)
+      ..color = Colors.white.withValues(alpha: 0.18)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 16
+      ..strokeWidth = 20
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14);
 
     final strokePaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFFFFD8EA), Color(0xFFFFFFFF)],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..color = Colors.white.withValues(alpha: 0.92)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 5.2
+      ..strokeWidth = 8.8
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
