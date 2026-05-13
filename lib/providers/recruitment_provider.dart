@@ -82,7 +82,15 @@ class RecruitmentProvider with ChangeNotifier {
         }
 
         // Build pipeline
-        const stages = ['Applied', 'Screening', 'Interview', 'Offer', 'Hired'];
+        const stages = [
+          'Applied',
+          'Screening',
+          'Interview',
+          'Offer',
+          'Hired',
+          'Rejected',
+          'Withdrawn',
+        ];
         _pipeline = stages.map((stage) {
           final key = stage.toLowerCase();
           int count = 0;

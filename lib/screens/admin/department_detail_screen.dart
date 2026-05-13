@@ -11,9 +11,9 @@ import '../../models/employee_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/department_provider.dart';
 import '../../providers/employee_provider.dart';
-import '../../providers/notification_provider.dart';
-import 'add_edit_department_screen.dart';
 import 'package:hris_mobile/core/utils/image_helper.dart';
+import 'add_edit_department_screen.dart';
+import 'admin_palette.dart';
 
 class DepartmentDetailScreen extends StatefulWidget {
   final String departmentId;
@@ -25,12 +25,21 @@ class DepartmentDetailScreen extends StatefulWidget {
 }
 
 class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
+  Color get _screenBackgroundColor => AdminPalette.page(context);
+  Color get _surfaceColor => AdminPalette.surface(context);
+  Color get _borderColor => AdminPalette.border(context);
+  Color get _primaryTextColor => AdminPalette.text(context);
+  Color get _secondaryTextColor => AdminPalette.mutedText(context);
+
   @override
   void initState() {
     super.initState();
     // Load department data when screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final deptProvider = Provider.of<DepartmentProvider>(context, listen: false);
+      final deptProvider = Provider.of<DepartmentProvider>(
+        context,
+        listen: false,
+      );
       // Refresh to ensure we have latest data
       deptProvider.fetchDepartments();
     });
@@ -53,20 +62,18 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
           title: Text(
             'Department Details',
             style: GoogleFonts.poppins(
-              color: Colors.black,
+              color: _primaryTextColor,
               fontWeight: FontWeight.bold,
             ),
           ),
-          backgroundColor: Colors.white,
+          backgroundColor: _surfaceColor,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+            icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
             onPressed: () => Navigator.pop(context),
           ),
         ),
-        body: const AccessDeniedState(
-          permissionLabel: 'view-department',
-        ),
+        body: const AccessDeniedState(permissionLabel: 'view-department'),
       );
     }
 
@@ -83,14 +90,14 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
               title: Text(
                 'Department Details',
                 style: GoogleFonts.poppins(
-                  color: Colors.black,
+                  color: _primaryTextColor,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              backgroundColor: Colors.white,
+              backgroundColor: _surfaceColor,
               elevation: 0,
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+                icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -105,14 +112,14 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
               title: Text(
                 'Error',
                 style: GoogleFonts.poppins(
-                  color: Colors.black,
+                  color: _primaryTextColor,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              backgroundColor: Colors.white,
+              backgroundColor: _surfaceColor,
               elevation: 0,
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+                icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -129,7 +136,10 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                   const SizedBox(height: 8),
                   Text(
                     'ID: ${widget.departmentId}',
-                    style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
@@ -155,23 +165,25 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
             .toList();
 
         final userIdStr = authProvider.user?.id.toString();
-        final isDeptHead = userIdStr == department.employeeId; // Use employeeId instead of headId
+        final isDeptHead =
+            userIdStr ==
+            department.employeeId; // Use employeeId instead of headId
         final canManage = canManageEmployees || isDeptHead;
 
         return Scaffold(
-          backgroundColor: Colors.grey[50],
+          backgroundColor: _screenBackgroundColor,
           appBar: AppBar(
             title: Text(
               department.name,
               style: GoogleFonts.poppins(
-                color: Colors.black,
+                color: _primaryTextColor,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            backgroundColor: Colors.white,
+            backgroundColor: _surfaceColor,
             elevation: 0,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+              icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
@@ -231,7 +243,9 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                           ),
                           child: Text(
                             'Manage',
-                            style: GoogleFonts.poppins(color: AppColors.primary),
+                            style: GoogleFonts.poppins(
+                              color: AppColors.primary,
+                            ),
                           ),
                         ),
                     ],
@@ -247,11 +261,17 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                       child: Center(
                         child: Column(
                           children: [
-                            Icon(Icons.people_outline, size: 48, color: Colors.grey[400]),
+                            Icon(
+                              Icons.people_outline,
+                              size: 48,
+                              color: Colors.grey[400],
+                            ),
                             const SizedBox(height: 8),
                             Text(
                               'No employees assigned',
-                              style: GoogleFonts.poppins(color: Colors.grey[600]),
+                              style: GoogleFonts.poppins(
+                                color: Colors.grey[600],
+                              ),
                             ),
                           ],
                         ),
@@ -283,11 +303,17 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                       child: Center(
                         child: Column(
                           children: [
-                            Icon(Icons.subdirectory_arrow_right, size: 48, color: Colors.grey[400]),
+                            Icon(
+                              Icons.subdirectory_arrow_right,
+                              size: 48,
+                              color: Colors.grey[400],
+                            ),
                             const SizedBox(height: 8),
                             Text(
                               'No sub-departments',
-                              style: GoogleFonts.poppins(color: Colors.grey[600]),
+                              style: GoogleFonts.poppins(
+                                color: Colors.grey[600],
+                              ),
                             ),
                           ],
                         ),
@@ -298,7 +324,8 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: children.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 12),
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 12),
                       itemBuilder: (context, index) {
                         return _buildChildDepartmentCard(
                           context,
@@ -402,8 +429,10 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                             itemBuilder: (context, index) {
                               final employee = filteredEmployees[index];
                               final isInDepartment =
-                                  employee.department?.toString() == department.name ||
-                                  employee.department?.toString() == department.id.toString();
+                                  employee.department?.toString() ==
+                                      department.name ||
+                                  employee.department?.toString() ==
+                                      department.id.toString();
 
                               return CheckboxListTile(
                                 value: isInDepartment,
@@ -421,8 +450,12 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                                   ),
                                 ),
                                 secondary: CircleAvatar(
-                                  backgroundImage: ImageHelper.avatar(employee.avatarUrl),
-                                  child: employee.avatarUrl == null || employee.avatarUrl!.isEmpty
+                                  backgroundImage: ImageHelper.avatar(
+                                    employee.avatarUrl,
+                                  ),
+                                  child:
+                                      employee.avatarUrl == null ||
+                                          employee.avatarUrl!.isEmpty
                                       ? const Icon(Icons.person, size: 20)
                                       : null,
                                 ),
@@ -430,16 +463,19 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                                   try {
                                     if (value == true) {
                                       // Assign to department
-                                      await empProvider.updateEmployeeDepartment(
-                                        employee.id,
-                                        department.name,
-                                      );
-                                      
+                                      await empProvider
+                                          .updateEmployeeDepartment(
+                                            employee.id,
+                                            department.name,
+                                          );
+
                                       // Refresh data
                                       await deptProvider.fetchDepartments();
-                                      
+
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           SnackBar(
                                             content: Text(
                                               '${employee.name} assigned to ${department.name}',
@@ -451,16 +487,19 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                                       }
                                     } else {
                                       // Remove from department
-                                      await empProvider.updateEmployeeDepartment(
-                                        employee.id,
-                                        'Unassigned',
-                                      );
-                                      
+                                      await empProvider
+                                          .updateEmployeeDepartment(
+                                            employee.id,
+                                            'Unassigned',
+                                          );
+
                                       // Refresh data
                                       await deptProvider.fetchDepartments();
-                                      
+
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           SnackBar(
                                             content: Text(
                                               '${employee.name} removed from ${department.name}',
@@ -474,7 +513,9 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                                   } catch (e) {
                                     debugPrint('Error updating employee: $e');
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
                                           content: Text(
                                             'Error: $e',
@@ -514,15 +555,10 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
           return Container(
             width: 80,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _surfaceColor,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              border: Border.all(color: _borderColor),
+              boxShadow: AdminPalette.shadow(context),
             ),
             padding: const EdgeInsets.all(8),
             child: Column(
@@ -531,20 +567,28 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                 CircleAvatar(
                   radius: 24,
                   backgroundImage: ImageHelper.avatar(employee.avatarUrl),
-                  child: employee.avatarUrl == null || employee.avatarUrl!.isEmpty
+                  child:
+                      employee.avatarUrl == null || employee.avatarUrl!.isEmpty
                       ? const Icon(Icons.person, size: 24)
                       : null,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   employee.name.split(' ').first,
-                  style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w500),
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: _primaryTextColor,
+                  ),
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                 ),
                 Text(
                   employee.position.split(' ').last,
-                  style: GoogleFonts.poppins(fontSize: 8, color: Colors.grey),
+                  style: GoogleFonts.poppins(
+                    fontSize: 8,
+                    color: _secondaryTextColor,
+                  ),
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                 ),
@@ -622,7 +666,7 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
       style: GoogleFonts.poppins(
         fontSize: 18,
         fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
+        color: _primaryTextColor,
       ),
     );
   }
@@ -631,15 +675,10 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: _borderColor),
+        boxShadow: AdminPalette.shadow(context),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -651,7 +690,10 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                 Chip(
                   label: Text(
                     department.code!,
-                    style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 12,
+                    ),
                   ),
                   backgroundColor: AppColors.primary,
                   padding: EdgeInsets.zero,
@@ -661,7 +703,10 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
                 Chip(
                   label: Text(
                     'Dept #${department.id}',
-                    style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 12,
+                    ),
                   ),
                   backgroundColor: AppColors.primary.withOpacity(0.7),
                   padding: EdgeInsets.zero,
@@ -704,16 +749,15 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
             Icons.attach_money,
             'Budget',
             department.budget != null
-                ? NumberFormat.currency(locale: 'id', symbol: 'Rp ').format(department.budget)
+                ? NumberFormat.currency(
+                    locale: 'id',
+                    symbol: 'Rp ',
+                  ).format(department.budget)
                 : 'No budget',
           ),
           const SizedBox(height: 12),
           if (department.cCode != null)
-            _buildInfoRow(
-              Icons.business,
-              'Company Code',
-              department.cCode!,
-            ),
+            _buildInfoRow(Icons.business, 'Company Code', department.cCode!),
         ],
       ),
     );
@@ -752,10 +796,15 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
   }
 
   Widget _buildStatsGrid(Department department, List<Employee> employees) {
-    final count = employees.isNotEmpty ? employees.length : (department.employees ?? 0);
+    final count = employees.isNotEmpty
+        ? employees.length
+        : (department.employees ?? 0);
 
     // Calculate total salary
-    final totalSalary = employees.fold<double>(0.0, (sum, e) => sum + (e.salary ?? 0));
+    final totalSalary = employees.fold<double>(
+      0.0,
+      (sum, e) => sum + (e.salary ?? 0),
+    );
 
     // Calculate Budget Utilization if budget is available
     String utilization = 'N/A';
@@ -796,7 +845,9 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
             Expanded(
               child: _buildStatCard(
                 'Payroll Cost',
-                totalSalary > 0 ? NumberFormat.compact().format(totalSalary) : 'Rp 0',
+                totalSalary > 0
+                    ? NumberFormat.compact().format(totalSalary)
+                    : 'Rp 0',
                 Icons.money_off,
                 Colors.orange,
               ),
@@ -825,15 +876,10 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: _borderColor),
+        boxShadow: AdminPalette.shadow(context),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -845,14 +891,14 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
             style: GoogleFonts.poppins(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: _primaryTextColor,
             ),
           ),
           Text(
             label,
             style: GoogleFonts.poppins(
               fontSize: 12,
-              color: AppColors.textSecondary,
+              color: _secondaryTextColor,
             ),
           ),
         ],
@@ -873,19 +919,16 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: _borderColor),
+        boxShadow: AdminPalette.shadow(context),
       ),
       child: Column(
         children: sortedEntries.map((e) {
-          final percentage = (e.value / employees.length * 100).toStringAsFixed(1);
+          final percentage = (e.value / employees.length * 100).toStringAsFixed(
+            1,
+          );
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
@@ -942,16 +985,17 @@ class _DepartmentDetailScreenState extends State<DepartmentDetailScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => DepartmentDetailScreen(departmentId: child.id.toString())
+            builder: (_) =>
+                DepartmentDetailScreen(departmentId: child.id.toString()),
           ),
         );
       },
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _surfaceColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[200]!),
+          border: Border.all(color: _borderColor),
         ),
         child: Row(
           children: [

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/claim_model.dart';
 import '../../providers/claim_provider.dart';
+import 'admin_palette.dart';
 
 class ClaimReportsScreen extends StatefulWidget {
   const ClaimReportsScreen({super.key});
@@ -25,20 +26,15 @@ class _ClaimReportsScreenState extends State<ClaimReportsScreen> {
 
   bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
 
-  Color get _screenBackgroundColor =>
-      _isDarkMode ? const Color(0xFF020817) : AppColors.background;
+  Color get _screenBackgroundColor => AdminPalette.page(context);
 
-  Color get _surfaceColor =>
-      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+  Color get _surfaceColor => AdminPalette.surface(context);
 
-  Color get _surfaceBorderColor =>
-      _isDarkMode ? const Color(0xFF253041) : AppColors.border;
+  Color get _surfaceBorderColor => AdminPalette.border(context);
 
-  Color get _primaryTextColor =>
-      _isDarkMode ? const Color(0xFFF8FAFC) : AppColors.textPrimary;
+  Color get _primaryTextColor => AdminPalette.text(context);
 
-  Color get _secondaryTextColor =>
-      _isDarkMode ? const Color(0xFFCBD5E1) : AppColors.textSecondary;
+  Color get _secondaryTextColor => AdminPalette.mutedText(context);
 
   List<BoxShadow> get _cardShadow => _isDarkMode
       ? const []

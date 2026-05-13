@@ -9,6 +9,7 @@ import '../../models/broadcast_models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/broadcast_provider.dart';
 import '../../providers/event_provider.dart';
+import 'admin_palette.dart';
 
 enum _BroadcastRecipientType { all, department, custom }
 
@@ -50,23 +51,17 @@ class _BroadcastScreenState extends State<BroadcastScreen>
 
   bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
 
-  Color get _screenBackgroundColor =>
-      _isDarkMode ? const Color(0xFF020817) : AppColors.background;
+  Color get _screenBackgroundColor => AdminPalette.page(context);
 
-  Color get _surfaceColor =>
-      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+  Color get _surfaceColor => AdminPalette.surface(context);
 
-  Color get _surfaceMutedColor =>
-      _isDarkMode ? const Color(0xFF0F172A) : Colors.grey.shade100;
+  Color get _surfaceMutedColor => AdminPalette.mutedSurface(context);
 
-  Color get _surfaceBorderColor =>
-      _isDarkMode ? const Color(0xFF253041) : AppColors.border;
+  Color get _surfaceBorderColor => AdminPalette.border(context);
 
-  Color get _primaryTextColor =>
-      _isDarkMode ? const Color(0xFFF8FAFC) : AppColors.textPrimary;
+  Color get _primaryTextColor => AdminPalette.text(context);
 
-  Color get _secondaryTextColor =>
-      _isDarkMode ? const Color(0xFFCBD5E1) : AppColors.textSecondary;
+  Color get _secondaryTextColor => AdminPalette.mutedText(context);
 
   Color get _mutedTextColor =>
       _isDarkMode ? const Color(0xFF94A3B8) : AppColors.textMuted;

@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../providers/correction_provider.dart';
 import '../../providers/attendance_provider.dart';
 import '../../data/models/correction_model.dart';
+import 'admin_palette.dart';
 
 class CorrectionManagementScreen extends StatefulWidget {
   const CorrectionManagementScreen({super.key});
@@ -15,19 +16,13 @@ class CorrectionManagementScreen extends StatefulWidget {
 
 class _CorrectionManagementScreenState
     extends State<CorrectionManagementScreen> {
-  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+  Color get _screenBackgroundColor => AdminPalette.page(context);
 
-  Color get _screenBackgroundColor =>
-      _isDarkMode ? const Color(0xFF020817) : AppColors.background;
+  Color get _surfaceColor => AdminPalette.surface(context);
 
-  Color get _surfaceColor =>
-      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+  Color get _primaryTextColor => AdminPalette.text(context);
 
-  Color get _primaryTextColor =>
-      _isDarkMode ? const Color(0xFFF8FAFC) : AppColors.textPrimary;
-
-  Color get _secondaryTextColor =>
-      _isDarkMode ? const Color(0xFFCBD5E1) : AppColors.textSecondary;
+  Color get _secondaryTextColor => AdminPalette.mutedText(context);
 
   @override
   void initState() {

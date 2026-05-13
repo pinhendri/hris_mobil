@@ -30,6 +30,44 @@ interface Religion {
   name: string;
 }
 
+const defaultReligionOptions: Religion[] = [
+  { id: 1, name: "Islam" },
+  { id: 2, name: "Non-Islam" },
+  { id: 3, name: "All" },
+  { id: 4, name: "None" },
+];
+
+const normalizeLookup = (value: unknown) =>
+  value?.toString().trim().toLowerCase() || "";
+
+const resolveReligionId = (data: any, religions: Religion[] = []) => {
+  const directId =
+    data.religion_id ??
+    data.religionId ??
+    data.religion?.id;
+
+  if (directId !== undefined && directId !== null && directId !== "") {
+    return directId.toString();
+  }
+
+  const religionName = normalizeLookup(
+    data.religion_name ??
+      data.religion?.name ??
+      data.religion?.description ??
+      data.religion
+  );
+
+  if (!religionName) {
+    return "";
+  }
+
+  const matchedReligion = religions.find(
+    (religion) => normalizeLookup(religion.name) === religionName
+  );
+
+  return matchedReligion?.id?.toString() || "";
+};
+
 export default function EditEmployeePage() {
   const { uuid } = useParams();
   const navigate = useNavigate();
@@ -38,7 +76,7 @@ export default function EditEmployeePage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [ptkpOptions, setPtkpOptions] = useState<PTKP[]>([]);
-  const [religions, setReligions] = useState<Religion[]>([]);
+  const [religionOptions, setReligionOptions] = useState<Religion[]>(defaultReligionOptions);
   const [loading, setLoading] = useState(false);
   const [formValid, setFormValid] = useState(false);
   const [employeesList, setEmployeesList] = useState<EmployeeMini[]>([]);
@@ -75,7 +113,11 @@ export default function EditEmployeePage() {
           department: data.department?.toString() || "",
           immediate_supervisor: data.immediate_supervisor || "",
           position_id: data.position?.toString() || "",
-          religion_id: data.religion_id?.toString() || "",
+          religion_id: resolveReligionId(data, religionOptions),
+          religion_name:
+            data.religion_name ||
+            data.religion?.name ||
+            (typeof data.religion === "string" ? data.religion : ""),
           shift_id: data.shift_id?.toString() || "",
           ptkp_code: data.ptkp_code || ""
         });
@@ -89,7 +131,7 @@ export default function EditEmployeePage() {
     };
 
     fetchEmployee();
-  }, [uuid, navigate]);
+  }, [uuid, navigate, religionOptions]);
 
   // Ambil master data
  useEffect(() => {
@@ -102,14 +144,12 @@ export default function EditEmployeePage() {
         shiftsRes,
         positionsRes,
         ptkpRes,
-        religionsRes,
         employeesRes
       ] = await Promise.all([
         api_laravel.get("/api/departments"),
         api_laravel.get("/api/employees/master/shifts"),
         api_laravel.get("/api/employees/master/position"),
         api_laravel.get("/api/master-ptkp"),
-        api_laravel.get("/api/religions"),
         api_laravel.get("/api/employees/list"),
       ]);
 
@@ -125,7 +165,7 @@ export default function EditEmployeePage() {
       setShifts(extractData(shiftsRes));
       setPositions(extractData(positionsRes));
       setPtkpOptions(extractData(ptkpRes));
-      setReligions(extractData(religionsRes));
+      setReligionOptions(defaultReligionOptions);
 
       // 🔥 ambil employee list
       const employeesRaw = extractData(employeesRes);
@@ -154,6 +194,20 @@ export default function EditEmployeePage() {
 
   fetchMasterData();
 }, []);
+
+  useEffect(() => {
+    if (!religionOptions.length || !Object.keys(employee).length || employee.religion_id) {
+      return;
+    }
+
+    const religionId = resolveReligionId(employee, religionOptions);
+    if (religionId) {
+      setEmployee((current: any) => ({
+        ...current,
+        religion_id: religionId,
+      }));
+    }
+  }, [employee, religionOptions]);
 
 
   const handleSubmit = async () => {
@@ -268,6 +322,9 @@ export default function EditEmployeePage() {
   }
 
   const validSupervisors = getValidSupervisors();
+  const visibleReligionOptions = religionOptions.length
+    ? religionOptions
+    : defaultReligionOptions;
 
   return (
     <div className="max-w-4xl mx-auto mt-10 p-6 bg-white shadow-md rounded-lg">
@@ -321,22 +378,21 @@ export default function EditEmployeePage() {
         {/* Religion */}
         <div>
           <label className="text-sm text-muted-foreground mb-1 block">Religion</label>
-          <Select
+          <select
             value={employee.religion_id?.toString() || ""}
-            onValueChange={(val) => setEmployee({ ...employee, religion_id: val })}
+            onChange={(event) =>
+              setEmployee({ ...employee, religion_id: event.target.value })
+            }
             disabled={loading}
+            className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-yellow-300 px-3 py-2 text-sm text-gray-900 ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Select religion" />
-            </SelectTrigger>
-            <SelectContent>
-              {religions.map(rel => (
-                <SelectItem key={`rel-${rel.id}`} value={rel.id.toString()}>
-                  {rel.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <option value="">Select religion</option>
+            {visibleReligionOptions.map((rel) => (
+              <option key={`rel-${rel.id}`} value={rel.id.toString()}>
+                {rel.name}
+              </option>
+            ))}
+          </select>
         </div>
 
      {/* Immediate Supervisor */}

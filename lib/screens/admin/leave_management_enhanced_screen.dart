@@ -6,6 +6,7 @@ import '../../core/constants/app_colors.dart';
 import '../../models/leave_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/leave_provider.dart';
+import 'admin_palette.dart';
 
 class LeaveManagementEnhancedScreen extends StatefulWidget {
   const LeaveManagementEnhancedScreen({super.key});
@@ -24,26 +25,20 @@ class _LeaveManagementEnhancedScreenState
 
   bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
 
-  Color get _screenBackgroundColor =>
-      _isDarkMode ? const Color(0xFF050914) : AppColors.background;
+  Color get _screenBackgroundColor => AdminPalette.page(context);
 
-  Color get _surfaceColor =>
-      _isDarkMode ? const Color(0xFF0B1220) : Colors.white;
+  Color get _surfaceColor => AdminPalette.surface(context);
 
-  Color get _surfaceMutedColor =>
-      _isDarkMode ? const Color(0xFF111A2C) : Colors.grey.shade100;
+  Color get _surfaceMutedColor => AdminPalette.mutedSurface(context);
 
-  Color get _surfaceBorderColor =>
-      _isDarkMode ? const Color(0xFF1E293B) : AppColors.border;
+  Color get _surfaceBorderColor => AdminPalette.border(context);
 
   Color get _primarySoftColor =>
       AppColors.primary.withValues(alpha: _isDarkMode ? 0.13 : 0.1);
 
-  Color get _primaryTextColor =>
-      _isDarkMode ? const Color(0xFFE5EDF8) : AppColors.textPrimary;
+  Color get _primaryTextColor => AdminPalette.text(context);
 
-  Color get _secondaryTextColor =>
-      _isDarkMode ? const Color(0xFF94A3B8) : AppColors.textSecondary;
+  Color get _secondaryTextColor => AdminPalette.mutedText(context);
 
   BoxDecoration _surfaceDecoration() => BoxDecoration(
     color: _surfaceColor,

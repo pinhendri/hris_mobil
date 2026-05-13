@@ -193,12 +193,12 @@ class AuthProvider with ChangeNotifier {
         _companyCode = selectedCompany.cCode;
         await SessionStorage.saveCompanyCode(selectedCompany.cCode);
       } else {
-        print(
+        debugPrint(
           '⚠️ Silent company sync failed (${response.statusCode}): ${response.body}',
         );
       }
     } catch (e) {
-      print('❌ Silent company sync error: $e');
+      debugPrint('❌ Silent company sync error: $e');
     }
   }
 
@@ -207,7 +207,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   // ===== LOGIN =====
-  Future<Map<String, dynamic>> login(String email, String password) async {
+  Future<Map<String, dynamic>> login(String identifier, String password) async {
     _isLoading = true;
     notifyListeners();
 
@@ -218,7 +218,7 @@ class AuthProvider with ChangeNotifier {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: jsonEncode({'email': email, 'password': password}),
+        body: jsonEncode({'email': identifier, 'password': password}),
       );
 
       final Map<String, dynamic> data = jsonDecode(response.body);
@@ -266,7 +266,7 @@ class AuthProvider with ChangeNotifier {
         if (companyCode != null && companyCode.isNotEmpty) {
           _companyCode = companyCode; // <-- SIMPAN DI MEMORY
           await SessionStorage.saveCompanyCode(companyCode);
-          print('✅ Company code saved: $companyCode');
+          debugPrint('✅ Company code saved: $companyCode');
         }
 
         if (companyCode != null && companyCode.isNotEmpty) {
@@ -622,9 +622,11 @@ class AuthProvider with ChangeNotifier {
         try {
           final userMap = jsonDecode(userJson);
           _user = User.fromMap(userMap);
-          print('✅ Loaded user from storage: ${_user?.id} - ${_user?.name}');
+          debugPrint(
+            '✅ Loaded user from storage: ${_user?.id} - ${_user?.name}',
+          );
         } catch (e) {
-          print('❌ Error loading user from storage: $e');
+          debugPrint('❌ Error loading user from storage: $e');
         }
       }
 
@@ -637,7 +639,7 @@ class AuthProvider with ChangeNotifier {
             return Company.fromMap(c as Map<String, dynamic>);
           }).toList();
         } catch (e) {
-          print('❌ Error loading companies from storage: $e');
+          debugPrint('❌ Error loading companies from storage: $e');
         }
       }
 
@@ -653,9 +655,9 @@ class AuthProvider with ChangeNotifier {
           _selectedCompany = _companyAssignments.firstWhere(
             (c) => c.cCode == _companyCode,
           );
-          print('✅ Loaded selected company: ${_selectedCompany?.cCode}');
+          debugPrint('✅ Loaded selected company: ${_selectedCompany?.cCode}');
         } catch (e) {
-          print('❌ Selected company not found in assignments');
+          debugPrint('❌ Selected company not found in assignments');
         }
       }
 
@@ -734,15 +736,7 @@ class AuthProvider with ChangeNotifier {
       return true;
     }
 
-    final roleSet = {
-      ..._normalizedAccessSet(roles),
-      _normalizeAccessKey(_user?.role ?? ''),
-    }..removeWhere((value) => value.isEmpty);
-    if (_hasPlatformFullAccessRole(roleSet)) {
-      return true;
-    }
-
-    return permissionSet.contains(normalized);
+    return _accessSetContains(permissionSet, normalized);
   }
 
   bool hasGrantedPermission(String permission) {
@@ -752,7 +746,8 @@ class AuthProvider with ChangeNotifier {
     }
 
     final permissionSet = _normalizedAccessSet(permissions);
-    return _hasFullAccess(permissionSet) || permissionSet.contains(normalized);
+    return _hasFullAccess(permissionSet) ||
+        _accessSetContains(permissionSet, normalized);
   }
 
   bool hasExplicitPermission(String permission) {
@@ -762,7 +757,7 @@ class AuthProvider with ChangeNotifier {
     }
 
     final permissionSet = _normalizedAccessSet(permissions);
-    return permissionSet.contains(normalized);
+    return _accessSetContains(permissionSet, normalized);
   }
 
   bool hasAnyGrantedPermission(Iterable<String> requiredPermissions) {
@@ -883,8 +878,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   bool get canAccessAdminPanel {
-    return hasAdminHrRole &&
-        (hasAnyPermission(_adminPermissions) || hasAnyRole(_adminRoles));
+    return hasAnyPermission(_adminPermissions) || hasAnyRole(_adminRoles);
   }
 
   bool get canAccessPlatformAdmin {
@@ -897,16 +891,11 @@ class AuthProvider with ChangeNotifier {
   }
 
   bool get canAccessEmployeeModule {
-    return hasAnyPermission([
-      'view-employee',
-      'create-employee',
-      'edit-employee',
-      'delete-employee',
-    ]);
+    return hasPermission('view-employee');
   }
 
   bool get canViewAllEmployeeData {
-    return hasAdminHrRole;
+    return hasAdminHrRole || canAccessEmployeeModule;
   }
 
   bool get shouldUseSelfEmployeeScope {
@@ -918,39 +907,24 @@ class AuthProvider with ChangeNotifier {
   }
 
   bool get canAccessEmployeeMasterModule {
-    return hasAnyPermission([
-      'create-employee',
-      'edit-employee',
-      'delete-employee',
-    ]);
+    return hasPermission('view-employee');
   }
 
   bool get canAccessDepartmentModule {
-    return hasAnyPermission([
-      'view-department',
-      'create-department',
-      'edit-department',
-      'delete-department',
-    ]);
+    return hasPermission('view-department');
   }
 
   bool get canAccessAttendanceModule {
-    return hasAnyPermission([
-      'view-attendance',
-      'create-attendance',
-      'edit-attendance',
-    ]);
+    return hasPermission('view-attendance');
   }
 
   bool get canAccessLeaveModule {
-    return hasAnyPermission(['view-leave', 'create-leave', 'edit-leave']);
+    return hasPermission('view-leave');
   }
 
   bool get canAccessPayrollModule {
     return hasAnyPermission([
       'view-payroll',
-      'create-payroll',
-      'edit-payroll',
       'edit-payroll-settings',
       'view-payroll-settings',
       'view-payslip',
@@ -959,12 +933,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   bool get canAccessClaimsModule {
-    return hasAnyPermission([
-      'view-claims',
-      'create-claims',
-      'edit-claims',
-      'approve-claims',
-    ]);
+    return hasPermission('view-claims');
   }
 
   bool get canAccessPerformanceModule {
@@ -989,45 +958,24 @@ class AuthProvider with ChangeNotifier {
   }
 
   bool get canAccessDocumentsModule {
-    return hasAnyPermission([
-      'view-documents',
-      'create-documents',
-      'edit-documents',
-      'delete-documents',
-    ]);
+    return hasPermission('view-documents');
   }
 
   bool get canAccessInventoryModule {
     return hasAnyPermission([
-      'view-inventory',
       'view-inventory-master',
       'view-inventory-request',
       'view-inventory-receipt',
-      'view-inventory-issued',
       'view-inventory-report',
-      'approve-requests-stock',
-      'manage-inventory',
-      'issue-stock',
     ]);
   }
 
   bool get canAccessSettingsModule {
     return hasAnyPermission([
       'view-settings',
-      'create-settings',
-      'edit-settings',
       'view-default-location',
-      'create-default-location',
-      'edit-default-location',
-      'delete-default-location',
       'view-shift',
-      'create-shift',
-      'edit-shift',
-      'delete-shift',
       'view-shift-day',
-      'create-shift-day',
-      'edit-shift-day',
-      'delete-shift-day',
     ]);
   }
 
@@ -1061,13 +1009,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   bool get canAccessBroadcastModule {
-    return hasAnyPermission([
-      'view-broadcast',
-      'create-broadcast',
-      'edit-broadcast',
-      'delete-broadcast',
-      'send-broadcast',
-    ]);
+    return hasPermission('view-broadcast');
   }
 
   bool get canAccessCorrectionsModule {
@@ -1076,6 +1018,7 @@ class AuthProvider with ChangeNotifier {
       'view-correction-allowance',
       'view-correction-payroll',
       'view-correction-leave-balance',
+      'view-settings',
     ]);
   }
 
@@ -1265,10 +1208,8 @@ class AuthProvider with ChangeNotifier {
         values.contains('admin');
   }
 
-  bool _hasPlatformFullAccessRole(Set<String> values) {
-    return values.contains('super-admin') ||
-        values.contains('superadmin') ||
-        values.contains('platform-admin');
+  bool _accessSetContains(Set<String> values, String normalizedKey) {
+    return values.contains(normalizedKey);
   }
 
   String _normalizeAccessKey(String value) {

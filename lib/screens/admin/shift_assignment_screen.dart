@@ -9,6 +9,7 @@ import '../../providers/shift_provider.dart';
 import '../../providers/employee_provider.dart';
 import '../../providers/department_provider.dart';
 import '../../models/shift_assignment_model.dart';
+import 'admin_palette.dart';
 
 class ShiftAssignmentScreen extends StatefulWidget {
   const ShiftAssignmentScreen({super.key});
@@ -20,22 +21,17 @@ class ShiftAssignmentScreen extends StatefulWidget {
 class _ShiftAssignmentScreenState extends State<ShiftAssignmentScreen> {
   bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
 
-  Color get _pageColor =>
-      _isDarkMode ? const Color(0xFF020817) : const Color(0xFFF8FAFC);
+  Color get _pageColor => AdminPalette.page(context);
 
-  Color get _surfaceColor =>
-      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+  Color get _surfaceColor => AdminPalette.surface(context);
 
-  Color get _fieldColor => _isDarkMode ? const Color(0xFF0F172A) : Colors.white;
+  Color get _fieldColor => AdminPalette.mutedSurface(context);
 
-  Color get _borderColor =>
-      _isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+  Color get _borderColor => AdminPalette.border(context);
 
-  Color get _primaryTextColor =>
-      _isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+  Color get _primaryTextColor => AdminPalette.text(context);
 
-  Color get _secondaryTextColor =>
-      _isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+  Color get _secondaryTextColor => AdminPalette.mutedText(context);
 
   InputDecoration _inputDecoration(String label) {
     return InputDecoration(

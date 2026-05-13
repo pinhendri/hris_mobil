@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../models/department_model.dart';
 import '../../providers/department_provider.dart';
 import '../../providers/employee_provider.dart';
+import 'admin_palette.dart';
 
 class AddEditDepartmentScreen extends StatefulWidget {
   final Department? department;
@@ -34,25 +35,20 @@ class _AddEditDepartmentScreenState extends State<AddEditDepartmentScreen> {
 
   bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
 
-  Color get _pageColor =>
-      _isDarkMode ? const Color(0xFF020817) : const Color(0xFFF8FAFC);
+  Color get _pageColor => AdminPalette.page(context);
 
-  Color get _surfaceColor =>
-      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+  Color get _surfaceColor => AdminPalette.surface(context);
 
-  Color get _fieldColor => _isDarkMode ? const Color(0xFF0F172A) : Colors.white;
+  Color get _fieldColor => AdminPalette.mutedSurface(context);
 
   Color get _readOnlyFieldColor =>
-      _isDarkMode ? const Color(0xFF1F2937) : const Color(0xFFF1F5F9);
+      _isDarkMode ? const Color(0xFF1F2937) : const Color(0xFFF8F6F2);
 
-  Color get _borderColor =>
-      _isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+  Color get _borderColor => AdminPalette.border(context);
 
-  Color get _primaryTextColor =>
-      _isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+  Color get _primaryTextColor => AdminPalette.text(context);
 
-  Color get _secondaryTextColor =>
-      _isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+  Color get _secondaryTextColor => AdminPalette.mutedText(context);
 
   @override
   void initState() {

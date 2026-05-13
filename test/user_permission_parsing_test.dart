@@ -66,10 +66,7 @@ void main() {
       'name': 'RBA',
       'email': 'rba@kkk.com',
       'uuid': 'user-account-uuid',
-      'employee': {
-        'id': 17,
-        'name': 'rba@kkk.com',
-      },
+      'employee': {'id': 17, 'name': 'rba@kkk.com'},
       'permissions': <String>[],
     });
 
@@ -101,7 +98,7 @@ void main() {
   );
 
   test(
-    'does not treat a regular user with admin permissions as admin hr',
+    'lets assigned admin permissions show admin menus without requiring an HR role',
     () async {
       final authProvider = AuthProvider(bootstrapOfflineProfileSync: false);
       addTearDown(authProvider.dispose);
@@ -122,7 +119,31 @@ void main() {
 
       expect(authProvider.hasPermission('view-leave'), isTrue);
       expect(authProvider.hasAdminHrRole, isFalse);
-      expect(authProvider.canAccessAdminPanel, isFalse);
+      expect(authProvider.canAccessAdminPanel, isTrue);
+    },
+  );
+
+  test(
+    'lets assigned employee permission access full employee module without an HR role',
+    () async {
+      final authProvider = AuthProvider(bootstrapOfflineProfileSync: false);
+      addTearDown(authProvider.dispose);
+
+      await authProvider.setUser({
+        'id': 13,
+        'name': 'Employee Viewer',
+        'email': 'employee.viewer@example.com',
+        'uuid': 'employee-viewer-user-uuid',
+        'role': 'user',
+        'permissions': [
+          {'name': 'view-employee'},
+        ],
+      });
+
+      expect(authProvider.hasAdminHrRole, isFalse);
+      expect(authProvider.canAccessEmployeeModule, isTrue);
+      expect(authProvider.canViewAllEmployeeData, isTrue);
+      expect(authProvider.shouldUseSelfEmployeeScope, isFalse);
     },
   );
 
@@ -164,21 +185,172 @@ void main() {
     expect(authProvider.hasPermission('view-tasks'), isFalse);
   });
 
-  test('treats platform super admin role as full access fallback', () async {
+  test('does not show broadcast from recruitment permission alone', () async {
     final authProvider = AuthProvider(bootstrapOfflineProfileSync: false);
     addTearDown(authProvider.dispose);
 
     await authProvider.setUser({
-      'id': 12,
-      'name': 'Super Admin',
-      'email': 'super.admin@example.com',
-      'uuid': 'super-admin-user-uuid',
-      'role': 'super-admin',
-      'permissions': <String>[],
+      'id': 16,
+      'name': 'Recruitment Only User',
+      'email': 'hendri.ariiii@gmail.com',
+      'uuid': 'recruitment-only-user-uuid',
+      'role': 'user',
+      'permissions': [
+        {'name': 'view-recruitment'},
+      ],
     });
 
-    expect(authProvider.hasPermission('view-employee'), isTrue);
-    expect(authProvider.hasPermission('view-settings'), isTrue);
-    expect(authProvider.hasPermission('assign-roles'), isTrue);
+    expect(authProvider.canAccessRecruitmentModule, isTrue);
+    expect(authProvider.canAccessBroadcastModule, isFalse);
   });
+
+  test(
+    'matches frontend by requiring view-broadcast for broadcast menu',
+    () async {
+      final authProvider = AuthProvider(bootstrapOfflineProfileSync: false);
+      addTearDown(authProvider.dispose);
+
+      await authProvider.setUser({
+        'id': 17,
+        'name': 'Broadcast Sender Only',
+        'email': 'broadcast.sender@example.com',
+        'uuid': 'broadcast-sender-only-user-uuid',
+        'role': 'user',
+        'permissions': [
+          {'name': 'send-broadcast'},
+          {'name': 'create-broadcast'},
+          {'name': 'edit-broadcast'},
+          {'name': 'delete-broadcast'},
+        ],
+      });
+
+      expect(authProvider.hasPermission('send-broadcast'), isTrue);
+      expect(authProvider.canAccessBroadcastModule, isFalse);
+    },
+  );
+
+  test('matches frontend by requiring view-claims for claims menu', () async {
+    final authProvider = AuthProvider(bootstrapOfflineProfileSync: false);
+    addTearDown(authProvider.dispose);
+
+    await authProvider.setUser({
+      'id': 19,
+      'name': 'Claim Action Only',
+      'email': 'claim.action@example.com',
+      'uuid': 'claim-action-only-user-uuid',
+      'role': 'user',
+      'permissions': [
+        {'name': 'create-claims'},
+        {'name': 'edit-claims'},
+        {'name': 'approve-claims'},
+        {'name': 'view-payroll'},
+        {'name': 'view-reports'},
+      ],
+    });
+
+    expect(authProvider.hasPermission('view-claims'), isFalse);
+    expect(authProvider.canAccessClaimsModule, isFalse);
+    expect(authProvider.canAccessPayrollModule, isTrue);
+    expect(authProvider.canAccessReportsModule, isTrue);
+  });
+
+  test(
+    'keeps settings permission fallback aligned with frontend sidebar',
+    () async {
+      final authProvider = AuthProvider(bootstrapOfflineProfileSync: false);
+      addTearDown(authProvider.dispose);
+
+      await authProvider.setUser({
+        'id': 14,
+        'name': 'Frontend Menu User',
+        'email': 'frontend.menu@example.com',
+        'uuid': 'frontend-menu-user-uuid',
+        'role': 'user',
+        'permissions': [
+          {'name': 'view-settings'},
+        ],
+      });
+
+      expect(authProvider.canAccessCorrectionsModule, isTrue);
+    },
+  );
+
+  test('matches frontend permission keys without legacy aliases', () async {
+    final authProvider = AuthProvider(bootstrapOfflineProfileSync: false);
+    addTearDown(authProvider.dispose);
+
+    await authProvider.setUser({
+      'id': 15,
+      'name': 'Frontend Permission User',
+      'email': 'frontend.permission@example.com',
+      'uuid': 'frontend-permission-user-uuid',
+      'role': 'user',
+      'permissions': [
+        {'name': 'view_ic'},
+        {'name': 'view_ic_master'},
+        {'name': 'view_inventory_receipt'},
+        {'name': 'view_user_management'},
+        {'name': 'view_user_roles'},
+        {'name': 'manage_general_settings'},
+        {'name': 'manage_company_profile'},
+      ],
+    });
+
+    expect(authProvider.hasPermission('view-inventory'), isFalse);
+    expect(authProvider.hasPermission('view-inventory-master'), isFalse);
+    expect(authProvider.hasPermission('view-inventory-receipt'), isTrue);
+    expect(authProvider.canAccessInventoryModule, isTrue);
+    expect(authProvider.hasPermission('view-users'), isFalse);
+    expect(authProvider.hasPermission('view-roles'), isFalse);
+    expect(authProvider.canAccessSettingsModule, isFalse);
+    expect(authProvider.canAccessAdminPanel, isFalse);
+  });
+
+  test(
+    'does not show inventory from parent or legacy inventory permissions alone',
+    () async {
+      final authProvider = AuthProvider(bootstrapOfflineProfileSync: false);
+      addTearDown(authProvider.dispose);
+
+      await authProvider.setUser({
+        'id': 18,
+        'name': 'Inventory Parent Only',
+        'email': 'inventory.parent@example.com',
+        'uuid': 'inventory-parent-only-user-uuid',
+        'role': 'user',
+        'permissions': [
+          {'name': 'view-inventory'},
+          {'name': 'view-ic'},
+          {'name': 'manage-inventory'},
+          {'name': 'issue-stock'},
+        ],
+      });
+
+      expect(authProvider.hasPermission('view-inventory'), isTrue);
+      expect(authProvider.hasPermission('view-inventory-master'), isFalse);
+      expect(authProvider.canAccessInventoryModule, isFalse);
+    },
+  );
+
+  test(
+    'does not use platform admin role as menu permission fallback',
+    () async {
+      final authProvider = AuthProvider(bootstrapOfflineProfileSync: false);
+      addTearDown(authProvider.dispose);
+
+      await authProvider.setUser({
+        'id': 12,
+        'name': 'Super Admin',
+        'email': 'super.admin@example.com',
+        'uuid': 'super-admin-user-uuid',
+        'role': 'super-admin',
+        'permissions': <String>[],
+      });
+
+      expect(authProvider.hasPermission('view-employee'), isFalse);
+      expect(authProvider.hasPermission('view-settings'), isFalse);
+      expect(authProvider.hasPermission('assign-roles'), isFalse);
+      expect(authProvider.canAccessPlatformAdmin, isTrue);
+    },
+  );
 }

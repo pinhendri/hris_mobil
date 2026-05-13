@@ -61,6 +61,8 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
     return context.tr(key).replaceAll(token, value.toString());
   }
 
+  bool _useRecruitmentPageForm() => true;
+
   String _statusLabel(String status) {
     switch (status.toLowerCase()) {
       case 'applied':
@@ -93,12 +95,20 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
     }
   }
 
+  String _jobUrgencyBadgeLabel(String urgency) {
+    if (urgency.toLowerCase() == 'high') {
+      return context.tr('recruitment_high_priority');
+    }
+    return _urgencyLabel(urgency);
+  }
+
   ShapeBorder _cardShape(BuildContext context) => RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(12),
     side: BorderSide(color: _borderColor(context)),
   );
 
   int _pipelineColumnCount(double width) {
+    if (width >= 720) return 7;
     if (width >= 520) return 5;
     if (width >= 300) return 3;
     return 2;
@@ -215,7 +225,119 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
     }
   }
 
+  Future<void> _showJobRequirementDialog(
+    RecruitmentProvider provider,
+    OpenPosition position,
+  ) async {
+    if (!_hoveredJobRequirement.containsKey(position.id)) {
+      await _fetchJobRequirement(position.id);
+    }
+
+    if (!mounted) return;
+
+    final cachedRequirement = _hoveredJobRequirement[position.id]?.trim();
+    final requirement = cachedRequirement?.isNotEmpty == true
+        ? cachedRequirement!
+        : position.requirement.trim().isNotEmpty
+        ? position.requirement.trim()
+        : '-';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return _dialogTheme(
+          context,
+          AlertDialog(
+            backgroundColor: _surfaceColor(context),
+            title: Text(
+              context.tr('recruitment_job_requirements'),
+              style: _titleStyle(context, size: 20),
+            ),
+            content: SingleChildScrollView(
+              child: Text(
+                requirement,
+                style: TextStyle(
+                  color: _primaryTextColor(context),
+                  height: 1.45,
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(context.tr('recruitment_close')),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmCloseJob(
+    RecruitmentProvider provider,
+    OpenPosition position,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return _dialogTheme(
+          context,
+          AlertDialog(
+            backgroundColor: _surfaceColor(context),
+            title: Text(
+              context.tr('recruitment_close_job'),
+              style: _titleStyle(context, size: 20),
+            ),
+            content: Text(
+              position.title,
+              style: TextStyle(color: _primaryTextColor(context)),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(context.tr('recruitment_cancel')),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(context.tr('recruitment_close')),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    final success = await provider.closeJob(position.id);
+    if (success && mounted) {
+      await _loadData();
+    }
+  }
+
   void _showAddJobDialog(BuildContext context, RecruitmentProvider provider) {
+    if (_useRecruitmentPageForm()) {
+      Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChangeNotifierProvider.value(
+            value: provider,
+            child: const _RecruitmentJobFormScreen(),
+          ),
+        ),
+      ).then((saved) async {
+        if (saved == true && mounted) {
+          await _loadData();
+        }
+      });
+      return;
+    }
+
     String? selectedDepartment;
     String? selectedPositionId;
     String? selectedPositionTitle;
@@ -395,6 +517,23 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
     BuildContext context,
     RecruitmentProvider provider,
   ) {
+    if (_useRecruitmentPageForm()) {
+      Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChangeNotifierProvider.value(
+            value: provider,
+            child: const _RecruitmentApplicationFormScreen(),
+          ),
+        ),
+      ).then((saved) async {
+        if (saved == true && mounted) {
+          await _loadData();
+        }
+      });
+      return;
+    }
+
     final nameController = TextEditingController();
     final emailController = TextEditingController();
     final phoneController = TextEditingController();
@@ -403,8 +542,6 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
 
     String? selectedFileName;
     File? selectedFile;
-    bool isUploading = false;
-
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -528,95 +665,83 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
                                       : _secondaryTextColor(context),
                                 ),
                               ),
-                              trailing: isUploading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (selectedFileName != null)
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.clear,
+                                        color: Colors.red,
                                       ),
-                                    )
-                                  : Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (selectedFileName != null)
-                                          IconButton(
-                                            icon: const Icon(
-                                              Icons.clear,
-                                              color: Colors.red,
-                                            ),
-                                            onPressed: () {
-                                              setState(() {
-                                                selectedFileName = null;
-                                                selectedFile = null;
-                                              });
-                                            },
-                                          ),
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.upload_file,
-                                            color: Colors.blue,
-                                          ),
-                                          onPressed: () async {
-                                            try {
-                                              FilePickerResult? result =
-                                                  await FilePicker.platform
-                                                      .pickFiles(
-                                                        type: FileType.custom,
-                                                        allowedExtensions: [
-                                                          'pdf',
-                                                          'doc',
-                                                          'docx',
-                                                        ],
-                                                        allowMultiple: false,
-                                                      );
-
-                                              if (result != null) {
-                                                setState(() {
-                                                  selectedFileName =
-                                                      result.files.single.name;
-                                                  selectedFile = File(
-                                                    result.files.single.path!,
-                                                  );
-                                                });
-
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      context.tr(
-                                                        'recruitment_file_selected_success',
-                                                      ),
-                                                    ),
-                                                    backgroundColor:
-                                                        Colors.green,
-                                                    duration: Duration(
-                                                      seconds: 1,
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-                                            } catch (e) {
-                                              ScaffoldMessenger.of(
-                                                context,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    _replaceToken(
-                                                      'recruitment_file_select_error',
-                                                      '{error}',
-                                                      e,
-                                                    ),
-                                                  ),
-                                                  backgroundColor: Colors.red,
-                                                ),
-                                              );
-                                            }
-                                          },
-                                        ),
-                                      ],
+                                      onPressed: () {
+                                        setState(() {
+                                          selectedFileName = null;
+                                          selectedFile = null;
+                                        });
+                                      },
                                     ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.upload_file,
+                                      color: Colors.blue,
+                                    ),
+                                    onPressed: () async {
+                                      try {
+                                        FilePickerResult? result =
+                                            await FilePicker.platform.pickFiles(
+                                              type: FileType.custom,
+                                              allowedExtensions: [
+                                                'pdf',
+                                                'doc',
+                                                'docx',
+                                              ],
+                                              allowMultiple: false,
+                                            );
+
+                                        if (result != null) {
+                                          setState(() {
+                                            selectedFileName =
+                                                result.files.single.name;
+                                            selectedFile = File(
+                                              result.files.single.path!,
+                                            );
+                                          });
+
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                context.tr(
+                                                  'recruitment_file_selected_success',
+                                                ),
+                                              ),
+                                              backgroundColor: Colors.green,
+                                              duration: Duration(seconds: 1),
+                                            ),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              _replaceToken(
+                                                'recruitment_file_select_error',
+                                                '{error}',
+                                                e,
+                                              ),
+                                            ),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
                             Divider(height: 0, color: _borderColor(context)),
                             Padding(
@@ -641,123 +766,116 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
                     child: Text(context.tr('recruitment_cancel')),
                   ),
                   ElevatedButton(
-                    onPressed: isUploading
-                        ? null
-                        : () async {
-                            if (nameController.text.isEmpty ||
-                                emailController.text.isEmpty ||
-                                phoneController.text.isEmpty ||
-                                selectedDepartmentId == null ||
-                                selectedPositionId == null ||
-                                selectedFile == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    context.tr(
-                                      'recruitment_fill_application_fields',
-                                    ),
-                                  ),
-                                  backgroundColor: Colors.red,
+                    onPressed: () async {
+                      if (nameController.text.isEmpty ||
+                          emailController.text.isEmpty ||
+                          phoneController.text.isEmpty ||
+                          selectedDepartmentId == null ||
+                          selectedPositionId == null ||
+                          selectedFile == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              context.tr('recruitment_fill_application_fields'),
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      // TUTUP DIALOG APLIKASI
+                      Navigator.pop(dialogContext);
+
+                      // TAMPILKAN LOADING DIALOG
+                      BuildContext? loadingContext;
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctx) {
+                          loadingContext = ctx;
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        },
+                      );
+
+                      try {
+                        final applicationData = {
+                          'name': nameController.text,
+                          'email': emailController.text,
+                          'phone': phoneController.text,
+                          'department_id': selectedDepartmentId,
+                          'position_id': selectedPositionId,
+                        };
+
+                        final success = await provider.addApplicationWithCV(
+                          applicationData,
+                          selectedFile!,
+                        );
+
+                        // TUTUP LOADING DIALOG
+                        if (loadingContext != null && mounted) {
+                          if (Navigator.canPop(loadingContext!)) {
+                            Navigator.pop(loadingContext!);
+                          }
+                        }
+
+                        if (success && mounted) {
+                          await _loadData();
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                context.tr(
+                                  'recruitment_application_submitted_success',
                                 ),
-                              );
-                              return;
-                            }
+                              ),
+                              backgroundColor: Colors.green,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        } else if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                _replaceToken(
+                                  'recruitment_failed',
+                                  '{error}',
+                                  provider.error ??
+                                      context.tr('recruitment_unknown_error'),
+                                ),
+                              ),
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        // TUTUP LOADING DIALOG KALAU ERROR
+                        if (loadingContext != null && mounted) {
+                          if (Navigator.canPop(loadingContext!)) {
+                            Navigator.pop(loadingContext!);
+                          }
+                        }
 
-                            // TUTUP DIALOG APLIKASI
-                            Navigator.pop(dialogContext);
-
-                            // TAMPILKAN LOADING DIALOG
-                            BuildContext? loadingContext;
-                            showDialog(
-                              context: context,
-                              barrierDismissible: false,
-                              builder: (ctx) {
-                                loadingContext = ctx;
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              },
-                            );
-
-                            try {
-                              final applicationData = {
-                                'name': nameController.text,
-                                'email': emailController.text,
-                                'phone': phoneController.text,
-                                'department_id': selectedDepartmentId,
-                                'position_id': selectedPositionId,
-                              };
-
-                              final success = await provider
-                                  .addApplicationWithCV(
-                                    applicationData,
-                                    selectedFile!,
-                                  );
-
-                              // TUTUP LOADING DIALOG
-                              if (loadingContext != null && mounted) {
-                                if (Navigator.canPop(loadingContext!)) {
-                                  Navigator.pop(loadingContext!);
-                                }
-                              }
-
-                              if (success && mounted) {
-                                await _loadData();
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      context.tr(
-                                        'recruitment_application_submitted_success',
-                                      ),
-                                    ),
-                                    backgroundColor: Colors.green,
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              } else if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      _replaceToken(
-                                        'recruitment_failed',
-                                        '{error}',
-                                        provider.error ??
-                                            context.tr(
-                                              'recruitment_unknown_error',
-                                            ),
-                                      ),
-                                    ),
-                                    backgroundColor: Colors.red,
-                                    duration: Duration(seconds: 3),
-                                  ),
-                                );
-                              }
-                            } catch (e) {
-                              // TUTUP LOADING DIALOG KALAU ERROR
-                              if (loadingContext != null && mounted) {
-                                if (Navigator.canPop(loadingContext!)) {
-                                  Navigator.pop(loadingContext!);
-                                }
-                              }
-
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      _replaceToken(
-                                        'recruitment_error',
-                                        '{error}',
-                                        e,
-                                      ),
-                                    ),
-                                    backgroundColor: Colors.red,
-                                    duration: Duration(seconds: 3),
-                                  ),
-                                );
-                              }
-                            }
-                          },
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                _replaceToken(
+                                  'recruitment_error',
+                                  '{error}',
+                                  e,
+                                ),
+                              ),
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                        }
+                      }
+                    },
                     child: Text(context.tr('recruitment_submit')),
                   ),
                 ],
@@ -983,19 +1101,20 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
         ),
         backgroundColor: isDark ? const Color(0xFF1B1F24) : Colors.white,
         foregroundColor: isDark ? Colors.white : const Color(0xFF111827),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () => isApplicationsMode
+                ? _showAddApplicationDialog(context, provider)
+                : _showAddJobDialog(context, provider),
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : isApplicationsMode
           ? _buildApplicationsTab(provider)
           : _buildRecruitmentPage(provider),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add),
-        onPressed: () => isApplicationsMode
-            ? _showAddApplicationDialog(context, provider)
-            : _showAddJobDialog(context, provider),
-      ),
     );
   }
 
@@ -1031,37 +1150,13 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
                         ],
                       );
 
-                      final actionButton = ElevatedButton.icon(
-                        onPressed: () => _showAddJobDialog(context, provider),
-                        icon: const Icon(Icons.add),
-                        label: Text(context.tr('recruitment_post_job')),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                        ),
-                      );
-
                       if (constraints.maxWidth < 420) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            titleBlock,
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: actionButton,
-                            ),
-                          ],
-                        );
+                        return titleBlock;
                       }
 
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(child: titleBlock),
-                          const SizedBox(width: 12),
-                          actionButton,
-                        ],
+                        children: [Expanded(child: titleBlock)],
                       );
                     },
                   ),
@@ -1071,232 +1166,424 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
           ),
           const SizedBox(height: 16),
 
-          Card(
-            elevation: 2,
-            color: _surfaceColor(context),
-            shape: _cardShape(context),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionHeader(
-                    Icons.timeline,
-                    context.tr('recruitment_candidate_pipeline'),
-                  ),
-                  const SizedBox(height: 16),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      return GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: _pipelineColumnCount(
-                            constraints.maxWidth,
-                          ),
-                          mainAxisExtent: 88,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
-                        ),
-                        itemCount: provider.pipeline.length,
-                        itemBuilder: (context, index) {
-                          final stage = provider.pipeline[index];
-                          return Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(
-                                alpha: _isDark(context) ? 0.16 : 0.06,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: _borderColor(context)),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  stage.stage,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: _primaryTextColor(context),
-                                  ),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${stage.count}',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
+          _buildOpenPositionsSection(provider),
+          const SizedBox(height: 16),
 
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: _mutedSurfaceColor(context),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: _borderColor(context)),
-                    ),
-                    child: Column(
-                      children: [
-                        _metricRow(
-                          context.tr('recruitment_conversion_rate'),
-                          '${provider.metrics.conversionRate}%',
-                        ),
-                        const SizedBox(height: 4),
-                        LinearProgressIndicator(
-                          value: provider.metrics.conversionRate / 100,
-                          backgroundColor: _isDark(context)
-                              ? const Color(0xFF334155)
-                              : Colors.grey[200],
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.green,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _metricRow(
-                          context.tr('recruitment_avg_time_to_hire'),
-                          '${provider.metrics.averageTimeToHire} ${context.tr('recruitment_days')}',
-                        ),
-                        const SizedBox(height: 4),
-                        LinearProgressIndicator(
-                          value: (provider.metrics.averageTimeToHire / 30)
-                              .clamp(0, 1),
-                          backgroundColor: _isDark(context)
-                              ? const Color(0xFF334155)
-                              : Colors.grey[200],
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.blue,
-                          ),
-                        ),
-                      ],
-                    ),
+          _buildPipelineSection(provider),
+          const SizedBox(height: 16),
+
+          _buildRecentApplicationsSection(provider),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOpenPositionsSection(RecruitmentProvider provider) {
+    return Card(
+      elevation: 2,
+      color: _surfaceColor(context),
+      shape: _cardShape(context),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionHeader(
+              Icons.work,
+              context.tr('recruitment_open_positions'),
+            ),
+            const SizedBox(height: 16),
+            if (provider.openPositions.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    context.tr('recruitment_no_open_positions'),
+                    style: _bodyStyle(context),
                   ),
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: provider.openPositions.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  return _buildOpenPositionCard(
+                    provider,
+                    provider.openPositions[index],
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOpenPositionCard(
+    RecruitmentProvider provider,
+    OpenPosition position,
+  ) {
+    final urgencyColor = provider.getUrgencyColor(position.urgency);
+    final dateText = position.datePosted.trim().isEmpty
+        ? '-'
+        : position.datePosted.trim();
+    final isClosed = position.status.toLowerCase() == 'closed';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _mutedSurfaceColor(context),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _borderColor(context)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  position.title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: _primaryTextColor(context),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  provider.getDepartmentName(position.department),
+                  style: _bodyStyle(context, size: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(
+                    label: Text(
+                      _jobUrgencyBadgeLabel(position.urgency),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: urgencyColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    backgroundColor: urgencyColor.withValues(alpha: 0.12),
+                    side: BorderSide(
+                      color: urgencyColor.withValues(alpha: 0.3),
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                dateText,
+                style: _bodyStyle(context, size: 11),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: context.tr('recruitment_view_job_requirements'),
+                    icon: Icon(
+                      Icons.visibility_outlined,
+                      color: AppColors.primary,
+                    ),
+                    onPressed: () =>
+                        _showJobRequirementDialog(provider, position),
+                  ),
+                  if (!isClosed)
+                    IconButton(
+                      tooltip: context.tr('recruitment_close_job'),
+                      icon: const Icon(
+                        Icons.cancel_outlined,
+                        color: Colors.red,
+                      ),
+                      onPressed: () => _confirmCloseJob(provider, position),
+                    ),
                 ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPipelineSection(RecruitmentProvider provider) {
+    return Card(
+      elevation: 2,
+      color: _surfaceColor(context),
+      shape: _cardShape(context),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionHeader(
+              Icons.timeline,
+              context.tr('recruitment_candidate_pipeline'),
+            ),
+            const SizedBox(height: 16),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = _pipelineColumnCount(constraints.maxWidth);
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
+                    mainAxisExtent: columns >= 5 ? 184 : 168,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: provider.pipeline.length,
+                  itemBuilder: (context, index) {
+                    return _buildPipelineStageCard(provider.pipeline[index]);
+                  },
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            _buildPipelineHealthPanel(provider),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPipelineStageCard(PipelineStage stage) {
+    final candidates = stage.candidates.take(2).toList(growable: false);
+    final hiddenCount = stage.candidates.length - candidates.length;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(
+          alpha: _isDark(context) ? 0.16 : 0.06,
+        ),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _borderColor(context)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            stage.stage,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: _primaryTextColor(context),
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${stage.count}',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: candidates.isEmpty
+                ? Center(
+                    child: Text(
+                      _replaceToken(
+                        'recruitment_candidate_count',
+                        '{count}',
+                        stage.count,
+                      ),
+                      textAlign: TextAlign.center,
+                      style: _bodyStyle(context, size: 11),
+                    ),
+                  )
+                : Column(
+                    children: [
+                      for (final candidate in candidates)
+                        _buildPipelineCandidateTile(candidate),
+                      if (hiddenCount > 0)
+                        Text(
+                          _replaceToken(
+                            'recruitment_candidate_count',
+                            '{count}',
+                            '+$hiddenCount',
+                          ),
+                          style: _bodyStyle(context, size: 10),
+                        ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPipelineCandidateTile(Candidate candidate) {
+    final initials = candidate.name
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .take(2)
+        .map((part) => part[0].toUpperCase())
+        .join();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: _isDark(context)
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.white.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 12,
+            backgroundColor: AppColors.primary.withValues(alpha: 0.16),
+            child: Text(
+              initials.isEmpty ? '?' : initials,
+              style: const TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
               ),
             ),
           ),
-          const SizedBox(height: 16),
-
-          Card(
-            elevation: 2,
-            color: _surfaceColor(context),
-            shape: _cardShape(context),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionHeader(
-                    Icons.work,
-                    context.tr('recruitment_open_positions'),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  candidate.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _primaryTextColor(context),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
                   ),
-                  const SizedBox(height: 16),
-                  if (provider.openPositions.isEmpty)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          context.tr('recruitment_no_open_positions'),
-                          style: _bodyStyle(context),
-                        ),
-                      ),
-                    )
-                  else
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: provider.openPositions.length,
-                      itemBuilder: (context, index) {
-                        final position = provider.openPositions[index];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          color: _mutedSurfaceColor(context),
-                          shape: _cardShape(context),
-                          child: ListTile(
-                            title: Text(
-                              position.title,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: _primaryTextColor(context),
-                              ),
-                            ),
-                            subtitle: Text(
-                              provider.getDepartmentName(position.department),
-                              style: _bodyStyle(context, size: 12),
-                            ),
-                            trailing: Chip(
-                              label: Text(
-                                _urgencyLabel(position.urgency),
-                                style: const TextStyle(fontSize: 10),
-                              ),
-                              backgroundColor: provider
-                                  .getUrgencyColor(position.urgency)
-                                  .withOpacity(0.2),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          Card(
-            elevation: 2,
-            color: _surfaceColor(context),
-            shape: _cardShape(context),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionHeader(
-                    Icons.assignment_ind_outlined,
-                    context.tr('recruitment_recent_applications'),
-                  ),
-                  const SizedBox(height: 16),
-                  if (provider.applications.isEmpty)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          context.tr('recruitment_no_applications'),
-                          style: _bodyStyle(context),
-                        ),
-                      ),
-                    )
-                  else
-                    Column(
-                      children: provider.applications
-                          .take(5)
-                          .map(
-                            (application) => _buildRecentApplicationItem(
-                              provider,
-                              application,
-                            ),
-                          )
-                          .toList(),
-                    ),
-                ],
-              ),
+                ),
+                Text(
+                  candidate.position ?? '-',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _bodyStyle(context, size: 10),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPipelineHealthPanel(RecruitmentProvider provider) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _mutedSurfaceColor(context),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _borderColor(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.tr('recruitment_pipeline_health'),
+            style: TextStyle(
+              color: _primaryTextColor(context),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _metricRow(
+            context.tr('recruitment_conversion_rate'),
+            '${provider.metrics.conversionRate}%',
+          ),
+          const SizedBox(height: 4),
+          LinearProgressIndicator(
+            value: provider.metrics.conversionRate / 100,
+            backgroundColor: _isDark(context)
+                ? const Color(0xFF334155)
+                : Colors.grey[200],
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+          ),
+          const SizedBox(height: 8),
+          _metricRow(
+            context.tr('recruitment_avg_time_to_hire'),
+            '${provider.metrics.averageTimeToHire} ${context.tr('recruitment_days')}',
+          ),
+          const SizedBox(height: 4),
+          LinearProgressIndicator(
+            value: (provider.metrics.averageTimeToHire / 30).clamp(0, 1),
+            backgroundColor: _isDark(context)
+                ? const Color(0xFF334155)
+                : Colors.grey[200],
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentApplicationsSection(RecruitmentProvider provider) {
+    return Card(
+      elevation: 2,
+      color: _surfaceColor(context),
+      shape: _cardShape(context),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionHeader(
+              Icons.assignment_ind_outlined,
+              context.tr('recruitment_recent_applications'),
+            ),
+            const SizedBox(height: 16),
+            if (provider.applications.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    context.tr('recruitment_no_applications'),
+                    style: _bodyStyle(context),
+                  ),
+                ),
+              )
+            else
+              Column(
+                children: provider.applications
+                    .take(5)
+                    .map(
+                      (application) =>
+                          _buildRecentApplicationItem(provider, application),
+                    )
+                    .toList(),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1583,5 +1870,402 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
   @override
   void dispose() {
     super.dispose();
+  }
+}
+
+class _RecruitmentJobFormScreen extends StatefulWidget {
+  const _RecruitmentJobFormScreen();
+
+  @override
+  State<_RecruitmentJobFormScreen> createState() =>
+      _RecruitmentJobFormScreenState();
+}
+
+class _RecruitmentJobFormScreenState extends State<_RecruitmentJobFormScreen> {
+  String? _selectedDepartment;
+  String? _selectedPositionId;
+  String? _selectedPositionTitle;
+  String _selectedUrgency = 'Medium';
+  final TextEditingController _requirementController = TextEditingController();
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _requirementController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_selectedDepartment == null ||
+        _selectedPositionId == null ||
+        _requirementController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.tr('recruitment_fill_all_fields')),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    final provider = context.read<RecruitmentProvider>();
+    final success = await provider.createJob({
+      'title': _selectedPositionTitle,
+      'position_id': _selectedPositionId,
+      'department': _selectedDepartment,
+      'urgency': _selectedUrgency,
+      'requirement': _requirementController.text.trim(),
+    });
+
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.tr('recruitment_job_posted_success')),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context, true);
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          provider.error ?? context.tr('recruitment_unknown_error'),
+        ),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<RecruitmentProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? const Color(0xFF1B1F24) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF111827);
+
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF101214) : AppColors.background,
+      appBar: AppBar(
+        title: Text(context.tr('recruitment_post_job')),
+        backgroundColor: surfaceColor,
+        foregroundColor: textColor,
+        actions: [
+          TextButton(
+            onPressed: _isSaving ? null : _save,
+            child: _isSaving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    context.tr('recruitment_save'),
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            DropdownButtonFormField<String>(
+              decoration: InputDecoration(
+                labelText: context.tr('recruitment_select_department'),
+                border: const OutlineInputBorder(),
+              ),
+              items: provider.departments
+                  .map(
+                    (dept) => DropdownMenuItem(
+                      value: dept.id.toString(),
+                      child: Text(dept.name),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) => setState(() => _selectedDepartment = value),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              decoration: InputDecoration(
+                labelText: context.tr('recruitment_select_position'),
+                border: const OutlineInputBorder(),
+              ),
+              items: provider.positions
+                  .map(
+                    (pos) => DropdownMenuItem(
+                      value: pos.id.toString(),
+                      child: Text(pos.namaJabatan),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                final selected = provider.positions.firstWhere(
+                  (position) => position.id.toString() == value,
+                  orElse: () => Position(id: 0, namaJabatan: ''),
+                );
+                setState(() {
+                  _selectedPositionId = value;
+                  _selectedPositionTitle = selected.namaJabatan;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedUrgency,
+              decoration: InputDecoration(
+                labelText: context.tr('recruitment_select_urgency'),
+                border: const OutlineInputBorder(),
+              ),
+              items: [
+                DropdownMenuItem(
+                  value: 'High',
+                  child: Text(context.tr('recruitment_urgency_high')),
+                ),
+                DropdownMenuItem(
+                  value: 'Medium',
+                  child: Text(context.tr('recruitment_urgency_medium')),
+                ),
+                DropdownMenuItem(
+                  value: 'Low',
+                  child: Text(context.tr('recruitment_urgency_low')),
+                ),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _selectedUrgency = value);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _requirementController,
+              maxLines: 6,
+              decoration: InputDecoration(
+                labelText: context.tr('recruitment_job_requirements'),
+                hintText: context.tr('recruitment_requirement_hint'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecruitmentApplicationFormScreen extends StatefulWidget {
+  const _RecruitmentApplicationFormScreen();
+
+  @override
+  State<_RecruitmentApplicationFormScreen> createState() =>
+      _RecruitmentApplicationFormScreenState();
+}
+
+class _RecruitmentApplicationFormScreenState
+    extends State<_RecruitmentApplicationFormScreen> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  String? _selectedDepartmentId;
+  String? _selectedPositionId;
+  String? _selectedFileName;
+  File? _selectedFile;
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx'],
+      allowMultiple: false,
+    );
+
+    if (result == null || result.files.single.path == null) {
+      return;
+    }
+
+    setState(() {
+      _selectedFileName = result.files.single.name;
+      _selectedFile = File(result.files.single.path!);
+    });
+  }
+
+  Future<void> _save() async {
+    if (_nameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _phoneController.text.trim().isEmpty ||
+        _selectedDepartmentId == null ||
+        _selectedPositionId == null ||
+        _selectedFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.tr('recruitment_fill_application_fields')),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    final provider = context.read<RecruitmentProvider>();
+    final success = await provider.addApplicationWithCV({
+      'name': _nameController.text.trim(),
+      'email': _emailController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'department_id': _selectedDepartmentId,
+      'position_id': _selectedPositionId,
+    }, _selectedFile!);
+
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr('recruitment_application_submitted_success'),
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context, true);
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          provider.error ?? context.tr('recruitment_unknown_error'),
+        ),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<RecruitmentProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? const Color(0xFF1B1F24) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF111827);
+
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF101214) : AppColors.background,
+      appBar: AppBar(
+        title: Text(context.tr('recruitment_new_application')),
+        backgroundColor: surfaceColor,
+        foregroundColor: textColor,
+        actions: [
+          TextButton(
+            onPressed: _isSaving ? null : _save,
+            child: _isSaving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    context.tr('recruitment_submit'),
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: context.tr('recruitment_full_name'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: context.tr('recruitment_email'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                labelText: context.tr('recruitment_phone'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              decoration: InputDecoration(
+                labelText: context.tr('recruitment_department'),
+                border: const OutlineInputBorder(),
+              ),
+              items: provider.departments
+                  .map(
+                    (dept) => DropdownMenuItem(
+                      value: dept.id.toString(),
+                      child: Text(dept.name),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() => _selectedDepartmentId = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              decoration: InputDecoration(
+                labelText: context.tr('recruitment_position'),
+                border: const OutlineInputBorder(),
+              ),
+              items: provider.positions
+                  .map(
+                    (pos) => DropdownMenuItem(
+                      value: pos.id.toString(),
+                      child: Text(pos.namaJabatan),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() => _selectedPositionId = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _pickFile,
+              icon: const Icon(Icons.upload_file),
+              label: Text(
+                _selectedFileName ?? context.tr('recruitment_no_file_selected'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

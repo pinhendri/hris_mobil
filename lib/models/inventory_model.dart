@@ -32,12 +32,23 @@ class InventoryModel {
       name: json['name'] ?? '',
       category: json['category'] ?? '',
       unit: json['unit'] ?? '',
-      stock: json['stock'] ?? 0,
-      minStock: json['min_stock'] ?? 0,
-      maxStock: json['max_stock'] ?? 0,
-      purchasePrice: (json['purchase_price'] ?? 0).toDouble(),
-      sellingPrice: (json['selling_price'] ?? 0).toDouble(),
+      stock: _readInt(json['stock']),
+      minStock: _readInt(json['min_stock']),
+      maxStock: _readInt(json['max_stock']),
+      purchasePrice: _readDouble(json['purchase_price']),
+      sellingPrice: _readDouble(json['selling_price']),
       status: json['status'] ?? 'active',
     );
+  }
+
+  static int _readInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static double _readDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

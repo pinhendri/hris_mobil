@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/employee_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/employee_provider.dart';
+import 'admin_palette.dart';
 
 class OrgStructureScreen extends StatefulWidget {
   const OrgStructureScreen({super.key});
@@ -17,16 +18,11 @@ class _OrgStructureScreenState extends State<OrgStructureScreen> {
   String _query = '';
 
   bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
-  Color get _screenBackgroundColor =>
-      _isDarkMode ? const Color(0xFF0F1115) : const Color(0xFFF6F7FB);
-  Color get _surfaceColor =>
-      _isDarkMode ? const Color(0xFF1B1D20) : Colors.white;
-  Color get _borderColor =>
-      _isDarkMode ? const Color(0xFF2F3338) : const Color(0xFFE5E7EB);
-  Color get _primaryTextColor =>
-      _isDarkMode ? const Color(0xFFF5F7FA) : const Color(0xFF111827);
-  Color get _secondaryTextColor =>
-      _isDarkMode ? const Color(0xFFA8ADB7) : const Color(0xFF64748B);
+  Color get _screenBackgroundColor => AdminPalette.page(context);
+  Color get _surfaceColor => AdminPalette.surface(context);
+  Color get _borderColor => AdminPalette.border(context);
+  Color get _primaryTextColor => AdminPalette.text(context);
+  Color get _secondaryTextColor => AdminPalette.mutedText(context);
   Color get _accentColor =>
       _isDarkMode ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
 

@@ -117,7 +117,7 @@ void main() {
     );
 
     expect(find.text('Rapat'), findsOneWidget);
-    expect(find.text('Buat Rapat'), findsOneWidget);
+    expect(find.byTooltip('Buat Rapat'), findsOneWidget);
     expect(
       find.text('Belum ada rapat. Buat rapat pertama Anda.'),
       findsOneWidget,
@@ -137,7 +137,7 @@ void main() {
     );
 
     expect(find.text('Meeting'), findsOneWidget);
-    expect(find.text('Create Meeting'), findsOneWidget);
+    expect(find.byTooltip('Create Meeting'), findsOneWidget);
     expect(find.text('3 participants'), findsOneWidget);
     expect(find.text('Created by HR Admin'), findsOneWidget);
   });

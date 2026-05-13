@@ -75,6 +75,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
   String? _selectedGender;
   DateTime? _dob;
   String? _selectedNationality;
+  String? _selectedReligion;
   String? _selectedMaritalStatus;
   String? _selectedEmergencyRelationship;
 
@@ -105,6 +106,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
   bool _handbookAcknowledged = false;
   bool _isSubmitting = false;
   List<Position> _positionOptions = const [];
+  List<_ReligionOption> _religionOptions = const [];
 
   PlatformFile? _resumeFile;
   PlatformFile? _idFile;
@@ -244,9 +246,12 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     if (e != null) {
       _nameController.text = e.name;
       _nikController.text = e.nik ?? '';
+      _emailController.text = e.email ?? '';
+      _phoneController.text = e.phone ?? '';
       _selectedGender = e.gender;
       _dob = _tryParseDate(e.dateOfBirth);
       _selectedNationality = e.nationality;
+      _selectedReligion = e.religionId;
       _addressController.text = e.address ?? '';
       _selectedMaritalStatus = e.maritalStatus;
       _emergencyNameController.text = e.emergencyContactName ?? '';
@@ -348,6 +353,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       employeeProvider.fetchAllEmployees(),
       shiftProvider.fetchShifts(),
       _loadPositions(),
+      _loadReligions(),
       _loadEmployeePrefix(companyCode),
     ]);
 
@@ -406,6 +412,41 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     } catch (_) {
       _positionOptions = const [];
     }
+  }
+
+  Future<void> _loadReligions() async {
+    try {
+      final response = await _apiService.get('/religions');
+      final rawData = _extractListPayload(response);
+      _religionOptions = rawData
+          .whereType<Map>()
+          .map(
+            (item) => _ReligionOption.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
+          .toList(growable: false);
+    } catch (_) {
+      _religionOptions = const [];
+    }
+  }
+
+  List<dynamic> _extractListPayload(dynamic response) {
+    if (response is List) {
+      return response;
+    }
+
+    if (response is Map) {
+      final data = response['data'];
+      if (data is List) {
+        return data;
+      }
+
+      if (data is Map && data['data'] is List) {
+        return data['data'] as List;
+      }
+    }
+
+    return const [];
   }
 
   void _syncMasterSelections() {
@@ -589,6 +630,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
           icon: Icon(Icons.arrow_back_ios, color: _primaryTextColor),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [_buildSaveAction()],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -674,6 +716,17 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
             items: _countries,
             icon: Icons.flag_outlined,
             onChanged: (val) => setState(() => _selectedNationality = val),
+            validator: (value) => value == null ? 'Required' : null,
+          ),
+          const SizedBox(height: 16),
+          _buildOptionDropdown(
+            label: 'Religion',
+            value: _selectedReligion,
+            items: _religionOptions
+                .map((item) => _OptionItem(value: item.id, label: item.name))
+                .toList(growable: false),
+            icon: Icons.account_balance_outlined,
+            onChanged: (val) => setState(() => _selectedReligion = val),
             validator: (value) => value == null ? 'Required' : null,
           ),
           const SizedBox(height: 16),
@@ -1369,40 +1422,6 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
               color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
-              onPressed: _isSubmitting ? null : () => _submitForm(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 2,
-              ),
-              child: _isSubmitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : Text(
-                      widget.employee == null
-                          ? 'Submit Employee Data'
-                          : 'Update Employee Data',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-            ),
-          ),
         ],
       ),
     );
@@ -1562,6 +1581,7 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
       'gender': _selectedGender,
       'date_of_birth': _formatDate(_dob),
       'nationality': _selectedNationality,
+      'religion_id': int.tryParse(_selectedReligion ?? ''),
       'address': _addressController.text.trim(),
       'marital_status': _selectedMaritalStatus,
       'emergency_contact_name': _emergencyNameController.text.trim(),
@@ -1640,38 +1660,30 @@ class _AddEmployeeScreenState extends State<AddEmployeeScreen>
     return hasDescription ? '${shift.name} - $description' : shift.name;
   }
 
-  Widget _buildNextButton(int nextTabIndex) {
-    final bool showSave = nextTabIndex >= 2;
+  Widget _buildSaveAction() {
+    return TextButton(
+      onPressed: _isSubmitting ? null : _submitForm,
+      child: _isSubmitting
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Text(
+              widget.employee == null ? 'Save' : 'Update',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+                fontSize: 16,
+              ),
+            ),
+    );
+  }
 
+  Widget _buildNextButton(int nextTabIndex) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        if (showSave) ...[
-          OutlinedButton.icon(
-            onPressed: _isSubmitting ? null : () => _submitForm(),
-            icon: _isSubmitting
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.save_outlined),
-            label: Text(
-              _isSubmitting
-                  ? 'Saving...'
-                  : (widget.employee == null ? 'Save' : 'Update'),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: const BorderSide(color: AppColors.primary),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-        ],
         ElevatedButton(
           onPressed: () {
             if (nextTabIndex <= 8) {
@@ -1858,4 +1870,18 @@ class _OptionItem {
   final String label;
 
   const _OptionItem({required this.value, required this.label});
+}
+
+class _ReligionOption {
+  final String id;
+  final String name;
+
+  const _ReligionOption({required this.id, required this.name});
+
+  factory _ReligionOption.fromJson(Map<String, dynamic> json) {
+    return _ReligionOption(
+      id: (json['id'] ?? json['religion_id'] ?? '').toString(),
+      name: (json['name'] ?? json['religion_name'] ?? '').toString(),
+    );
+  }
 }

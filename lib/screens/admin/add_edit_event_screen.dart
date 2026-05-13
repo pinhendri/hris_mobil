@@ -8,6 +8,7 @@ import '../../models/employee_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/employee_provider.dart';
 import '../../providers/event_provider.dart';
+import 'admin_palette.dart';
 
 class AddEditEventScreen extends StatefulWidget {
   final CalendarEvent? event;
@@ -31,24 +32,17 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
   final Set<String> _selectedInvitees = <String>{};
   String _loadedCompanyCode = '';
 
-  bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
+  Color get _pageColor => AdminPalette.page(context);
 
-  Color get _pageColor =>
-      _isDarkMode ? const Color(0xFF020817) : const Color(0xFFF8FAFC);
+  Color get _surfaceColor => AdminPalette.surface(context);
 
-  Color get _surfaceColor =>
-      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+  Color get _fieldColor => AdminPalette.mutedSurface(context);
 
-  Color get _fieldColor => _isDarkMode ? const Color(0xFF0F172A) : Colors.white;
+  Color get _borderColor => AdminPalette.border(context);
 
-  Color get _borderColor =>
-      _isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+  Color get _primaryTextColor => AdminPalette.text(context);
 
-  Color get _primaryTextColor =>
-      _isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
-
-  Color get _secondaryTextColor =>
-      _isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+  Color get _secondaryTextColor => AdminPalette.mutedText(context);
 
   InputDecoration _inputDecoration(
     String label, {
@@ -268,7 +262,13 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
         actions: [
           TextButton(
             onPressed: eventProvider.isSubmitting ? null : _save,
-            child: Text(context.tr('meeting_save')),
+            child: eventProvider.isSubmitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(context.tr('meeting_save')),
           ),
         ],
       ),
@@ -444,24 +444,6 @@ class _AddEditEventScreenState extends State<AddEditEventScreen> {
                         ),
                 ),
               ],
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: eventProvider.isSubmitting ? null : _save,
-                  child: eventProvider.isSubmitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          widget.event == null
-                              ? context.tr('meeting_create')
-                              : context.tr('meeting_update'),
-                        ),
-                ),
-              ),
             ],
           ),
         ),

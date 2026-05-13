@@ -6,23 +6,17 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/claim_model.dart';
 import '../../providers/claim_provider.dart';
+import 'admin_palette.dart';
 
 class ClaimManagementScreen extends StatelessWidget {
   const ClaimManagementScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final screenBackgroundColor = isDarkMode
-        ? const Color(0xFF020817)
-        : AppColors.background;
-    final surfaceColor = isDarkMode ? const Color(0xFF111827) : Colors.white;
-    final primaryTextColor = isDarkMode
-        ? const Color(0xFFF8FAFC)
-        : AppColors.textPrimary;
-    final secondaryTextColor = isDarkMode
-        ? const Color(0xFFCBD5E1)
-        : AppColors.textSecondary;
+    final screenBackgroundColor = AdminPalette.page(context);
+    final surfaceColor = AdminPalette.surface(context);
+    final primaryTextColor = AdminPalette.text(context);
+    final secondaryTextColor = AdminPalette.mutedText(context);
 
     return DefaultTabController(
       length: 3,

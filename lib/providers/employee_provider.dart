@@ -682,9 +682,18 @@ class EmployeeProvider with ChangeNotifier {
 
       if (response['success'] == true) {
         final data = _extractSingleEmployeePayload(response);
+        final mergedData = _mergeEmployeeUpdatePayload(
+          updatedEmployee,
+          updateData,
+          responseData: data,
+        );
         _selectedEmployee = data != null
             ? Employee.fromJson(data)
-            : updatedEmployee;
+            : Employee.fromJson(mergedData);
+        final refreshedEmployee = await fetchEmployeeDetail(
+          updatedEmployee.uuid,
+        );
+        _selectedEmployee = refreshedEmployee ?? _selectedEmployee;
         await fetchEmployees();
         _error = null;
         return true;
@@ -700,6 +709,22 @@ class EmployeeProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Map<String, dynamic> _mergeEmployeeUpdatePayload(
+    Employee existingEmployee,
+    Map<String, dynamic> updateData, {
+    Map<String, dynamic>? responseData,
+  }) {
+    final mergedData = <String, dynamic>{
+      ...existingEmployee.toJson(),
+      ...updateData,
+      if (responseData != null) ...responseData,
+    };
+
+    mergedData['uuid'] = responseData?['uuid'] ?? existingEmployee.uuid;
+    mergedData['id'] = responseData?['id'] ?? existingEmployee.id;
+    return mergedData;
   }
 
   // Create new employee

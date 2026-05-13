@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -90,37 +91,54 @@ class MyApp extends StatelessWidget {
       ],
       child: Consumer2<ThemeProvider, LanguageProvider>(
         builder: (context, themeProvider, languageProvider, _) {
-          return MaterialApp(
-            title: 'HR App',
-            debugShowCheckedModeBanner: false,
-            locale: languageProvider.locale,
-            supportedLocales: LanguageProvider.supportedLocales,
+          final isDark = themeProvider.isDarkMode;
 
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: isDark
+                  ? Brightness.light
+                  : Brightness.dark,
+              statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+              systemNavigationBarColor: isDark
+                  ? const Color(0xFF020817)
+                  : Colors.white,
+              systemNavigationBarIconBrightness: isDark
+                  ? Brightness.light
+                  : Brightness.dark,
+            ),
+            child: MaterialApp(
+              title: 'HR App',
+              debugShowCheckedModeBanner: false,
+              locale: languageProvider.locale,
+              supportedLocales: LanguageProvider.supportedLocales,
 
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: themeProvider.themeMode,
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
 
-            routes: {
-              '/': (context) => const AppBootstrapScreen(),
-              '/login': (context) => const LoginScreen(),
-              '/home': (context) => const MainScreen(),
-            },
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: themeProvider.themeMode,
 
-            onGenerateRoute: (settings) {
-              if (settings.name == '/select-company') {
-                final companies = settings.arguments as List;
-                return MaterialPageRoute(
-                  builder: (_) => SelectCompanyScreen(companies: companies),
-                );
-              }
-              return null;
-            },
+              routes: {
+                '/': (context) => const AppBootstrapScreen(),
+                '/login': (context) => const LoginScreen(),
+                '/home': (context) => const MainScreen(),
+              },
+
+              onGenerateRoute: (settings) {
+                if (settings.name == '/select-company') {
+                  final companies = settings.arguments as List;
+                  return MaterialPageRoute(
+                    builder: (_) => SelectCompanyScreen(companies: companies),
+                  );
+                }
+                return null;
+              },
+            ),
           );
         },
       ),

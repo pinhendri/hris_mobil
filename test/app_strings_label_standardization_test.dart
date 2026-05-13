@@ -137,6 +137,11 @@ void main() {
                 'feature_label_recruitment',
                 listen: false,
               ),
+              'job_postings': AppStrings.of(
+                context,
+                'feature_label_job_postings',
+                listen: false,
+              ),
               'applications': AppStrings.of(
                 context,
                 'feature_label_applications',
@@ -145,6 +150,37 @@ void main() {
               'recruitment_ops': AppStrings.of(
                 context,
                 'feature_label_recruitment_ops',
+                listen: false,
+              ),
+              'employees_one': AppStrings.of(
+                context,
+                'feature_label_employee_one',
+                listen: false,
+              ),
+              'leave': AppStrings.of(
+                context,
+                'feature_label_leave',
+                listen: false,
+              ),
+              'vendor': AppStrings.of(
+                context,
+                'feature_label_clients',
+                listen: false,
+              ),
+              'correction': AppStrings.of(
+                context,
+                'feature_label_corrections',
+                listen: false,
+              ),
+              'correction_attendance': AppStrings.of(
+                context,
+                'correction_attendance',
+                listen: false,
+              ),
+              'kpi_list': AppStrings.of(context, 'kpi_master', listen: false),
+              'kpi_evaluation_list': AppStrings.of(
+                context,
+                'kpi_evaluation_list',
                 listen: false,
               ),
               'recruitment_subtitle': AppStrings.of(
@@ -262,8 +298,16 @@ void main() {
     expect(labels['task_due'], 'Tenggat');
     expect(labels['task_no_due'], 'Tidak ada tenggat');
     expect(labels['recruitment'], 'Rekrutmen');
+    expect(labels['job_postings'], 'Lowongan');
     expect(labels['applications'], 'Lamaran');
     expect(labels['recruitment_ops'], 'Operasional Rekrutmen');
+    expect(labels['employees_one'], 'Karyawan Satu');
+    expect(labels['leave'], 'Manajemen Cuti');
+    expect(labels['vendor'], 'Manajemen Vendor');
+    expect(labels['correction'], 'Koreksi');
+    expect(labels['correction_attendance'], 'Koreksi Absensi');
+    expect(labels['kpi_list'], 'Daftar KPI');
+    expect(labels['kpi_evaluation_list'], 'Daftar Evaluasi');
     expect(
       labels['recruitment_subtitle'],
       'Kelola lowongan pekerjaan dan pantau proses lamaran kandidat.',
@@ -329,8 +373,16 @@ void main() {
     expect(labels['task_due'], 'Due');
     expect(labels['task_no_due'], 'No due date');
     expect(labels['recruitment'], 'Recruitment');
+    expect(labels['job_postings'], 'Job Postings');
     expect(labels['applications'], 'Applications');
     expect(labels['recruitment_ops'], 'Recruitment Ops');
+    expect(labels['employees_one'], 'EmployeesOne');
+    expect(labels['leave'], 'Leave Management');
+    expect(labels['vendor'], 'Vendor Management');
+    expect(labels['correction'], 'Corection');
+    expect(labels['correction_attendance'], 'Attendance Corection');
+    expect(labels['kpi_list'], 'KPI List');
+    expect(labels['kpi_evaluation_list'], 'List Evaluation');
     expect(
       labels['recruitment_subtitle'],
       'Manage job postings and track candidate applications.',

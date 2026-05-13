@@ -23,6 +23,7 @@ class Employee {
   final String? clockIn;
   final String? clockOut;
   final String? supervisorName;
+  final String? religionId;
   final String? religionName;
   final String? ptkpCode;
   final String? taxNumber;
@@ -93,6 +94,7 @@ class Employee {
     this.clockIn,
     this.clockOut,
     this.supervisorName,
+    this.religionId,
     this.religionName,
     this.ptkpCode,
     this.taxNumber,
@@ -159,49 +161,144 @@ class Employee {
     return 0.0;
   }
 
+  static String? _asString(dynamic value) {
+    if (value == null) return null;
+    final text = value.toString();
+    return text.isEmpty ? null : text;
+  }
+
+  static Map<String, dynamic>? _asStringMap(dynamic value) {
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+    return null;
+  }
+
+  static String? _firstString(Map<String, dynamic> json, List<String> keys) {
+    for (final key in keys) {
+      final value = _asString(json[key]);
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  static List<String>? _parseStringList(dynamic value) {
+    if (value == null) return null;
+
+    if (value is List) {
+      final items = value
+          .map((item) => item?.toString().trim() ?? '')
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+      return items.isEmpty ? null : items;
+    }
+
+    if (value is String) {
+      final items = value
+          .split(',')
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+      return items.isEmpty ? null : items;
+    }
+
+    return null;
+  }
+
+  static bool? _parseBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+
+    final text = value.toString().trim().toLowerCase();
+    if (text == 'true' || text == '1' || text == 'yes') return true;
+    if (text == 'false' || text == '0' || text == 'no') return false;
+    return null;
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
+  }
+
   factory Employee.fromJson(Map<String, dynamic> json) {
+    final positionMap = _asStringMap(json['position']);
+    final departmentMap = _asStringMap(json['department']);
+    final supervisorMap = _asStringMap(json['supervisor']);
+    final shiftMap = _asStringMap(json['shift']);
+
+    final positionName =
+        _firstString(json, ['position_name', 'nama_jabatan']) ??
+        _firstString(positionMap ?? const {}, [
+          'position_name',
+          'nama_jabatan',
+          'name',
+          'description',
+        ]);
+    final departmentName =
+        _firstString(json, ['department_description', 'department_name']) ??
+        _firstString(departmentMap ?? const {}, [
+          'description',
+          'department_description',
+          'department_name',
+          'name',
+        ]);
+    final shiftName =
+        _firstString(json, ['shift_name', 'shift_description']) ??
+        _firstString(shiftMap ?? const {}, [
+          'name',
+          'description',
+          'deskripsi',
+          'shift_name',
+        ]);
+
     return Employee(
       id: json['id'].toString(),
       uuid: json['uuid']?.toString() ?? '',
       nik: json['nik']?.toString(),
       nikEmployee: json['nik_employee']?.toString(),
       name: json['name'] ?? '',
-      position:
-          json['position_name']?.toString() ??
-          json['position']?.toString() ??
-          '',
-      positionId: json['position']?.toString(),
-      department:
-          json['department_name']?.toString() ??
-          json['department_description']?.toString() ??
-          json['department']?.toString() ??
-          '',
-      departmentId: json['department']?.toString(),
+      position: positionName ?? _asString(json['position']) ?? '',
+      positionId:
+          _asString(json['position_id']) ??
+          _asString(positionMap?['id']) ??
+          _asString(json['position']),
+      department: departmentName ?? _asString(json['department']) ?? '',
+      departmentId:
+          _asString(json['department_id']) ??
+          _asString(departmentMap?['id']) ??
+          _asString(json['department']),
       status: json['status'] ?? 'Active',
       joinDate: json['join_date'] ?? json['created_at'] ?? '',
-      avatarUrl: json['avatar'],
-      email: json['email'],
-      phone: json['phone'],
-      salary: _parseSalary(json['salary']),
-      cCode: json['c_code'],
-      companyCode: json['company_code'],
-      positionName: json['position_name'],
-      departmentDescription:
-          json['department_description']?.toString() ??
-          json['department_name']?.toString(),
-      shiftId: json['shift_id']?.toString(),
-      shiftName:
-          json['shift_name']?.toString() ??
-          json['shift_description']?.toString(),
-      clockIn: json['clock_in']?.toString(),
-      clockOut: json['clock_out']?.toString(),
-      supervisorName: json['supervisor_name']?.toString(),
-      religionName: json['religion_name']?.toString(),
+      avatarUrl: _firstString(json, ['avatar', 'profile_picture', 'photo']),
+      email: _asString(json['email']),
+      phone: _asString(json['phone']),
+      salary: _parseSalary(json['salary'] ?? json['basic_salary']),
+      cCode: _asString(json['c_code']),
+      companyCode: _asString(json['company_code']),
+      positionName: positionName,
+      departmentDescription: departmentName,
+      shiftId: _asString(json['shift_id']) ?? _asString(shiftMap?['id']),
+      shiftName: shiftName,
+      clockIn: _asString(json['clock_in']) ?? _asString(shiftMap?['clock_in']),
+      clockOut:
+          _asString(json['clock_out']) ?? _asString(shiftMap?['clock_out']),
+      supervisorName:
+          _asString(json['supervisor_name']) ??
+          _asString(supervisorMap?['name']),
+      religionId:
+          _asString(json['religion_id']) ??
+          _asString(_asStringMap(json['religion'])?['id']),
+      religionName:
+          json['religion_name']?.toString() ??
+          _asString(_asStringMap(json['religion'])?['name']),
       ptkpCode: json['ptkp_code']?.toString(),
       taxNumber: json['tax_number']?.toString(),
       flag: json['flag']?.toString(),
-      endDate: json['enddate']?.toString(),
-      cvUrl: json['cv']?.toString(),
+      endDate: _firstString(json, ['enddate', 'end_date', 'contract_end_date']),
+      cvUrl: _firstString(json, ['cv', 'cv_url', 'resume']),
       gender: json['gender'],
       dateOfBirth: json['date_of_birth'],
       nationality: json['nationality'],
@@ -211,14 +308,13 @@ class Employee {
       emergencyContactRelationship: json['emergency_contact_relationship'],
       emergencyContactPhone: json['emergency_contact_phone'],
       managerId:
+          _asString(supervisorMap?['uuid']) ??
+          _asString(supervisorMap?['id']) ??
           json['manager_id']?.toString() ??
           json['immediate_supervisor']?.toString(),
       employmentType: json['employment_type'],
       officeLocation: json['office_location'],
-      shiftType:
-          json['shift_description']?.toString() ??
-          json['shift_type']?.toString() ??
-          json['shift_name']?.toString(),
+      shiftType: shiftName ?? json['shift_type']?.toString(),
       workSchedule: json['work_schedule'],
       bankAccountNumber: json['bank_account_number'],
       bankName: json['bank_name'],
@@ -228,8 +324,8 @@ class Employee {
       institution: json['institution'],
       graduationYear: json['graduation_year'],
       previousEmployers: json['previous_employers'],
-      yearsOfExperience: json['years_of_experience'],
-      skills: json['skills'] != null ? List<String>.from(json['skills']) : null,
+      yearsOfExperience: _parseInt(json['years_of_experience']),
+      skills: _parseStringList(json['skills']),
       certifications: json['certifications'],
       medicalConditions: json['medical_conditions'],
       bloodType: json['blood_type'],
@@ -238,15 +334,13 @@ class Employee {
       ssn: json['ssn'],
       workAuthorization: json['work_authorization'],
       contractType: json['contract_type'],
-      companyPoliciesAcknowledged: json['company_policies_acknowledged'],
-      assignedEquipment: json['assigned_equipment'] != null
-          ? List<String>.from(json['assigned_equipment'])
-          : null,
+      companyPoliciesAcknowledged: _parseBool(
+        json['company_policies_acknowledged'],
+      ),
+      assignedEquipment: _parseStringList(json['assigned_equipment']),
       trainingPlan: json['training_plan'],
-      systemAccess: json['system_access'] != null
-          ? List<String>.from(json['system_access'])
-          : null,
-      handbookAcknowledged: json['handbook_acknowledged'],
+      systemAccess: _parseStringList(json['system_access']),
+      handbookAcknowledged: _parseBool(json['handbook_acknowledged']),
     );
   }
 
@@ -276,6 +370,7 @@ class Employee {
     String? clockIn,
     String? clockOut,
     String? supervisorName,
+    String? religionId,
     String? religionName,
     String? ptkpCode,
     String? taxNumber,
@@ -345,6 +440,7 @@ class Employee {
       clockIn: clockIn ?? this.clockIn,
       clockOut: clockOut ?? this.clockOut,
       supervisorName: supervisorName ?? this.supervisorName,
+      religionId: religionId ?? this.religionId,
       religionName: religionName ?? this.religionName,
       ptkpCode: ptkpCode ?? this.ptkpCode,
       taxNumber: taxNumber ?? this.taxNumber,
@@ -419,6 +515,7 @@ class Employee {
       'clock_in': clockIn,
       'clock_out': clockOut,
       'supervisor_name': supervisorName,
+      'religion_id': religionId,
       'religion_name': religionName,
       'ptkp_code': ptkpCode,
       'tax_number': taxNumber,

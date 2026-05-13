@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/shift_provider.dart';
 import '../../models/shift_model.dart';
 import '../../models/shift_day_model.dart';
+import 'admin_palette.dart';
 
 class MasterShiftScreen extends StatefulWidget {
   const MasterShiftScreen({Key? key}) : super(key: key);
@@ -19,20 +20,15 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
 
   bool get _isDarkMode => Theme.of(context).brightness == Brightness.dark;
 
-  Color get _screenBackgroundColor =>
-      _isDarkMode ? const Color(0xFF020817) : const Color(0xFFF8FAFC);
+  Color get _screenBackgroundColor => AdminPalette.page(context);
 
-  Color get _surfaceColor =>
-      _isDarkMode ? const Color(0xFF111827) : Colors.white;
+  Color get _surfaceColor => AdminPalette.surface(context);
 
-  Color get _surfaceBorderColor =>
-      _isDarkMode ? const Color(0xFF253041) : const Color(0xFFE2E8F0);
+  Color get _surfaceBorderColor => AdminPalette.border(context);
 
-  Color get _primaryTextColor =>
-      _isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
+  Color get _primaryTextColor => AdminPalette.text(context);
 
-  Color get _secondaryTextColor =>
-      _isDarkMode ? const Color(0xFFCBD5E1) : const Color(0xFF64748B);
+  Color get _secondaryTextColor => AdminPalette.mutedText(context);
 
   InputDecoration _dialogInputDecoration(String label, {String? hint}) {
     return InputDecoration(
@@ -41,7 +37,7 @@ class _MasterShiftScreenState extends State<MasterShiftScreen> {
       labelStyle: TextStyle(color: _secondaryTextColor),
       hintStyle: TextStyle(color: _secondaryTextColor),
       filled: true,
-      fillColor: _isDarkMode ? const Color(0xFF0F172A) : Colors.white,
+      fillColor: AdminPalette.mutedSurface(context),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: _surfaceBorderColor),

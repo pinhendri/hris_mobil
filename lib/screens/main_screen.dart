@@ -7,19 +7,28 @@ import '../providers/bot_assistant_provider.dart';
 import '../providers/theme_provider.dart';
 import 'bot/bot_assistant_screen.dart';
 import 'tabs/approval_tab.dart';
+import 'tabs/admin_tab.dart';
 import 'tabs/dashboard_tab.dart';
 import 'tabs/feature_tab.dart';
 import 'tabs/profile_tab.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final int initialIndex;
+
+  const MainScreen({super.key, this.initialIndex = 0});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
+  late int _selectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex;
+  }
 
   Future<void> _openBotAssistant() async {
     final authProvider = context.read<AuthProvider>();
@@ -37,6 +46,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
+    final authProvider = context.watch<AuthProvider>();
     final isDark = themeProvider.isDarkMode;
 
     final tabs = <_MainNavigationItem>[
@@ -64,6 +74,13 @@ class _MainScreenState extends State<MainScreen> {
         activeIcon: Icons.fact_check_rounded,
         screen: const ApprovalTab(),
       ),
+      if (authProvider.canAccessAdminPanel)
+        _MainNavigationItem(
+          label: context.tr('nav_admin'),
+          icon: Icons.admin_panel_settings_outlined,
+          activeIcon: Icons.admin_panel_settings_rounded,
+          screen: const AdminTab(),
+        ),
       _MainNavigationItem(
         label: context.tr('nav_profile'),
         icon: Icons.person_outline,

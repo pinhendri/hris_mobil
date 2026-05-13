@@ -15,7 +15,7 @@ class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   static const double _maxContentWidth = 430;
 
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _identifierController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
@@ -100,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     _animationController.dispose();
     super.dispose();
@@ -113,10 +113,10 @@ class _LoginScreenState extends State<LoginScreen>
     final auth = context.read<AuthProvider>();
     final navigator = Navigator.of(context);
     final currentRoute = ModalRoute.of(context)?.settings.name;
-    final email = _emailController.text.trim();
+    final identifier = _identifierController.text.trim();
     final password = _passwordController.text.trim();
 
-    final result = await auth.login(email, password);
+    final result = await auth.login(identifier, password);
 
     if (!mounted) return;
 
@@ -124,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     if (success) {
       if (_rememberMe) {
-        await SessionStorage.saveRememberedEmail(email);
+        await SessionStorage.saveRememberedEmail(identifier);
       } else {
         await SessionStorage.clearRememberedCredentials();
       }
@@ -152,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     setState(() {
       _rememberMe = rememberMeEnabled;
-      _emailController.text = rememberedCredentials['email'] ?? '';
+      _identifierController.text = rememberedCredentials['email'] ?? '';
     });
   }
 
@@ -183,14 +183,19 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   // Validators
-  String? _validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Email tidak boleh kosong';
+  String? _validateLoginIdentifier(String? value) {
+    final identifier = value?.trim() ?? '';
+    if (identifier.isEmpty) {
+      return 'Employee ID atau email tidak boleh kosong';
     }
-    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-    if (!emailRegex.hasMatch(value)) {
-      return 'Format email tidak valid';
+
+    if (identifier.contains('@')) {
+      final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+      if (!emailRegex.hasMatch(identifier)) {
+        return 'Format email tidak valid';
+      }
     }
+
     return null;
   }
 
@@ -466,7 +471,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Use your email and password to access the app.',
+                        'Use your employee ID or email to access the app.',
                         style: GoogleFonts.poppins(
                           fontSize: 13,
                           height: 1.45,
@@ -503,18 +508,18 @@ class _LoginScreenState extends State<LoginScreen>
             ),
             const SizedBox(height: 22),
             TextFormField(
-              controller: _emailController,
+              controller: _identifierController,
               keyboardType: TextInputType.emailAddress,
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
                 color: _primaryTextColor,
               ),
-              validator: _validateEmail,
+              validator: _validateLoginIdentifier,
               enabled: !isLoading,
               decoration: _buildInputDecoration(
-                label: 'Email',
-                hint: 'Enter your email',
+                label: 'Employee ID / Email',
+                hint: 'Enter employee ID or email',
                 icon: Icons.alternate_email_rounded,
               ),
             ),
@@ -651,7 +656,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 340) {
+        if (constraints.maxWidth < 390) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

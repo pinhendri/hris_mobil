@@ -7,6 +7,7 @@ import '../../models/calendar_event_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/employee_provider.dart';
 import '../../providers/event_provider.dart';
+import 'admin_palette.dart';
 import 'add_edit_event_screen.dart';
 
 class EventManagementScreen extends StatefulWidget {
@@ -40,11 +41,17 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(context.tr('meeting_delete_title')),
+        backgroundColor: AdminPalette.surface(context),
+        surfaceTintColor: AdminPalette.surface(context),
+        title: Text(
+          context.tr('meeting_delete_title'),
+          style: TextStyle(color: AdminPalette.text(context)),
+        ),
         content: Text(
           context
               .tr('meeting_delete_message')
               .replaceAll('{title}', event.title),
+          style: TextStyle(color: AdminPalette.mutedText(context)),
         ),
         actions: [
           TextButton(
@@ -84,11 +91,27 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('meeting_page_title'))),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openForm(),
-        icon: const Icon(Icons.add),
-        label: Text(context.tr('meeting_create')),
+      backgroundColor: AdminPalette.page(context),
+      appBar: AppBar(
+        title: Text(
+          context.tr('meeting_page_title'),
+          style: TextStyle(color: AdminPalette.text(context)),
+        ),
+        backgroundColor: AdminPalette.surface(context),
+        surfaceTintColor: AdminPalette.surface(context),
+        foregroundColor: AdminPalette.text(context),
+        actions: [
+          IconButton(
+            onPressed: () => _openForm(),
+            icon: const Icon(Icons.add),
+            tooltip: context.tr('meeting_create'),
+          ),
+          IconButton(
+            onPressed: () => context.read<EventProvider>().fetchManagedEvents(),
+            icon: Icon(Icons.refresh, color: AdminPalette.mutedText(context)),
+            tooltip: context.tr('meeting_retry'),
+          ),
+        ],
       ),
       body: Consumer<EventProvider>(
         builder: (context, provider, child) {
@@ -109,7 +132,11 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
                       color: Colors.redAccent,
                     ),
                     const SizedBox(height: 12),
-                    Text(provider.error!, textAlign: TextAlign.center),
+                    Text(
+                      provider.error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AdminPalette.mutedText(context)),
+                    ),
                     const SizedBox(height: 12),
                     ElevatedButton(
                       onPressed: provider.fetchManagedEvents,
@@ -122,7 +149,12 @@ class _EventManagementScreenState extends State<EventManagementScreen> {
           }
 
           if (provider.managedEvents.isEmpty) {
-            return Center(child: Text(context.tr('meeting_empty')));
+            return Center(
+              child: Text(
+                context.tr('meeting_empty'),
+                style: TextStyle(color: AdminPalette.mutedText(context)),
+              ),
+            );
           }
 
           return RefreshIndicator(
@@ -161,19 +193,16 @@ class _EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd MMM yyyy, HH:mm');
+    final primaryText = AdminPalette.text(context);
+    final secondaryText = AdminPalette.mutedText(context);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AdminPalette.surface(context),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: AdminPalette.border(context)),
+        boxShadow: AdminPalette.shadow(context),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,9 +212,10 @@ class _EventCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   event.title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
+                    color: primaryText,
                   ),
                 ),
               ),
@@ -235,25 +265,27 @@ class _EventCard extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Icons.place_outlined, size: 18, color: Colors.grey),
+                Icon(Icons.place_outlined, size: 18, color: secondaryText),
                 const SizedBox(width: 6),
-                Expanded(child: Text(event.location)),
+                Expanded(
+                  child: Text(
+                    event.location,
+                    style: TextStyle(color: primaryText),
+                  ),
+                ),
               ],
             ),
           ],
           if (event.description.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text(
-              event.description,
-              style: TextStyle(color: Colors.grey.shade700),
-            ),
+            Text(event.description, style: TextStyle(color: secondaryText)),
           ],
           const SizedBox(height: 12),
           Text(
             context
                 .tr('meeting_created_by')
                 .replaceAll('{name}', event.createdByName),
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 12, color: secondaryText),
           ),
         ],
       ),

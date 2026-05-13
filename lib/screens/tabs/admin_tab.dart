@@ -6,14 +6,12 @@ import '../../core/widgets/access_denied_state.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/broadcast_provider.dart';
 import '../../providers/claim_provider.dart';
-import '../../providers/department_provider.dart';
 import '../../providers/employee_provider.dart';
 import '../admin/broadcast_screen.dart';
 import '../admin/claim_management_screen.dart';
 import '../admin/claim_reports_screen.dart';
 import '../admin/common_master_menu_screen.dart';
 import '../admin/correction_management_screen.dart';
-import '../admin/department_list_screen.dart';
 import '../admin/event_management_screen.dart';
 import '../admin/leave_management_enhanced_screen.dart';
 import '../admin/master_shift_screen.dart';
@@ -561,35 +559,12 @@ class AdminTab extends StatelessWidget {
     BuildContext context,
     AuthProvider authProvider,
   ) {
-    final canAccessReports = authProvider.canAccessReportsModule;
-
     return [
       _AdminSection(
         title: context.tr('admin_section_master_data'),
         icon: Icons.storage,
         color: const Color(0xFF3478F6),
         items: [
-          if (authProvider.canAccessDepartmentModule)
-            _AdminMenuItem(
-              title: context.tr('admin_master_department'),
-              subtitle: context.tr('admin_master_department_subtitle'),
-              icon: Icons.business,
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4158D0), Color(0xFFC850C0)],
-              ),
-              badge: context.tr('admin_badge_master'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ChangeNotifierProvider(
-                      create: (_) => DepartmentProvider(),
-                      child: const DepartmentListScreen(),
-                    ),
-                  ),
-                );
-              },
-            ),
           if (authProvider.canAccessEmployeeMasterModule)
             _AdminMenuItem(
               title: context.tr('admin_master_employee'),
@@ -638,6 +613,10 @@ class AdminTab extends StatelessWidget {
             'assign-company',
             'view-settings',
             'assign-roles',
+            'view-department',
+            'create-department',
+            'edit-department',
+            'delete-department',
           ]))
             _AdminMenuItem(
               title: context.tr('admin_common_master'),
@@ -799,7 +778,7 @@ class AdminTab extends StatelessWidget {
                 );
               },
             ),
-          if (authProvider.canAccessPayrollModule)
+          if (authProvider.canAccessClaimsModule)
             _AdminMenuItem(
               title: context.tr('admin_claim_management'),
               subtitle: context.tr('admin_claim_management_subtitle'),
@@ -820,7 +799,7 @@ class AdminTab extends StatelessWidget {
                 );
               },
             ),
-          if (canAccessReports)
+          if (authProvider.canAccessClaimsModule)
             _AdminMenuItem(
               title: context.tr('admin_claim_reports'),
               subtitle: context.tr('admin_claim_reports_subtitle'),

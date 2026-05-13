@@ -120,6 +120,13 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
         surfaceTintColor: _surfaceColor,
         elevation: 0,
         iconTheme: IconThemeData(color: _primaryTextColor),
+        actions: [
+          if (canCreateEmployee)
+            IconButton(
+              icon: const Icon(Icons.add, color: AppColors.primary),
+              onPressed: _openAddEmployee,
+            ),
+        ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,21 +165,18 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
           ),
         ],
       ),
-      floatingActionButton: canCreateEmployee
-          ? FloatingActionButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AddEmployeeScreen(),
-                  ),
-                );
-              },
-              backgroundColor: AppColors.primary,
-              child: const Icon(Icons.add, color: Colors.white),
-            )
-          : null,
     );
+  }
+
+  void _openAddEmployee() {
+    Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => const AddEmployeeScreen()),
+    ).then((saved) {
+      if (saved == true && mounted) {
+        context.read<EmployeeProvider>().fetchEmployees();
+      }
+    });
   }
 
   Widget _buildSearchBar() {

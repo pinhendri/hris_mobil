@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import 'admin_palette.dart';
 
 class UserManagementMenuScreen extends StatelessWidget {
   const UserManagementMenuScreen({super.key});
@@ -70,19 +71,22 @@ class UserManagementMenuScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: _pageColor(isDark),
       appBar: AppBar(
         title: Text(
           'Manajemen User',
           style: GoogleFonts.poppins(
-            color: Colors.black,
+            color: _primaryTextColor(isDark),
             fontWeight: FontWeight.w700,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _surfaceColor(isDark),
+        surfaceTintColor: _surfaceColor(isDark),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: _primaryTextColor(isDark)),
       ),
       body: Consumer<AuthProvider>(
         builder: (context, authProvider, _) {
@@ -215,24 +219,29 @@ class _UserManagementListScreenState extends State<_UserManagementListScreen> {
   @override
   Widget build(BuildContext context) {
     final config = widget.config;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryTextColor = _primaryTextColor(isDark);
+    final secondaryTextColor = _secondaryTextColor(isDark);
+    final borderColor = _borderColor(isDark);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: _pageColor(isDark),
       appBar: AppBar(
         title: Text(
           config.title,
           style: GoogleFonts.poppins(
-            color: Colors.black,
+            color: primaryTextColor,
             fontWeight: FontWeight.w700,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: _surfaceColor(isDark),
+        surfaceTintColor: _surfaceColor(isDark),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: primaryTextColor),
         actions: [
           IconButton(
             onPressed: _isLoading ? null : _loadData,
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, color: secondaryTextColor),
           ),
         ],
       ),
@@ -251,14 +260,24 @@ class _UserManagementListScreenState extends State<_UserManagementListScreen> {
                     controller: _searchController,
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => _loadData(),
+                    style: GoogleFonts.poppins(color: primaryTextColor),
                     decoration: InputDecoration(
                       hintText: config.searchHint,
-                      prefixIcon: const Icon(Icons.search),
+                      hintStyle: GoogleFonts.poppins(color: secondaryTextColor),
+                      prefixIcon: Icon(Icons.search, color: secondaryTextColor),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: _mutedSurfaceColor(isDark),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: config.color, width: 1.4),
                       ),
                     ),
                   ),
@@ -267,6 +286,13 @@ class _UserManagementListScreenState extends State<_UserManagementListScreen> {
                 IconButton.filled(
                   onPressed: _isLoading ? null : _loadData,
                   icon: const Icon(Icons.search),
+                  style: IconButton.styleFrom(
+                    backgroundColor: config.color,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: config.color.withValues(
+                      alpha: 0.38,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -281,16 +307,19 @@ class _UserManagementListScreenState extends State<_UserManagementListScreen> {
                 icon: Icons.error_outline,
                 title: 'Gagal memuat data',
                 message: _error,
+                isDark: isDark,
               )
             else if (_items.isEmpty)
               _MessageCard(
                 icon: Icons.folder_open,
                 title: 'Data belum tersedia',
                 message: 'Tidak ada data pada ${config.title}.',
+                isDark: isDark,
               )
             else
               ..._items.map(
-                (item) => _UserDataCard(config: config, item: item),
+                (item) =>
+                    _UserDataCard(config: config, item: item, isDark: isDark),
               ),
           ],
         ),
@@ -306,8 +335,10 @@ class _UserMenuCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Material(
-      color: Colors.white,
+      color: _surfaceColor(isDark),
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -342,6 +373,7 @@ class _UserMenuCard extends StatelessWidget {
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
+                        color: _primaryTextColor(isDark),
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -349,13 +381,17 @@ class _UserMenuCard extends StatelessWidget {
                       config.subtitle,
                       style: GoogleFonts.poppins(
                         fontSize: 12,
-                        color: Colors.grey[600],
+                        color: _secondaryTextColor(isDark),
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[500]),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: _secondaryTextColor(isDark),
+              ),
             ],
           ),
         ),
@@ -372,10 +408,19 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: config.color,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            config.color,
+            config.color.withValues(alpha: isDark ? 0.78 : 0.92),
+          ],
+        ),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
@@ -413,8 +458,13 @@ class _Header extends StatelessWidget {
 class _UserDataCard extends StatelessWidget {
   final _UserManagementConfig config;
   final Map<String, dynamic> item;
+  final bool isDark;
 
-  const _UserDataCard({required this.config, required this.item});
+  const _UserDataCard({
+    required this.config,
+    required this.item,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -422,16 +472,19 @@ class _UserDataCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor(isDark),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: _borderColor(isDark)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             _titleValue(),
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w700,
+              color: _primaryTextColor(isDark),
+            ),
           ),
           const SizedBox(height: 10),
           ...config.fields.map(
@@ -446,7 +499,7 @@ class _UserDataCard extends StatelessWidget {
                       field.label,
                       style: GoogleFonts.poppins(
                         fontSize: 11,
-                        color: Colors.grey[600],
+                        color: _secondaryTextColor(isDark),
                       ),
                     ),
                   ),
@@ -456,6 +509,7 @@ class _UserDataCard extends StatelessWidget {
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
+                        color: _primaryTextColor(isDark),
                       ),
                     ),
                   ),
@@ -511,11 +565,13 @@ class _MessageCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String message;
+  final bool isDark;
 
   const _MessageCard({
     required this.icon,
     required this.title,
     required this.message,
+    required this.isDark,
   });
 
   @override
@@ -523,19 +579,29 @@ class _MessageCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surfaceColor(isDark),
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _borderColor(isDark)),
       ),
       child: Column(
         children: [
-          Icon(icon, size: 44, color: Colors.grey[500]),
+          Icon(icon, size: 44, color: _secondaryTextColor(isDark)),
           const SizedBox(height: 12),
-          Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+          Text(
+            title,
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w700,
+              color: _primaryTextColor(isDark),
+            ),
+          ),
           const SizedBox(height: 6),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: _secondaryTextColor(isDark),
+            ),
           ),
         ],
       ),
@@ -579,4 +645,30 @@ class _UserField {
     this.isPermissionList = false,
     this.isStringList = false,
   });
+}
+
+Color _pageColor(bool isDark) {
+  return isDark ? AdminPalette.darkPage : AdminPalette.lightPage;
+}
+
+Color _surfaceColor(bool isDark) {
+  return isDark ? AdminPalette.darkSurface : AdminPalette.lightSurface;
+}
+
+Color _mutedSurfaceColor(bool isDark) {
+  return isDark
+      ? AdminPalette.darkMutedSurface
+      : AdminPalette.lightMutedSurface;
+}
+
+Color _primaryTextColor(bool isDark) {
+  return isDark ? AdminPalette.darkText : AdminPalette.lightText;
+}
+
+Color _secondaryTextColor(bool isDark) {
+  return isDark ? AdminPalette.darkMutedText : AdminPalette.lightMutedText;
+}
+
+Color _borderColor(bool isDark) {
+  return isDark ? AdminPalette.darkBorder : AdminPalette.lightBorder;
 }

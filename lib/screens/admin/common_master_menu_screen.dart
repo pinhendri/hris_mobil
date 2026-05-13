@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../providers/department_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import 'admin_palette.dart';
+import 'department_list_screen.dart';
 
 class CommonMasterMenuScreen extends StatelessWidget {
   const CommonMasterMenuScreen({super.key});
@@ -73,23 +76,47 @@ class CommonMasterMenuScreen extends StatelessWidget {
       searchHint: 'Cari user...',
       dataPath: ['data', 'users', 'data'],
     ),
+    _MasterMenuConfig(
+      title: 'Departemen',
+      subtitle: 'Departments',
+      endpoint: '/departments',
+      permissions: [
+        'view-department',
+        'create-department',
+        'edit-department',
+        'delete-department',
+      ],
+      icon: Icons.business_outlined,
+      color: Color(0xFF4158D0),
+      fields: [
+        _MasterField('Nama', ['name', 'department_name']),
+        _MasterField('Kode', ['code', 'department_code']),
+        _MasterField('Deskripsi', ['description']),
+      ],
+      searchHint: 'Cari departemen...',
+      screenBuilder: (context) => ChangeNotifierProvider(
+        create: (_) => DepartmentProvider(),
+        child: const DepartmentListScreen(),
+      ),
+    ),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: AdminPalette.page(context),
       appBar: AppBar(
         title: Text(
           'Master Data Umum',
           style: GoogleFonts.poppins(
-            color: Colors.black,
+            color: AdminPalette.text(context),
             fontWeight: FontWeight.w700,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AdminPalette.surface(context),
+        surfaceTintColor: AdminPalette.surface(context),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AdminPalette.text(context)),
       ),
       body: Consumer<AuthProvider>(
         builder: (context, authProvider, _) {
@@ -227,24 +254,28 @@ class _CommonMasterListScreenState extends State<_CommonMasterListScreen> {
   @override
   Widget build(BuildContext context) {
     final config = widget.config;
+    final primaryText = AdminPalette.text(context);
+    final secondaryText = AdminPalette.mutedText(context);
+    final borderColor = AdminPalette.border(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: AdminPalette.page(context),
       appBar: AppBar(
         title: Text(
           config.title,
           style: GoogleFonts.poppins(
-            color: Colors.black,
+            color: primaryText,
             fontWeight: FontWeight.w700,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AdminPalette.surface(context),
+        surfaceTintColor: AdminPalette.surface(context),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: primaryText),
         actions: [
           IconButton(
             onPressed: _isLoading ? null : _loadData,
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, color: secondaryText),
           ),
         ],
       ),
@@ -263,14 +294,24 @@ class _CommonMasterListScreenState extends State<_CommonMasterListScreen> {
                     controller: _searchController,
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => _loadData(),
+                    style: GoogleFonts.poppins(color: primaryText),
                     decoration: InputDecoration(
                       hintText: config.searchHint,
-                      prefixIcon: const Icon(Icons.search),
+                      hintStyle: GoogleFonts.poppins(color: secondaryText),
+                      prefixIcon: Icon(Icons.search, color: secondaryText),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: AdminPalette.mutedSurface(context),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: config.color, width: 1.4),
                       ),
                     ),
                   ),
@@ -279,6 +320,10 @@ class _CommonMasterListScreenState extends State<_CommonMasterListScreen> {
                 IconButton.filled(
                   onPressed: _isLoading ? null : _loadData,
                   icon: const Icon(Icons.search),
+                  style: IconButton.styleFrom(
+                    backgroundColor: config.color,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ],
             ),
@@ -365,19 +410,29 @@ class _CommonMasterListScreenState extends State<_CommonMasterListScreen> {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AdminPalette.surface(context),
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AdminPalette.border(context)),
       ),
       child: Column(
         children: [
-          Icon(icon, size: 44, color: Colors.grey[500]),
+          Icon(icon, size: 44, color: AdminPalette.mutedText(context)),
           const SizedBox(height: 12),
-          Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+          Text(
+            title,
+            style: GoogleFonts.poppins(
+              color: AdminPalette.text(context),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 6),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: AdminPalette.mutedText(context),
+            ),
           ),
         ],
       ),
@@ -393,15 +448,18 @@ class _MasterMenuCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: AdminPalette.surface(context),
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: () {
+          final screenBuilder = config.screenBuilder;
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => _CommonMasterListScreen(config: config),
+              builder:
+                  screenBuilder ??
+                  (_) => _CommonMasterListScreen(config: config),
             ),
           );
         },
@@ -428,6 +486,7 @@ class _MasterMenuCard extends StatelessWidget {
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
+                        color: AdminPalette.text(context),
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -435,13 +494,17 @@ class _MasterMenuCard extends StatelessWidget {
                       config.subtitle,
                       style: GoogleFonts.poppins(
                         fontSize: 12,
-                        color: Colors.grey[600],
+                        color: AdminPalette.mutedText(context),
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[500]),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: AdminPalette.mutedText(context),
+              ),
             ],
           ),
         ),
@@ -464,9 +527,9 @@ class _MasterDataCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AdminPalette.surface(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: AdminPalette.border(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -479,6 +542,7 @@ class _MasterDataCard extends StatelessWidget {
                   style: GoogleFonts.poppins(
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
+                    color: AdminPalette.text(context),
                   ),
                 ),
               ),
@@ -486,7 +550,7 @@ class _MasterDataCard extends StatelessWidget {
                 Text(
                   '#${item['id']}',
                   style: GoogleFonts.poppins(
-                    color: Colors.grey[500],
+                    color: AdminPalette.mutedText(context),
                     fontSize: 11,
                   ),
                 ),
@@ -506,7 +570,7 @@ class _MasterDataCard extends StatelessWidget {
                       field.label,
                       style: GoogleFonts.poppins(
                         fontSize: 11,
-                        color: Colors.grey[600],
+                        color: AdminPalette.mutedText(context),
                       ),
                     ),
                   ),
@@ -516,6 +580,7 @@ class _MasterDataCard extends StatelessWidget {
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
+                        color: AdminPalette.text(context),
                       ),
                     ),
                   ),
@@ -599,6 +664,7 @@ class _MasterMenuConfig {
   final String searchHint;
   final List<String> permissions;
   final List<String>? dataPath;
+  final WidgetBuilder? screenBuilder;
 
   const _MasterMenuConfig({
     required this.title,
@@ -610,6 +676,7 @@ class _MasterMenuConfig {
     required this.searchHint,
     required this.permissions,
     this.dataPath,
+    this.screenBuilder,
   });
 }
 

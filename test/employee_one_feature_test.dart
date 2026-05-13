@@ -20,6 +20,21 @@ void main() {
     expect(snippet, contains('EmployeeListScreen(selfOnly: true)'));
   });
 
+  test('employee one permission does not open the full employee feature', () {
+    final source = File('lib/screens/tabs/feature_tab.dart').readAsStringSync();
+    final helperIndex = source.indexOf('bool _canAccessEmployeeFeature');
+
+    expect(helperIndex, isNonNegative);
+
+    final helperSnippet = source.substring(
+      helperIndex,
+      source.indexOf('bool _canAccessOrgStructureFeature', helperIndex),
+    );
+
+    expect(helperSnippet, contains("'view-employee'"));
+    expect(helperSnippet, isNot(contains("'view-employee-one'")));
+  });
+
   test(
     'employee-one resolver never treats user account uuid as employee uuid',
     () {

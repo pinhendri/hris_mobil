@@ -57,13 +57,13 @@ class _TasksScreenState extends State<TasksScreen> {
   void _openTaskForm(BuildContext context, {TaskModel? task}) {
     final provider = context.read<TaskProvider>();
 
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => ChangeNotifierProvider<TaskProvider>.value(
-        value: provider,
-        child: _TaskFormSheet(task: task),
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider<TaskProvider>.value(
+          value: provider,
+          child: _TaskFormScreen(task: task),
+        ),
       ),
     );
   }
@@ -77,17 +77,38 @@ class _TasksScreenState extends State<TasksScreen> {
       return;
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? const Color(0xFF111827) : Colors.white;
+    final primaryTextColor = isDark
+        ? const Color(0xFFF8FAFC)
+        : const Color(0xFF0F172A);
+    final secondaryTextColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF64748B);
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(context.tr('task_delete_title')),
+        backgroundColor: surfaceColor,
+        surfaceTintColor: surfaceColor,
+        title: Text(
+          context.tr('task_delete_title'),
+          style: GoogleFonts.poppins(
+            color: primaryTextColor,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         content: Text(
           context.tr('task_delete_message').replaceAll('{title}', task.title),
+          style: GoogleFonts.poppins(color: secondaryTextColor),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(context.tr('task_action_cancel')),
+            child: Text(
+              context.tr('task_action_cancel'),
+              style: GoogleFonts.poppins(color: secondaryTextColor),
+            ),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
@@ -118,48 +139,84 @@ class _TasksScreenState extends State<TasksScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pageColor = isDark
+        ? const Color(0xFF020817)
+        : const Color(0xFFF8FAFC);
+    final surfaceColor = isDark ? const Color(0xFF111827) : Colors.white;
+    final primaryTextColor = isDark
+        ? const Color(0xFFF8FAFC)
+        : const Color(0xFF111827);
+    final secondaryTextColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF64748B);
+    final tabBackgroundColor = isDark
+        ? const Color(0xFF0F172A)
+        : const Color(0xFFF1F5F9);
 
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: isDark
-            ? const Color(0xFF101214)
-            : const Color(0xFFF6F8FC),
+        backgroundColor: pageColor,
         appBar: AppBar(
           title: Text(
             context.tr('task_page_title'),
             style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              color: primaryTextColor,
             ),
           ),
-          backgroundColor: AppColors.primary,
-          iconTheme: const IconThemeData(color: Colors.white),
+          backgroundColor: surfaceColor,
+          surfaceTintColor: surfaceColor,
+          foregroundColor: primaryTextColor,
+          iconTheme: IconThemeData(color: primaryTextColor),
+          elevation: 0,
           actions: [
             IconButton(
+              onPressed: () => _openTaskForm(context),
+              icon: const Icon(Icons.add, color: AppColors.primary),
+              tooltip: context.tr('task_action_add'),
+            ),
+            IconButton(
               onPressed: () => context.read<TaskProvider>().refresh(),
-              icon: const Icon(Icons.refresh),
+              icon: Icon(Icons.refresh, color: secondaryTextColor),
               tooltip: context.tr('task_action_refresh'),
             ),
           ],
-          bottom: TabBar(
-            labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-            unselectedLabelStyle: GoogleFonts.poppins(),
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            indicatorColor: Colors.white,
-            tabs: [
-              Tab(text: context.tr('task_status_pending')),
-              Tab(text: context.tr('task_status_completed')),
-            ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(56),
+            child: Container(
+              height: 44,
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: tabBackgroundColor,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF253041)
+                      : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: TabBar(
+                labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                unselectedLabelStyle: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                ),
+                labelColor: Colors.white,
+                unselectedLabelColor: secondaryTextColor,
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                tabs: [
+                  Tab(text: context.tr('task_status_pending')),
+                  Tab(text: context.tr('task_status_completed')),
+                ],
+              ),
+            ),
           ),
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => _openTaskForm(context),
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.add),
-          label: Text(context.tr('task_action_add')),
         ),
         body: Consumer<TaskProvider>(
           builder: (context, provider, child) {
@@ -1287,16 +1344,16 @@ class _TaskDialogChip extends StatelessWidget {
   }
 }
 
-class _TaskFormSheet extends StatefulWidget {
-  const _TaskFormSheet({this.task});
+class _TaskFormScreen extends StatefulWidget {
+  const _TaskFormScreen({this.task});
 
   final TaskModel? task;
 
   @override
-  State<_TaskFormSheet> createState() => _TaskFormSheetState();
+  State<_TaskFormScreen> createState() => _TaskFormScreenState();
 }
 
-class _TaskFormSheetState extends State<_TaskFormSheet> {
+class _TaskFormScreenState extends State<_TaskFormScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late String _priority;
@@ -1730,7 +1787,6 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? const Color(0xFF1B1F24) : Colors.white;
     final fieldColor = isDark
@@ -1754,43 +1810,49 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
       borderColor: borderColor,
     );
 
-    return Container(
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border(top: BorderSide(color: borderColor)),
+    return Scaffold(
+      backgroundColor: surfaceColor,
+      appBar: AppBar(
+        title: Text(
+          _isEditing
+              ? context.tr('task_form_edit_title')
+              : context.tr('task_form_create_title'),
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w700,
+            color: primaryTextColor,
+          ),
+        ),
+        backgroundColor: surfaceColor,
+        surfaceTintColor: surfaceColor,
+        foregroundColor: primaryTextColor,
+        elevation: 0,
+        actions: [
+          TextButton(
+            onPressed: _isSubmitting ? null : _submit,
+            child: _isSubmitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    _isEditing
+                        ? context.tr('task_action_save')
+                        : context.tr('task_action_create'),
+                    style: GoogleFonts.poppins(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+          ),
+        ],
       ),
-      child: SafeArea(
-        top: false,
+      body: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, bottomInset + 24),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF475569)
-                        : Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                _isEditing
-                    ? context.tr('task_form_edit_title')
-                    : context.tr('task_form_create_title'),
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: primaryTextColor,
-                ),
-              ),
-              const SizedBox(height: 20),
               TextField(
                 controller: _titleController,
                 textInputAction: TextInputAction.next,
@@ -1970,46 +2032,6 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _isSubmitting
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: secondaryTextColor,
-                        side: BorderSide(color: borderColor),
-                      ),
-                      child: Text(context.tr('task_action_cancel')),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _isSubmitting ? null : _submit,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                      ),
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              _isEditing
-                                  ? context.tr('task_action_save')
-                                  : context.tr('task_action_create'),
-                            ),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),

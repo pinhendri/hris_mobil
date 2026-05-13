@@ -1,168 +1,152 @@
 import 'package:flutter/material.dart';
+
 import '../data/models/client_model.dart';
+import '../screens/clients/vendor_palette.dart';
 
 class ClientCard extends StatelessWidget {
   final Client client;
   final VoidCallback onTap;
-  final VoidCallback onAssign; // Tambahkan parameter onAssign
+  final VoidCallback onAssign;
   final VoidCallback onExtend;
   final VoidCallback onDelete;
 
   const ClientCard({
-    Key? key,
+    super.key,
     required this.client,
     required this.onTap,
-    required this.onAssign, // Tambahkan required parameter
+    required this.onAssign,
     required this.onExtend,
     required this.onDelete,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
+    final statusColor = _statusColor(context);
+
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      elevation: 0,
+      color: VendorPalette.surface(context),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: VendorPalette.border(context)),
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header dengan nama dan status
               Row(
                 children: [
-                  Expanded(
-                    child: Text(
-                      client.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: VendorPalette.featureGradient(context),
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.business_outlined,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          client.name,
+                          style: TextStyle(
+                            color: VendorPalette.text(context),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          client.contactPerson ?? 'No contact person',
+                          style: TextStyle(
+                            color: VendorPalette.mutedText(context),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
-                      color: client.getStatusColor().withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: client.getStatusColor(),
-                        width: 1,
-                      ),
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: statusColor),
                     ),
                     child: Text(
                       client.status?.toUpperCase() ?? 'UNKNOWN',
                       style: TextStyle(
                         fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: client.getStatusColor(),
+                        fontWeight: FontWeight.w800,
+                        color: statusColor,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              
-              // Contact Person
-              Row(
-                children: [
-                  const Icon(Icons.person_outline, size: 16, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      client.contactPerson ?? '-',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              _InfoRow(icon: Icons.phone_outlined, value: client.phone ?? '-'),
+              if (client.pksNumber != null) ...[
+                const SizedBox(height: 7),
+                _InfoRow(
+                  icon: Icons.description_outlined,
+                  value: 'PKS: ${client.pksNumber}',
+                ),
+              ],
+              const SizedBox(height: 7),
+              _InfoRow(
+                icon: Icons.calendar_today_outlined,
+                value: client.getFormattedContractPeriod(),
               ),
-              const SizedBox(height: 4),
-              
-              // Phone
-              if (client.phone != null)
-                Row(
-                  children: [
-                    const Icon(Icons.phone_outlined, size: 16, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        client.phone!,
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 4),
-              
-              // PKS Number
-              if (client.pksNumber != null)
-                Row(
-                  children: [
-                    const Icon(Icons.description_outlined, size: 16, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'PKS: ${client.pksNumber}',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 8),
-              
-              // Contract Period
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        client.getFormattedContractPeriod(),
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              const Divider(),
-              
-              // Action Buttons - HANYA SATU VERSION, hapus yang duplikat
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              const SizedBox(height: 12),
+              Divider(color: VendorPalette.border(context), height: 1),
+              const SizedBox(height: 6),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 6,
+                runSpacing: 4,
                 children: [
-                  // Assign Button
                   TextButton.icon(
                     onPressed: onAssign,
-                    icon: const Icon(Icons.assignment_ind, size: 16),
+                    icon: const Icon(Icons.assignment_ind_outlined, size: 16),
                     label: const Text('Assign'),
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.green,
+                      foregroundColor: VendorPalette.accent(context),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  
-                  // Extend Button
                   TextButton.icon(
                     onPressed: onExtend,
-                    icon: const Icon(Icons.update, size: 16),
+                    icon: const Icon(Icons.update_outlined, size: 16),
                     label: const Text('Extend'),
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.blue,
+                      foregroundColor: VendorPalette.warmAccent(context),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  
-                  // Delete Button
                   TextButton.icon(
                     onPressed: onDelete,
-                    icon: const Icon(Icons.delete, size: 16),
+                    icon: const Icon(Icons.delete_outline, size: 16),
                     label: const Text('Delete'),
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.red,
+                      foregroundColor: VendorPalette.danger(context),
                     ),
                   ),
                 ],
@@ -171,6 +155,45 @@ class ClientCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Color _statusColor(BuildContext context) {
+    switch (client.status) {
+      case 'active':
+        return VendorPalette.success(context);
+      case 'expired':
+        return VendorPalette.danger(context);
+      case 'pending':
+        return VendorPalette.warmAccent(context);
+      default:
+        return VendorPalette.mutedText(context);
+    }
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String value;
+
+  const _InfoRow({required this.icon, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: VendorPalette.mutedText(context)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              color: VendorPalette.mutedText(context),
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
